@@ -1,5 +1,7 @@
 #include "Obj3D.h"
 #include "Obj3dCommon.h"
+#include "CameraManager.h"
+#include "Camera.h"
 #include "Model.h"
 #include "TextureManager.h"
 #include "Sprite.h"
@@ -11,6 +13,17 @@
 void Obj3D::Initialize(Obj3dCommon* object3dCommon){
     this->object3dCommon = object3dCommon;
     this->camera = object3dCommon->GetDefaultCamera();
+
+    materialResource = object3dCommon->GetDxCommon()->CreateBufferResource(sizeof(Model::Material));
+
+    materialResource->Map(0,nullptr,reinterpret_cast<void**>(&materialData));
+    if(materialData){
+        materialData->color = {1.0f, 1.0f, 1.0f, 1.0f};
+        materialData->enableLighting = 1;
+        materialData->uvTransform = MakeIdentity4x4(); // 単位行列
+        materialData->shininess = 20.0f;
+        materialData->environmentCoefficient = 0.0f;
+    }
 
     // トランスフォームの初期化
     transform = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
@@ -53,13 +66,29 @@ void Obj3D::Update(){
 void Obj3D::Draw(){
     auto* commandList = object3dCommon->GetDxCommon()->GetCommandList();
 
+    commandList->SetGraphicsRootConstantBufferView(
+        0,materialResource->GetGPUVirtualAddress());
+
     // 座標変換行列CBufferの設定 (b1)
     commandList->SetGraphicsRootConstantBufferView(
         1,transformationMatrixResource->GetGPUVirtualAddress());
 
     // モデルの描画
     if(model){
-        model->Draw();
+        // 1. アクティブなカメラを取得
+        Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
+
+        if(activeCamera == nullptr){
+            // カメラがないなら描画をスキップするか、デフォルトのアドレスを渡す
+            return;
+        }
+
+        uint32_t skyboxIndex = 0;
+
+        uint32_t skyboxSRVIndex = TextureManager::GetInstance()->GetSrvIndex("resource/Skybox/rostock_laage_airport_4k.dds");
+
+        // 3. 引数を渡してDrawを呼ぶ
+        model->Draw(skyboxSRVIndex,activeCamera->GetGPUVirtualAddress());
     }
 }
 
@@ -82,4 +111,9 @@ void Obj3D::CreateTransformationMatrixData(){
     transformationMatrixData->WVP = MakeIdentity4x4();
     transformationMatrixData->World = MakeIdentity4x4();
     transformationMatrixData->WorldInverseTranspose = MakeIdentity4x4();
+}
+
+void Obj3D::CreateMaterialData(){
+    materialResource = object3dCommon->GetDxCommon()->CreateBufferResource(sizeof(Model::Material));
+    materialResource->Map(0,nullptr,reinterpret_cast<void**>(&materialData));
 }

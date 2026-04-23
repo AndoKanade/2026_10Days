@@ -23,6 +23,7 @@ namespace{
 	const std::string kModelFence = "Fence/fence.obj";
 	const std::string kModelSphere = "Sphere/sphere.obj";
 	const std::string kModelTerrain = "Terrain/terrain.obj";
+	const std::string kModelSimpleSkin = "simpleSkin/simpleSkin.gltf";
 
 	const std::string kParticleName = "Circle";
 }
@@ -46,6 +47,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	ModelManager::GetInstance()->LoadModel(kModelFence);
 	ModelManager::GetInstance()->LoadModel(kModelSphere);
 	ModelManager::GetInstance()->LoadModel(kModelTerrain);
+	ModelManager::GetInstance()->LoadModel(kModelSimpleSkin);
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
 
@@ -68,6 +70,15 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	terrainObj_->Initialize(object3dCommon_);
 	terrainObj_->SetModel(kModelTerrain);
 
+	simpleSkinObj_ = std::make_unique<Obj3D>();
+	simpleSkinObj_->Initialize(object3dCommon_);
+	simpleSkinObj_->SetModel(kModelSimpleSkin);
+
+	auto* simpleSkinMaterial = simpleSkinObj_->GetMaterial();
+	if(simpleSkinMaterial){
+		simpleSkinMaterial->environmentCoefficient = 1.0f; // 映り込みを有効(1.0f)に設定
+	}
+
 	skyboxCommon_ = std::make_unique<SkyboxCommon>();
 	skyboxCommon_->Initialize(object3dCommon_->GetDxCommon());
 	skybox_ = std::make_unique<Skybox>();
@@ -80,13 +91,15 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	particleEmitter_ = std::make_unique<ParticleEmitter>(kParticleName,emitterConfig,10,0.2f);
 
 	// カメラ設定
-	CameraManager::GetInstance()->CreateCamera("default");
+	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
 	auto* defaultCamera = CameraManager::GetInstance()->GetCamera("default");
 	if(defaultCamera){
 		defaultCamera->SetTranslate({0.0f, 0.0f, -30.0f});
 		CameraManager::GetInstance()->SetActiveCamera("default");
 	}
 	object3dCommon_->SetDefaultCamera(CameraManager::GetInstance()->GetActiveCamera());
+
+
 }
 
 void GameScene::Finalize(){}
@@ -97,6 +110,10 @@ void GameScene::Update(){
 	}
 	if(terrainObj_){
 		terrainObj_->Update();
+	}
+
+	if(simpleSkinObj_){
+		simpleSkinObj_->Update();
 	}
 
 	if(skybox_){
@@ -193,6 +210,27 @@ void GameScene::Update(){
 			sData->cosFalloffStart = cosf(spotDegreeStart * 3.141592f / 180.0f);
 		}
 
+		if(simpleSkinObj_){
+			ImGui::Separator();
+			ImGui::Text("SimpleSkin Object (Environment)");
+
+			// マテリアルを取得
+			auto* material = simpleSkinObj_->GetMaterial();
+			if(material){
+				// スライダーを追加。数値が変われば即座に映り込みが変わります
+				ImGui::SliderFloat("Env Coefficient",&material->environmentCoefficient,0.0f,1.0f);
+			} else{
+				// スライダーが出ない時、こっちが赤文字で表示されるはず
+				ImGui::TextColored(ImVec4(1,0,0,1),"Material is NULL!");
+			}
+
+			// オブジェクトの座標などもついでにいじれるようにする場合
+			Vector3 skinPos = simpleSkinObj_->GetTranslate();
+			if(ImGui::DragFloat3("Skin Pos",&skinPos.x,0.1f)){
+				simpleSkinObj_->SetTranslate(skinPos);
+			}
+		}
+
 		ModelManager::GetInstance()->UpdateLightGui();
 		ImGui::End();
 	}
@@ -203,15 +241,19 @@ void GameScene::Draw(){
 	object3dCommon_->Draw();
 	// 3Dオブジェクトの描画
 
-	if(terrainObj_){
-		terrainObj_->Draw();
-	}
-
-	if(sphereObj_){
-		sphereObj_->Draw();
-	}
-
-	//if(skybox_){
-	//	skybox_->Draw();
+	//if(terrainObj_){
+	//	terrainObj_->Draw();
 	//}
+
+	//if(sphereObj_){
+	//	sphereObj_->Draw();
+	//}
+
+	if(simpleSkinObj_){
+		simpleSkinObj_->Draw();
+	}
+
+	if(skybox_){
+		skybox_->Draw();
+	}
 }

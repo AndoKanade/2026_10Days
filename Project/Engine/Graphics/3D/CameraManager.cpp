@@ -1,4 +1,5 @@
 #include "CameraManager.h"
+#include <DXCommon.h>
 
 /// <summary>
 /// シングルトンインスタンスの取得
@@ -16,6 +17,7 @@ CameraManager* CameraManager::GetInstance(){
 void CameraManager::Initialize(){
 	cameras_.clear();
 	activeCamera_ = nullptr;
+
 }
 
 /// <summary>
@@ -40,22 +42,21 @@ void CameraManager::Update(){
 /// <summary>
 /// カメラ作成
 /// </summary>
-void CameraManager::CreateCamera(const std::string& name){
-	// すでに同じ名前のカメラが存在する場合は何もしない
-	// (C++20 以降なら contains が使用可能。C++17以前なら cameras_.find(name) != cameras_.end() を使用)
+// CameraManager.cpp
+
+void CameraManager::CreateCamera(const std::string& name,ID3D12Device* device){
 	if(cameras_.contains(name)){
 		return;
 	}
 
-	// 新しいカメラを生成 (make_unique推奨)
 	std::unique_ptr<Camera> newCamera = std::make_unique<Camera>();
 
-	// マップに登録 (moveを使って所有権をコンテナへ移動)
+	// 引数で受け取ったデバイスを使って初期化
+	newCamera->Initialize(device);
+
 	cameras_.emplace(name,std::move(newCamera));
 
-	// もしアクティブカメラがまだ設定されていなければ、作ったばかりのこれをアクティブにする
 	if(activeCamera_ == nullptr){
-		// get() で生ポインタを取得してセット (所有権は渡さない)
 		activeCamera_ = cameras_[name].get();
 	}
 }

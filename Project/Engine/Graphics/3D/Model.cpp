@@ -5,167 +5,114 @@
 #include <sstream>
 #include <iostream>
 #include <cassert>
-
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
+// 初期化
 void Model::Initialize(ModelCommon* modelCommon,const std::string& directorypath,const std::string& filename){
 	this->modelCommon_ = modelCommon;
 
-	// モデルデータの読み込み (.obj)
-	// TODO: 将来的には引数でファイル名を受け取るように変更する
+	// モデルデータの読み込み
 	modelData = LoadModelFile(directorypath,filename);
 
-	// テクスチャの読み込み (.mtlから取得したパスを使用)
+	// テクスチャの読み込みとIndex保持
 	TextureManager::GetInstance()->LoadTexture(modelData.material.textureFilePath);
+	modelData.material.textureIndex = TextureManager::GetInstance()->GetSrvIndex(modelData.material.textureFilePath);
 
-	// テクスチャ番号(Index)を取得して保存
-	modelData.material.textureIndex =
-		TextureManager::GetInstance()->GetSrvIndex(modelData.material.textureFilePath);
-
-	// バッファの生成 (頂点・マテリアル)
+	// 各種リソース生成
 	CreateVertexData();
 	CreateMaterialData();
 }
 
-void Model::Draw(){
-	// コマンドリストを取得
+// 描画
+void Model::Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress){
 	auto* commandList = modelCommon_->GetDxCommon()->commandList.Get();
 
 	// 1. 頂点バッファ(VBV)をセット
 	commandList->IASetVertexBuffers(0,1,&vertexBufferView);
 
-	// 2. マテリアルCBufferをセット (RootParameter[0])
-	commandList->SetGraphicsRootConstantBufferView(
-		0,materialResource->GetGPUVirtualAddress());
-
-	// 3. テクスチャSRVをセット (RootParameter[2])
-	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle =
-		SrvManager::GetInstance()->GetGPUDescriptorHandle(modelData.material.textureIndex);
+	// 2. テクスチャSRVをセット (register t0)
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle = SrvManager::GetInstance()->GetGPUDescriptorHandle(modelData.material.textureIndex);
 	commandList->SetGraphicsRootDescriptorTable(2,textureSrvHandle);
 
-	// 4. 描画コマンド発行
+	// 3. 環境マップ用SRVをセット (register t1)
+	D3D12_GPU_DESCRIPTOR_HANDLE skyboxSrvHandle = SrvManager::GetInstance()->GetGPUDescriptorHandle(skyboxTextureIndex);
+	commandList->SetGraphicsRootDescriptorTable(3,skyboxSrvHandle);
+
+	// 4. カメラCBufferをセット (register b3)
+	commandList->SetGraphicsRootConstantBufferView(5,cameraAddress);
+
+	// ※ マテリアル(b0)と行列(b1)は Obj3D::Draw 側でセットするため、ここでは行わない
+
+	// 5. 描画コマンド発行
 	commandList->DrawInstanced(UINT(modelData.vertices.size()),1,0,0);
 }
 
-Model::MaterialData Model::LoadMaterialTemplateFile(const std::string& directoryPath,const std::string& filename){
-	MaterialData materialData;
-	std::string line;
-	std::ifstream file(directoryPath + "/" + filename);
-
-	assert(file.is_open());
-
-	while(std::getline(file,line)){
-		std::string identifier;
-		std::istringstream s(line);
-		s >> identifier;
-
-		// "map_Kd": テクスチャファイル名
-		if(identifier == "map_Kd"){
-			std::string textureFilename;
-			s >> textureFilename;
-			// パスを結合して保存
-			materialData.textureFilePath = directoryPath + "/" + textureFilename;
-		}
-	}
-	return materialData;
-}
-
+// .objファイルの読み込み (Assimp使用)
 Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std::string& filename){
 	ModelData modelData;
 	Assimp::Importer importer;
 	std::string filePath = directoryPath + "/" + filename;
 
-	// 1. Sceneを構築（DirectX12向け設定）
-	const aiScene* scene = importer.ReadFile(filePath.c_str(),
-		aiProcess_FlipWindingOrder | aiProcess_FlipUVs | aiProcess_Triangulate);
-
+	const aiScene* scene = importer.ReadFile(filePath.c_str(),aiProcess_FlipWindingOrder | aiProcess_FlipUVs | aiProcess_Triangulate);
 	assert(scene && scene->HasMeshes());
 
-	// 2. Meshの解析
 	for(uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex){
 		aiMesh* mesh = scene->mMeshes[meshIndex];
+		assert(mesh->HasNormals() && mesh->HasTextureCoords(0));
 
-		assert(mesh->HasNormals());
-		assert(mesh->HasTextureCoords(0));
-
-		// Face（面）の解析
 		for(uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex){
 			aiFace& face = mesh->mFaces[faceIndex];
-			assert(face.mNumIndices == 3); // 三角形のみ
-
-			// Vertex（頂点）の解析
 			for(uint32_t element = 0; element < face.mNumIndices; ++element){
 				uint32_t vertexIndex = face.mIndices[element];
-
-				aiVector3D& position = mesh->mVertices[vertexIndex];
-				aiVector3D& normal = mesh->mNormals[vertexIndex];
-				aiVector3D& texcoord = mesh->mTextureCoords[0][vertexIndex];
+				aiVector3D& pos = mesh->mVertices[vertexIndex];
+				aiVector3D& norm = mesh->mNormals[vertexIndex];
+				aiVector3D& tex = mesh->mTextureCoords[0][vertexIndex];
 
 				VertexData vertex;
-				vertex.position = {position.x, position.y, position.z, 1.0f};
-				vertex.normal = {normal.x, normal.y, normal.z};
-				vertex.texcoord = {texcoord.x, texcoord.y};
-
-				// 右手系から左手系への変換（資料に基づきx軸を反転）
-				vertex.position.x *= -1.0f;
-				vertex.normal.x *= -1.0f;
-
+				vertex.position = {-pos.x, pos.y, pos.z, 1.0f}; // 右手→左手変換
+				vertex.normal = {-norm.x, norm.y, norm.z};      // 右手→左手変換
+				vertex.texcoord = {tex.x, tex.y};
 				modelData.vertices.push_back(vertex);
 			}
 		}
 	}
 
-	// 3. Materialの解析
-	for(uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex){
-		aiMaterial* material = scene->mMaterials[materialIndex];
-		if(material->GetTextureCount(aiTextureType_DIFFUSE) != 0){
-			aiString textureFilePath;
-			material->GetTexture(aiTextureType_DIFFUSE,0,&textureFilePath);
-			modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
-
-			// 資料の「最後にロードされたものを使う」挙動を維持しつつ、
-			// 1つ見つかったら抜ける場合は break; を入れてもOK
+	for(uint32_t i = 0; i < scene->mNumMaterials; ++i){
+		aiMaterial* mat = scene->mMaterials[i];
+		if(mat->GetTextureCount(aiTextureType_DIFFUSE) > 0){
+			aiString path;
+			mat->GetTexture(aiTextureType_DIFFUSE,0,&path);
+			modelData.material.textureFilePath = directoryPath + "/" + path.C_Str();
 		}
 	}
-
 	return modelData;
 }
 
+// 頂点バッファ生成
 void Model::CreateVertexData(){
-	// リソース作成
-	vertexResource = modelCommon_->GetDxCommon()->CreateBufferResource(
-		sizeof(VertexData) * modelData.vertices.size());
-
-	// VBVの設定
+	vertexResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeof(VertexData) * modelData.vertices.size());
 	vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
 	vertexBufferView.SizeInBytes = UINT(sizeof(VertexData) * modelData.vertices.size());
 	vertexBufferView.StrideInBytes = sizeof(VertexData);
 
-	// データの書き込み (Map -> memcpy -> Unmap)
-	VertexData* vertexDataPtr = nullptr;
-	vertexResource->Map(0,nullptr,reinterpret_cast<void**>(&vertexDataPtr));
-	std::memcpy(vertexDataPtr,modelData.vertices.data(),sizeof(VertexData) * modelData.vertices.size());
+	VertexData* ptr = nullptr;
+	vertexResource->Map(0,nullptr,reinterpret_cast<void**>(&ptr));
+	std::memcpy(ptr,modelData.vertices.data(),sizeof(VertexData) * modelData.vertices.size());
 	vertexResource->Unmap(0,nullptr);
 }
 
+// マテリアルバッファ生成
 void Model::CreateMaterialData(){
-	// ■■■ 1. バッファサイズの計算 (256バイトアライメント) ■■■
-	// これをしないと、GPUが「データが足りない！(範囲外アクセス)」とエラーを出します
 	size_t sizeInBytes = (sizeof(Material) + 0xff) & ~0xff;
-
-	// リソース作成 (計算した sizeInBytes を使う)
 	materialResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeInBytes);
-
-	// データを書き込むためのアドレスを取得
 	materialResource->Map(0,nullptr,reinterpret_cast<void**>(&materialData));
 
 	// 初期値設定
-	materialData->color = Vector4(1.0f,1.0f,1.0f,1.0f);
+	materialData->color = {1.0f, 1.0f, 1.0f, 1.0f};
 	materialData->enableLighting = 1;
 	materialData->uvTransform = MakeIdentity4x4();
-
-	// ■■■ 2. shininess の初期化を追加 ■■■
-	materialData->shininess = 50.0f; // 輝きの鋭さ (とりあえず50.0f)
+	materialData->shininess = 50.0f;
+	materialData->environmentCoefficient = 0.0f; // ★環境マップ係数の初期化を追加
 }

@@ -39,6 +39,7 @@ public: // --- 構造体定義 (データ構造) ---
 		float padding[3];       // 4バイト * 3 = 12バイト (合計16バイトにするためのパディング)
 		Matrix4x4 uvTransform;
 		float shininess;
+		float environmentCoefficient;
 	};
 
 public: // --- メンバ関数 ---
@@ -47,7 +48,7 @@ public: // --- メンバ関数 ---
 	void Initialize(ModelCommon* modelCommon,const std::string& directorypath,const std::string& filename);
 
 	// 描画
-	void Draw();
+	void Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress);
 
 	// --- 静的関数 (ファイル読み込みなど) ---
 

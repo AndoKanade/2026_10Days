@@ -58,24 +58,23 @@ void Obj3dCommon::Draw(){
 
     // 平行光源設定 (b2) - ModelManager経由
     auto lightRes = ModelManager::GetInstance()->GetModelCommon()->GetLightResource();
-    commandList->SetGraphicsRootConstantBufferView(3,lightRes->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(4,lightRes->GetGPUVirtualAddress());
 
     // カメラ設定 (b3)
     if(cameraResource_){
-        if(defaultCamera_){
-            cameraData_->worldPosition = defaultCamera_->GetTranslate();
-        }
-        commandList->SetGraphicsRootConstantBufferView(4,cameraResource_->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(5,cameraResource_->GetGPUVirtualAddress());
     }
 
     // 点光源設定 (b4)
+    // RootSignature の [6] 番目に PointLight を設定したので 5 -> 6 に変更
     if(pointLightResource_){
-        commandList->SetGraphicsRootConstantBufferView(5,pointLightResource_->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(6,pointLightResource_->GetGPUVirtualAddress());
     }
 
     // スポットライト設定 (b5)
+    // RootSignature の [7] 番目に SpotLight を設定したので 6 -> 7 に変更
     if(spotLightResource_){
-        commandList->SetGraphicsRootConstantBufferView(6,spotLightResource_->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(7,spotLightResource_->GetGPUVirtualAddress());
     }
 }
 
@@ -83,12 +82,20 @@ void Obj3dCommon::CreateRootSignature(){
     HRESULT hr;
 
     D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-    descriptorRange[0].BaseShaderRegister = 0;
+    descriptorRange[0].BaseShaderRegister = 0; // t0
     descriptorRange[0].NumDescriptors = 1;
     descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-    D3D12_ROOT_PARAMETER rootParameters[7] = {};
+    // t1 (環境マップ) 用
+    D3D12_DESCRIPTOR_RANGE descriptorRangeEnv[1] = {};
+    descriptorRangeEnv[0].BaseShaderRegister = 1; // t1
+    descriptorRangeEnv[0].NumDescriptors = 1;
+    descriptorRangeEnv[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRangeEnv[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    // --- 2. RootParameter の数を 7 -> 8 に増やす ---
+    D3D12_ROOT_PARAMETER rootParameters[8] = {}; // 8つに増やす
 
     // [0] Material (b0)
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -106,25 +113,31 @@ void Obj3dCommon::CreateRootSignature(){
     rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;
     rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);
 
-    // [3] DirectionalLight (b2)
-    rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    // [3] Environment Texture (t1)
+    rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[3].Descriptor.ShaderRegister = 2;
+    rootParameters[3].DescriptorTable.pDescriptorRanges = descriptorRangeEnv; // 環境マップ用レンジを指定
+    rootParameters[3].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeEnv);
 
-    // [4] Camera (b3)
+    // [4] DirectionalLight (b2)
     rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[4].Descriptor.ShaderRegister = 3;
+    rootParameters[4].Descriptor.ShaderRegister = 2;
 
-    // [5] PointLight (b4)
+    // [5] Camera (b3)
     rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[5].Descriptor.ShaderRegister = 4;
+    rootParameters[5].Descriptor.ShaderRegister = 3;
 
-    // [6] SpotLight (b5)
+    // [6] PointLight (b4)
     rootParameters[6].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     rootParameters[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[6].Descriptor.ShaderRegister = 5;
+    rootParameters[6].Descriptor.ShaderRegister = 4;
+
+    // [7] SpotLight (b5)
+    rootParameters[7].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[7].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[7].Descriptor.ShaderRegister = 5;
 
     D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
     staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
