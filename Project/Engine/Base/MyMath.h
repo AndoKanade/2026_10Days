@@ -300,3 +300,13 @@ inline Matrix4x4 MakeOrthographicMatrix(float left,float top,float right,float b
 
 	return result;
 }
+
+inline Matrix4x4 Transpose(const Matrix4x4& m){
+	Matrix4x4 result;
+	for(int i = 0; i < 4; ++i){
+		for(int j = 0; j < 4; ++j){
+			result.m[i][j] = m.m[j][i];
+		}
+	}
+	return result;
+}

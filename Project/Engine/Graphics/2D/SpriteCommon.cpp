@@ -144,10 +144,10 @@ void SpriteCommon::CreatePipelineState(){
 
 #pragma region shaderをコンパイルする
 	vertexShaderBlob =
-		dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Sprite.VS.hlsl",L"vs_6_0");
+		dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Sprite/Sprite.VS.hlsl",L"vs_6_0");
 	assert(vertexShaderBlob != nullptr);
 	pixelShaderBlob =
-		dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Sprite.PS.hlsl",L"ps_6_0");
+		dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Sprite/Sprite.PS.hlsl",L"ps_6_0");
 	assert(pixelShaderBlob != nullptr);
 
 #pragma endregion

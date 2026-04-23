@@ -55,7 +55,7 @@ public: // --- メンバ関数 ---
 	static MaterialData LoadMaterialTemplateFile(const std::string& directoryPath,const std::string& filename);
 
 	// .objファイルの読み込み
-	static ModelData LoadObjFile(const std::string&directoryPath,const std::string& filename);
+	static ModelData LoadModelFile(const std::string&directoryPath,const std::string& filename);
 
 
 private: // --- メンバ変数 ---

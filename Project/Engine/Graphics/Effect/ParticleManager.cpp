@@ -314,9 +314,9 @@ void ParticleManager::CreateGraphicsPipeline(){
     // --- Pipeline State Object (PSO) の作成 ---
 
     // シェーダーコンパイル
-    ComPtr<IDxcBlob> vertexShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Particle.VS.hlsl",L"vs_6_0");
+    ComPtr<IDxcBlob> vertexShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Particle/Particle.VS.hlsl",L"vs_6_0");
     assert(vertexShaderBlob != nullptr);
-    ComPtr<IDxcBlob> pixelShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Particle.PS.hlsl",L"ps_6_0");
+    ComPtr<IDxcBlob> pixelShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Particle/Particle.PS.hlsl",L"ps_6_0");
     assert(pixelShaderBlob != nullptr);
 
     // 入力レイアウト (頂点データ構造)
