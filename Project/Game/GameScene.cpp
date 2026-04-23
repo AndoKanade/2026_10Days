@@ -22,6 +22,7 @@ namespace{
 	const std::string kModelPlane = "plane.obj";
 	const std::string kModelFence = "fence.obj";
 	const std::string kModelSphere = "sphere.obj";
+	const std::string kModelTerrain = "terrain.obj";
 
 	const std::string kParticleName = "Circle";
 }
@@ -44,6 +45,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	ModelManager::GetInstance()->LoadModel(kModelPlane);
 	ModelManager::GetInstance()->LoadModel(kModelFence);
 	ModelManager::GetInstance()->LoadModel(kModelSphere);
+	ModelManager::GetInstance()->LoadModel(kModelTerrain);
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
 
@@ -62,6 +64,10 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	sphereObj_->Initialize(object3dCommon_);
 	sphereObj_->SetModel(kModelSphere);
 
+	terrainObj_ = std::make_unique<Obj3D>();
+	terrainObj_->Initialize(object3dCommon_);
+	terrainObj_->SetModel(kModelTerrain);
+
 	skyboxCommon_ = std::make_unique<SkyboxCommon>();
 	skyboxCommon_->Initialize(object3dCommon_->GetDxCommon());
 	skybox_ = std::make_unique<Skybox>();
@@ -77,7 +83,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	CameraManager::GetInstance()->CreateCamera("default");
 	auto* defaultCamera = CameraManager::GetInstance()->GetCamera("default");
 	if(defaultCamera){
-		defaultCamera->SetTranslate({0.0f, 0.0f, -10.0f});
+		defaultCamera->SetTranslate({0.0f, 0.0f, -30.0f});
 		CameraManager::GetInstance()->SetActiveCamera("default");
 	}
 	object3dCommon_->SetDefaultCamera(CameraManager::GetInstance()->GetActiveCamera());
@@ -88,6 +94,9 @@ void GameScene::Finalize(){}
 void GameScene::Update(){
 	if(sphereObj_){
 		sphereObj_->Update();
+	}
+	if(terrainObj_){
+		terrainObj_->Update();
 	}
 
 	if(skybox_){
@@ -128,12 +137,63 @@ void GameScene::Update(){
 		if(sphereObj_){
 			ImGui::Separator();
 			ImGui::Text("Sphere Object");
+			Vector3 sPos = sphereObj_->GetTranslate();
+			if(ImGui::DragFloat3("Sphere Pos",&sPos.x,0.1f)){
+				sphereObj_->SetTranslate(sPos);
+			}
+
 			Vector3 sRot = sphereObj_->GetRotate();
 			if(ImGui::DragFloat3("Sphere Rotate",&sRot.x,0.1f)){
 				sphereObj_->SetRotate(sRot);
 			}
+
+			Vector3 sScale = sphereObj_->GetScale();
+			if(ImGui::DragFloat3("Sphere Scale",&sScale.x,0.1f)){
+				sphereObj_->SetScale(sScale);
+			}
 		}
 
+		// --- PointLightの調整用GUI ---
+		ImGui::Separator();
+		ImGui::Text("Point Light");
+		PointLight* pData = object3dCommon_->GetPointLightData();
+
+		// pDataがnullptrでないかチェック
+		if(pData){
+			ImGui::ColorEdit4("Point Color",&pData->color.x);
+			ImGui::DragFloat3("Point Pos",&pData->position.x,0.1f);
+			ImGui::DragFloat("Point Intensity",&pData->intensity,0.1f,0.0f,100.0f);
+			ImGui::DragFloat("Point Radius",&pData->radius,0.1f,0.0f,100.0f);
+			ImGui::DragFloat("Point Decay",&pData->decay,0.1f,0.0f,10.0f);
+		} else{
+			ImGui::Text("PointLight Data is Null!");
+		}
+
+		// --- SpotLightの調整用GUI ---
+		SpotLight* sData = object3dCommon_->GetSpotLightData();
+		if(sData){
+			ImGui::Separator();
+			ImGui::Text("Spot Light");
+			ImGui::ColorEdit4("Spot Color",&sData->color.x);
+			ImGui::DragFloat3("Spot Pos",&sData->position.x,0.1f);
+			ImGui::DragFloat3("Spot Dir",&sData->direction.x,0.01f);
+			ImGui::DragFloat("Spot Intensity",&sData->intensity,0.1f);
+			ImGui::DragFloat("Spot Distance",&sData->distance,0.1f);
+
+			// 角度（度数法）で入力させて内部でcosに変換する例
+// GameSceneのImGui部分
+			static float spotDegree = 30.0f;       // 外角（度数法）
+			static float spotDegreeStart = 20.0f;  // 内角（度数法）
+
+			ImGui::DragFloat("Spot Angle",&spotDegree,0.1f,0.0f,90.0f);
+			ImGui::DragFloat("Spot FalloffStart",&spotDegreeStart,0.1f,0.0f,90.0f);
+
+			// 構造体には cos に変換して入れる（これが重要！）
+			sData->cosAngle = cosf(spotDegree * 3.141592f / 180.0f);
+			sData->cosFalloffStart = cosf(spotDegreeStart * 3.141592f / 180.0f);
+		}
+
+		ModelManager::GetInstance()->UpdateLightGui();
 		ImGui::End();
 	}
 #endif
@@ -141,12 +201,17 @@ void GameScene::Update(){
 
 void GameScene::Draw(){
 	object3dCommon_->Draw();
+	// 3Dオブジェクトの描画
+
+	if(terrainObj_){
+		terrainObj_->Draw();
+	}
 
 	if(sphereObj_){
 		sphereObj_->Draw();
 	}
 
-	if(skybox_){
-		skybox_->Draw();
-	}
+	//if(skybox_){
+	//	skybox_->Draw();
+	//}
 }

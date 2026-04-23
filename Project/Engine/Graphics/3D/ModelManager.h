@@ -4,35 +4,31 @@
 #include <memory>
 #include "Model.h"
 
-// 前方宣言
 class DXCommon;
 
 class ModelManager{
 public:
-	// シングルトンインスタンスの取得
-	static ModelManager* GetInstance();
+    static ModelManager* GetInstance();
 
-	// ★変更: static を外します (インスタンスを delete するのではなく、中身をクリアする関数にするため)
-	void Finalize();
+    void Initialize(DXCommon* dxCommon);
+    void Finalize();
 
-	// 初期化
-	void Initialize(DXCommon* dxCommon);
+    // モデル管理
+    void LoadModel(const std::string& filePath);
+    Model* FindModel(const std::string& filePath);
 
-	// モデルの読み込み (.objファイル名を指定)
-	void LoadModel(const std::string& filePath);
+    // ゲッター
+    ModelCommon* GetModelCommon() const{ return modelCommon.get(); }
 
-	// モデルの検索 (読み込み済みのモデルを取得)
-	Model* FindModel(const std::string& filePath);
+    // デバッグ用
+    void UpdateLightGui();
 
 private:
-	// ★削除: static ModelManager* instance; は不要です
+    ModelManager() = default;
+    ~ModelManager() = default;
+    ModelManager(const ModelManager&) = delete;
+    ModelManager& operator=(const ModelManager&) = delete;
 
-	ModelManager() = default;
-	~ModelManager() = default;
-	ModelManager(const ModelManager&) = delete;
-	ModelManager& operator=(const ModelManager&) = delete;
-
-	// メンバ変数
-	std::unique_ptr<ModelCommon> modelCommon = nullptr;
-	std::map<std::string,std::unique_ptr<Model>> models;
+    std::unique_ptr<ModelCommon> modelCommon = nullptr;
+    std::map<std::string,std::unique_ptr<Model>> models;
 };

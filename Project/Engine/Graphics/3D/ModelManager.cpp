@@ -1,55 +1,49 @@
 #include "ModelManager.h"
-#include "DXCommon.h" // Initializeで使うため必要ならインクルード
-#include "ModelCommon.h" // ★追加: ModelCommonの実体が必要
-
-// ★削除: staticメンバ変数の初期化は不要
-// ModelManager* ModelManager::instance = nullptr;
+#include "DXCommon.h"
+#include "ModelCommon.h"
 
 ModelManager* ModelManager::GetInstance(){
-	// ★変更: Meyers Singleton (staticローカル変数)
-	// これで new も delete も不要になります。
-	static ModelManager instance;
-	return &instance;
-}
-
-void ModelManager::Finalize(){
-	// ★変更: インスタンスの削除は自動で行われるので不要です。
-	// ここでは保持しているモデルデータをクリアするだけでOK。
-	models.clear();
-
-	// modelCommon も unique_ptr なので、
-	// ModelManager が死ぬときに勝手に道連れで消えてくれます。
+    static ModelManager instance;
+    return &instance;
 }
 
 void ModelManager::Initialize(DXCommon* dxCommon){
-	// ★変更: make_unique で生成
-	modelCommon = std::make_unique<ModelCommon>();
-	modelCommon->Initialize(dxCommon);
+    modelCommon = std::make_unique<ModelCommon>();
+    modelCommon->Initialize(dxCommon);
+}
+
+void ModelManager::Finalize(){
+    models.clear();
+    modelCommon.reset();
 }
 
 void ModelManager::LoadModel(const std::string& filePath){
-	// 読み込み済みなら何もしない
-	// (C++20なら contains が使えますが、なければ find != end で代用)
-	if(models.contains(filePath)){
-		return;
-	}
+    if(models.contains(filePath)){
+        return;
+    }
 
-	// モデルの生成と初期化
-	// (ここですでに make_unique を使えているのは素晴らしいです！)
-	std::unique_ptr<Model> model = std::make_unique<Model>();
-
-	// modelCommon は unique_ptr なので .get() で生ポインタを渡す
-	model->Initialize(modelCommon.get(),"resource",filePath);
-
-	// マップに登録（所有権を移動）
-	models.insert(std::make_pair(filePath,std::move(model)));
+    std::unique_ptr<Model> model = std::make_unique<Model>();
+    model->Initialize(modelCommon.get(),"resource",filePath);
+    models.insert(std::make_pair(filePath,std::move(model)));
 }
 
 Model* ModelManager::FindModel(const std::string& filePath){
-	// 指定されたモデルがあればポインタを返す
-	if(models.contains(filePath)){
-		return models.at(filePath).get();
-	}
-	// なければnullptr
-	return nullptr;
+    if(models.contains(filePath)){
+        return models.at(filePath).get();
+    }
+    return nullptr;
+}
+
+void ModelManager::UpdateLightGui(){
+#ifdef _DEBUG
+    DirectionalLight* data = modelCommon->GetLightData();
+    if(!data) return;
+
+    ImGui::Begin("Lighting Control");
+    ImGui::ColorEdit4("Light Color",&data->color.x);
+    ImGui::SliderFloat3("Light Direction",&data->direction.x,-1.0f,1.0f);
+    data->direction = Normalize(data->direction);
+    ImGui::DragFloat("Intensity",&data->intensity,0.01f,0.0f,10.0f);
+    ImGui::End();
+#endif
 }

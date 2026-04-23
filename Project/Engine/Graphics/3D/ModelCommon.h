@@ -1,12 +1,24 @@
 #pragma once
 #include "DXCommon.h"
-class ModelCommon{
-public:
-	void Initialize(DXCommon* dxCommon);
+#include "MyMath.h" // Vector3, Vector4 等のため
 
-	DXCommon* GetDxCommon()const{ return dxCommon_; }
-
-private:
-	DXCommon* dxCommon_;
+struct DirectionalLight{
+    Vector4 color;
+    Vector3 direction;
+    float intensity;
 };
 
+class ModelCommon{
+public:
+    void Initialize(DXCommon* dxCommon);
+    DXCommon* GetDxCommon() const{ return dxCommon_; }
+    ID3D12Resource* GetLightResource() const{ return lightResource.Get(); }
+    DirectionalLight* GetLightData() const{ return lightData; }
+
+private:
+    DXCommon* dxCommon_;
+    // ライト用のリソース
+    Microsoft::WRL::ComPtr<ID3D12Resource> lightResource;
+    // Map用ポインタ
+    DirectionalLight* lightData = nullptr;
+};

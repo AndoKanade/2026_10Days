@@ -1,218 +1,206 @@
-#include "Obj3DCommon.h"
-#include "Logger.h" // ログ機能がある場合
+#include "Obj3dCommon.h"
+#include "Logger.h"
 #include <cassert>
+#include <ModelManager.h>
 
 using namespace Microsoft::WRL;
 
 void Obj3dCommon::Initialize(DXCommon* dxcommon){
-	assert(dxcommon);
-	dxCommon_ = dxcommon;
+    assert(dxcommon);
+    dxCommon_ = dxcommon;
 
-	// パイプライン生成（この中でルートシグネチャ生成も呼ばれます）
-	CreateGraphicsPipelineState();
-	size_t sizeInBytes = (sizeof(CameraForGPU) + 0xff) & ~0xff;
+    CreateGraphicsPipelineState();
 
-	// 2. リソース作成
-	cameraResource_ = dxCommon_->CreateBufferResource(sizeInBytes);
+    // --- 1. カメラリソース作成 (256バイトアライメント) ---
+    size_t cameraSize = (sizeof(CameraForGPU) + 0xff) & ~0xff;
+    cameraResource_ = dxCommon_->CreateBufferResource(cameraSize);
+    cameraResource_->Map(0,nullptr,reinterpret_cast<void**>(&cameraData_));
+    cameraData_->worldPosition = {0.0f, 0.0f, 0.0f};
 
-	// 3. データを書き込めるようにアドレスを取得 (Map)
-	HRESULT hr = cameraResource_->Map(0,nullptr,reinterpret_cast<void**>(&cameraData_));
-	assert(SUCCEEDED(hr));
+    // --- 2. 平行光源リソース作成 (256バイトアライメント) ---
+    size_t directionalSize = (sizeof(DirectionalLight) + 0xff) & ~0xff;
+    directionalLightResource_ = dxCommon_->CreateBufferResource(directionalSize);
+    directionalLightResource_->Map(0,nullptr,reinterpret_cast<void**>(&directionalLightData_));
+    directionalLightData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
+    directionalLightData_->direction = {0.0f, -1.0f, 0.0f};
+    directionalLightData_->intensity = 1.0f;
 
-	// 4. 初期値を入れておく
-	cameraData_->worldPosition = {0.0f, 0.0f, 0.0f};
+    // --- 3. 点光源リソース作成 (256バイトアライメント) ---
+    size_t pointSize = (sizeof(PointLight) + 0xff) & ~0xff;
+    pointLightResource_ = dxCommon_->CreateBufferResource(pointSize);
+    pointLightResource_->Map(0,nullptr,reinterpret_cast<void**>(&pointLightData_));
+    pointLightData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
+    pointLightData_->position = {0.0f, 2.0f, 0.0f};
+    pointLightData_->intensity = 0.0f;
+    pointLightData_->radius = 10.0f;
+    pointLightData_->decay = 2.0f;
 
+    // --- 4. スポットライトリソース作成 (256バイトアライメント) ---
+    size_t spotSize = (sizeof(SpotLight) + 0xff) & ~0xff;
+    spotLightResource_ = dxCommon_->CreateBufferResource(spotSize);
+    spotLightResource_->Map(0,nullptr,reinterpret_cast<void**>(&spotLightData_));
+    spotLightData_->color = {1.0f, 1.0f, 1.0f, 1.0f};
+    spotLightData_->position = {0.0f, 5.0f, 0.0f};
+    spotLightData_->direction = {0.0f, -1.0f, 0.0f};
+    spotLightData_->intensity = 0.0f;
+    spotLightData_->distance = 20.0f;
+    spotLightData_->cosAngle = cosf(30.0f * 3.141592f / 180.0f);
+    spotLightData_->cosFalloffStart = cosf(20.0f * 3.141592f / 180.0f);
+    spotLightData_->decay = 2.0f;
 }
 
-// 描画共通設定（描画ループの前に一度だけ呼ぶ）
 void Obj3dCommon::Draw(){
-	// コマンドリスト取得
-	// ※GetCommandList() の名前はご自身のDXCommonの実装に合わせてください
-	auto commandList = dxCommon_->GetCommandList();
+    auto commandList = dxCommon_->GetCommandList();
 
-	// ルートシグネチャとPSOをセット
-	commandList->SetGraphicsRootSignature(rootSignature.Get());
-	commandList->SetPipelineState(graphicsPipelineState.Get());
+    commandList->SetGraphicsRootSignature(rootSignature.Get());
+    commandList->SetPipelineState(graphicsPipelineState.Get());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	// トポロジ設定（三角形リスト）
-	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    // 平行光源設定 (b2) - ModelManager経由
+    auto lightRes = ModelManager::GetInstance()->GetModelCommon()->GetLightResource();
+    commandList->SetGraphicsRootConstantBufferView(3,lightRes->GetGPUVirtualAddress());
 
-	if(cameraResource_){
-		// 現在のカメラ座標を更新 (Map済みデータに書き込み)
-		if(defaultCamera_){
-			cameraData_->worldPosition = defaultCamera_->GetTranslate();
-		}
+    // カメラ設定 (b3)
+    if(cameraResource_){
+        if(defaultCamera_){
+            cameraData_->worldPosition = defaultCamera_->GetTranslate();
+        }
+        commandList->SetGraphicsRootConstantBufferView(4,cameraResource_->GetGPUVirtualAddress());
+    }
 
-		// GPUにアドレスを渡す
-		commandList->SetGraphicsRootConstantBufferView(4,cameraResource_->GetGPUVirtualAddress());
-	}
+    // 点光源設定 (b4)
+    if(pointLightResource_){
+        commandList->SetGraphicsRootConstantBufferView(5,pointLightResource_->GetGPUVirtualAddress());
+    }
 
+    // スポットライト設定 (b5)
+    if(spotLightResource_){
+        commandList->SetGraphicsRootConstantBufferView(6,spotLightResource_->GetGPUVirtualAddress());
+    }
 }
 
 void Obj3dCommon::CreateRootSignature(){
-	HRESULT hr;
+    HRESULT hr;
 
-	D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
-	descriptorRange[0].BaseShaderRegister = 0;
-	descriptorRange[0].NumDescriptors = 1;
-	descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	descriptorRange[0].OffsetInDescriptorsFromTableStart =
-		D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    D3D12_DESCRIPTOR_RANGE descriptorRange[1] = {};
+    descriptorRange[0].BaseShaderRegister = 0;
+    descriptorRange[0].NumDescriptors = 1;
+    descriptorRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+    D3D12_ROOT_PARAMETER rootParameters[7] = {};
 
-	// 1. ルートパラメータの設定
-	// 一般的な3D用構成: [0]Material(CBV), [1]Transform(CBV), [2]Texture(DescTable), [3]Light(CBV), [4]Camera(CBV)
-	D3D12_ROOT_PARAMETER rootParameters[5] = {};
+    // [0] Material (b0)
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[0].Descriptor.ShaderRegister = 0;
 
-	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParameters[0].Descriptor.ShaderRegister = 0;
+    // [1] Transform (b1)
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[1].Descriptor.ShaderRegister = 1;
 
-	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-	rootParameters[1].Descriptor.ShaderRegister = 1;
+    // [2] Texture (t0)
+    rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = _countof(descriptorRange);
 
-	rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParameters[2].DescriptorTable.pDescriptorRanges = descriptorRange;
-	rootParameters[2].DescriptorTable.NumDescriptorRanges =
-		_countof(descriptorRange);
+    // [3] DirectionalLight (b2)
+    rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[3].Descriptor.ShaderRegister = 2;
 
-	rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParameters[3].Descriptor.ShaderRegister = 2;
+    // [4] Camera (b3)
+    rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[4].Descriptor.ShaderRegister = 3;
 
-	// [4] Camera (b3)
-	rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParameters[4].Descriptor.ShaderRegister = 3; // レジスタ番号 b3
+    // [5] PointLight (b4)
+    rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[5].Descriptor.ShaderRegister = 4;
 
-	D3D12_DESCRIPTOR_RANGE descriptorRangeForInstancing[1] = {};
+    // [6] SpotLight (b5)
+    rootParameters[6].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[6].Descriptor.ShaderRegister = 5;
 
-	descriptorRangeForInstancing[0].BaseShaderRegister = 0;
-	descriptorRangeForInstancing[0].NumDescriptors = 1;
-	descriptorRangeForInstancing[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	descriptorRangeForInstancing[0].OffsetInDescriptorsFromTableStart =
-		D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
+    staticSamplers[0].ShaderRegister = 0;
+    staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	D3D12_ROOT_PARAMETER rootParametersInstancing[4] = {};
+    D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
+    descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+    descriptionRootSignature.pParameters = rootParameters;
+    descriptionRootSignature.NumParameters = _countof(rootParameters);
+    descriptionRootSignature.pStaticSamplers = staticSamplers;
+    descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
 
-	rootParametersInstancing[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParametersInstancing[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParametersInstancing[0].Descriptor.ShaderRegister = 0;
+    ComPtr<ID3DBlob> signatureBlob;
+    ComPtr<ID3DBlob> errorBlob;
+    hr = D3D12SerializeRootSignature(&descriptionRootSignature,D3D_ROOT_SIGNATURE_VERSION_1,&signatureBlob,&errorBlob);
+    if(FAILED(hr)){
+        Logger::Log(reinterpret_cast<char*>(errorBlob->GetBufferPointer()));
+        assert(false);
+    }
 
-	rootParametersInstancing[1].ParameterType =
-		D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParametersInstancing[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-	rootParametersInstancing[1].DescriptorTable.pDescriptorRanges =
-		descriptorRangeForInstancing;
-	rootParametersInstancing[1].DescriptorTable.NumDescriptorRanges =
-		_countof(descriptorRangeForInstancing);
-
-	rootParametersInstancing[2].ParameterType =
-		D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParametersInstancing[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParametersInstancing[2].DescriptorTable.pDescriptorRanges =
-		descriptorRange;
-	rootParametersInstancing[2].DescriptorTable.NumDescriptorRanges =
-		_countof(descriptorRangeForInstancing);
-
-	rootParametersInstancing[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParametersInstancing[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-	rootParametersInstancing[3].Descriptor.ShaderRegister = 2;
-
-
-	// 2. サンプラーの設定
-	D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
-	staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-	staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;
-	staticSamplers[0].ShaderRegister = 0;
-	staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	// 3. ルートシグネチャの設定
-	D3D12_ROOT_SIGNATURE_DESC descriptionRootSignature{};
-	descriptionRootSignature.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-	descriptionRootSignature.pParameters = rootParameters;
-	descriptionRootSignature.NumParameters = _countof(rootParameters);
-	descriptionRootSignature.pStaticSamplers = staticSamplers;
-	descriptionRootSignature.NumStaticSamplers = _countof(staticSamplers);
-
-	// シリアライズ
-	ComPtr<ID3DBlob> signatureBlob;
-	ComPtr<ID3DBlob> errorBlob;
-	hr = D3D12SerializeRootSignature(&descriptionRootSignature,D3D_ROOT_SIGNATURE_VERSION_1,&signatureBlob,&errorBlob);
-	if(FAILED(hr)){
-		Logger::Log(reinterpret_cast<char*>(errorBlob->GetBufferPointer()));
-		assert(false);
-	}
-
-	// 生成
-	hr = dxCommon_->GetDevice()->CreateRootSignature(0,signatureBlob->GetBufferPointer(),signatureBlob->GetBufferSize(),IID_PPV_ARGS(&rootSignature));
-	assert(SUCCEEDED(hr));
+    hr = dxCommon_->GetDevice()->CreateRootSignature(0,signatureBlob->GetBufferPointer(),signatureBlob->GetBufferSize(),IID_PPV_ARGS(&rootSignature));
+    assert(SUCCEEDED(hr));
 }
 
 void Obj3dCommon::CreateGraphicsPipelineState(){
-	HRESULT hr;
+    HRESULT hr;
+    CreateRootSignature();
 
-	CreateRootSignature();
+    ComPtr<IDxcBlob> vertexShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Obj3D/Object3d.VS.hlsl",L"vs_6_0");
+    assert(vertexShaderBlob != nullptr);
+    ComPtr<IDxcBlob> pixelShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Obj3D/Object3d.PS.hlsl",L"ps_6_0");
+    assert(pixelShaderBlob != nullptr);
 
-	// 1. シェーダーコンパイル
-	// DXCommonにCompileShaderがある前提です
-	ComPtr<IDxcBlob> vertexShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Obj3D/Object3d.VS.hlsl",L"vs_6_0");
-	assert(vertexShaderBlob != nullptr);
-	ComPtr<IDxcBlob> pixelShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Obj3D/Object3d.PS.hlsl",L"ps_6_0");
-	assert(pixelShaderBlob != nullptr);
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+    };
 
-	// 2. InputLayout (3D用: POSITION, TEXCOORD, NORMAL)
-	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-		{"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-	};
+    D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{};
+    inputLayoutDesc.pInputElementDescs = inputElementDescs;
+    inputLayoutDesc.NumElements = _countof(inputElementDescs);
 
-	D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{};
-	inputLayoutDesc.pInputElementDescs = inputElementDescs;
-	inputLayoutDesc.NumElements = _countof(inputElementDescs);
+    D3D12_BLEND_DESC blendDesc{};
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
-	// 3. BlendState
-	D3D12_BLEND_DESC blendDesc{};
-	blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	// 必要に応じてブレンド有効化設定を追加してください
+    D3D12_RASTERIZER_DESC rasterizerDesc{};
+    rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
+    rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
 
-	// 4. RasterizerState (3Dはカリング有効: BACK)
-	D3D12_RASTERIZER_DESC rasterizerDesc{};
-	rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
-	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+    D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
+    depthStencilDesc.DepthEnable = true;
+    depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 
-	// 5. DepthStencilState (3Dは深度有効: WriteMask_ALL)
-	D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
-	depthStencilDesc.DepthEnable = true;
-	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-	depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc{};
+    graphicsPipelineStateDesc.pRootSignature = rootSignature.Get();
+    graphicsPipelineStateDesc.InputLayout = inputLayoutDesc;
+    graphicsPipelineStateDesc.VS = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
+    graphicsPipelineStateDesc.PS = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
+    graphicsPipelineStateDesc.BlendState = blendDesc;
+    graphicsPipelineStateDesc.RasterizerState = rasterizerDesc;
+    graphicsPipelineStateDesc.DepthStencilState = depthStencilDesc;
+    graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    graphicsPipelineStateDesc.NumRenderTargets = 1;
+    graphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    graphicsPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    graphicsPipelineStateDesc.SampleDesc.Count = 1;
+    graphicsPipelineStateDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
-	// 6. PSO生成設定
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPipelineStateDesc{};
-	graphicsPipelineStateDesc.pRootSignature = rootSignature.Get();
-	graphicsPipelineStateDesc.InputLayout = inputLayoutDesc;
-	graphicsPipelineStateDesc.VS = {vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize()};
-	graphicsPipelineStateDesc.PS = {pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize()};
-	graphicsPipelineStateDesc.BlendState = blendDesc;
-	graphicsPipelineStateDesc.RasterizerState = rasterizerDesc;
-	graphicsPipelineStateDesc.DepthStencilState = depthStencilDesc;
-	graphicsPipelineStateDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-
-	// レンダーターゲット設定
-	graphicsPipelineStateDesc.NumRenderTargets = 1;
-	graphicsPipelineStateDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-	graphicsPipelineStateDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	graphicsPipelineStateDesc.SampleDesc.Count = 1;
-	graphicsPipelineStateDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-
-	// 生成実行
-	hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc,IID_PPV_ARGS(&graphicsPipelineState));
-	assert(SUCCEEDED(hr));
+    hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&graphicsPipelineStateDesc,IID_PPV_ARGS(&graphicsPipelineState));
+    assert(SUCCEEDED(hr));
 }

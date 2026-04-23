@@ -454,14 +454,16 @@ DXCommon::CompileShader(const std::wstring& filePath,const wchar_t* profile){
 	return shaderBlob;
 }
 
-Microsoft::WRL::ComPtr<ID3D12Resource>
-DXCommon::CreateBufferResource(size_t sizeInBytes){
+Microsoft::WRL::ComPtr<ID3D12Resource> DXCommon::CreateBufferResource(size_t sizeInBytes){
 	D3D12_HEAP_PROPERTIES uploadHeapProperties{};
 	uploadHeapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
 
+	// --- 修正箇所：256バイトの倍数に切り上げる ---
+	size_t alignedSize = (sizeInBytes + 0xff) & ~0xff;
+
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	resourceDesc.Width = sizeInBytes;
+	resourceDesc.Width = alignedSize; // 切り上げたサイズを渡す
 	resourceDesc.Height = 1;
 	resourceDesc.DepthOrArraySize = 1;
 	resourceDesc.MipLevels = 1;
