@@ -16,7 +16,7 @@
 
 // 定数定義 (ファイルパスやパラメータ)
 namespace{
-    const std::string kModelName = "fence.obj";
+    const std::string kModelName = "Fence/fence.obj";
     const std::string kTextureName = "resource/uvChecker.png";
     const float kSpriteSize = 300.0f;
 }
