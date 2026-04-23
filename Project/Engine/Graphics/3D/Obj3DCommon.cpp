@@ -162,9 +162,9 @@ void Obj3dCommon::CreateGraphicsPipelineState(){
 
 	// 1. シェーダーコンパイル
 	// DXCommonにCompileShaderがある前提です
-	ComPtr<IDxcBlob> vertexShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Object3d.VS.hlsl",L"vs_6_0");
+	ComPtr<IDxcBlob> vertexShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Obj3D/Object3d.VS.hlsl",L"vs_6_0");
 	assert(vertexShaderBlob != nullptr);
-	ComPtr<IDxcBlob> pixelShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Object3d.PS.hlsl",L"ps_6_0");
+	ComPtr<IDxcBlob> pixelShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Obj3D/Object3d.PS.hlsl",L"ps_6_0");
 	assert(pixelShaderBlob != nullptr);
 
 	// 2. InputLayout (3D用: POSITION, TEXCOORD, NORMAL)

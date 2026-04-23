@@ -51,34 +51,34 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Engine\Graphics\Shaders\Particle.hlsli">
+    <None Include="Engine\Graphics\Shaders\Particle\Particle.hlsli">
       <Filter>Resources\shader</Filter>
     </None>
-    <None Include="Engine\Graphics\Shaders\Sprite.hlsli">
+    <None Include="Engine\Graphics\Shaders\Sprite\Sprite.hlsli">
       <Filter>Resources\shader</Filter>
     </None>
-    <None Include="Engine\Graphics\Shaders\Object3d.hlsli">
+    <None Include="Engine\Graphics\Shaders\Obj3D\Object3d.hlsli">
       <Filter>Resources\shader</Filter>
     </None>
-    <FxCompile Include="Engine\Graphics\Shaders\Object3d.PS.hlsl">
+    <FxCompile Include="Engine\Graphics\Shaders\Obj3D\Object3d.PS.hlsl">
       <Filter>Resources\shader</Filter>
     </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Object3d.VS.hlsl">
+    <FxCompile Include="Engine\Graphics\Shaders\Obj3D\Object3d.VS.hlsl">
       <Filter>Resources\shader</Filter>
     </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Particle.PS.hlsl">
+    <FxCompile Include="Engine\Graphics\Shaders\Particle\Particle.PS.hlsl">
       <Filter>Resources\shader</Filter>
     </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Particle.VS.hlsl">
+    <FxCompile Include="Engine\Graphics\Shaders\Particle\Particle.VS.hlsl">
       <Filter>Resources\shader</Filter>
     </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Sprite.PS.hlsl">
+    <FxCompile Include="Engine\Graphics\Shaders\Sprite\Sprite.PS.hlsl">
       <Filter>Resources\shader</Filter>
     </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Sprite.VS.hlsl">
+    <FxCompile Include="Engine\Graphics\Shaders\Sprite\Sprite.VS.hlsl">
       <Filter>Resources\shader</Filter>
     </FxCompile>
-    <None Include="Engine\Graphics\Shaders\Skybox.hlsli" />
+    <None Include="Engine\Graphics\Shaders\Skybox\Skybox.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Base\D3DResourceLeakChecker.h">
@@ -272,7 +272,7 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Engine\Graphics\Shaders\Skybox.PS.hlsl" />
-    <FxCompile Include="Engine\Graphics\Shaders\Skybox.VS.hlsl" />
+    <FxCompile Include="Engine\Graphics\Shaders\Skybox\Skybox.PS.hlsl" />
+    <FxCompile Include="Engine\Graphics\Shaders\Skybox\Skybox.VS.hlsl" />
   </ItemGroup>
 </Project>
