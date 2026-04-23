@@ -49,36 +49,50 @@
     <Filter Include="ヘッダー ファイル\Game">
       <UniqueIdentifier>{80861dad-2665-40b5-8acb-d9b187d82b66}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resources\shader\Obj3D">
+      <UniqueIdentifier>{de2f5a97-8450-4157-885c-4ebffcb724b1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\shader\Particle">
+      <UniqueIdentifier>{341918e5-a2ed-4928-bcf9-eafbad4ba961}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\shader\Sprite">
+      <UniqueIdentifier>{0f730ad9-0d7c-4c39-94bf-f2579bf5973c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\shader\Skybox">
+      <UniqueIdentifier>{517563f1-d482-437d-9a88-734330d38a13}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\Engine\Graphics\2D">
+      <UniqueIdentifier>{45ed3db4-867a-4ccc-80d6-ddf8808e26fd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\Engine\Graphics\3D">
+      <UniqueIdentifier>{ad915c9b-f260-4eb7-b43c-ab63111fe7e6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\Engine\Graphics\Effect">
+      <UniqueIdentifier>{14ac0714-d418-4d5c-8b58-ad439d0bbcdd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\Engine\Graphics\2D">
+      <UniqueIdentifier>{707a08ae-1e14-48e3-bb0d-4d5c42bdcbcb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\Engine\Graphics\3D">
+      <UniqueIdentifier>{d7a71f43-417e-457f-85c5-131fefd899c4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\Engine\Graphics\Effect">
+      <UniqueIdentifier>{9016068e-e0b7-4bef-82ba-34d97c87bc95}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Engine\Graphics\Shaders\Particle\Particle.hlsli">
-      <Filter>Resources\shader</Filter>
-    </None>
-    <None Include="Engine\Graphics\Shaders\Sprite\Sprite.hlsli">
-      <Filter>Resources\shader</Filter>
-    </None>
     <None Include="Engine\Graphics\Shaders\Obj3D\Object3d.hlsli">
-      <Filter>Resources\shader</Filter>
+      <Filter>Resources\shader\Obj3D</Filter>
     </None>
-    <FxCompile Include="Engine\Graphics\Shaders\Obj3D\Object3d.PS.hlsl">
-      <Filter>Resources\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Obj3D\Object3d.VS.hlsl">
-      <Filter>Resources\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Particle\Particle.PS.hlsl">
-      <Filter>Resources\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Particle\Particle.VS.hlsl">
-      <Filter>Resources\shader</Filter>
-    </FxCompile>
+    <None Include="Engine\Graphics\Shaders\Particle\Particle.hlsli">
+      <Filter>Resources\shader\Particle</Filter>
+    </None>
     <FxCompile Include="Engine\Graphics\Shaders\Sprite\Sprite.PS.hlsl">
-      <Filter>Resources\shader</Filter>
+      <Filter>Resources\shader\Sprite</Filter>
     </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Sprite\Sprite.VS.hlsl">
-      <Filter>Resources\shader</Filter>
-    </FxCompile>
-    <None Include="Engine\Graphics\Shaders\Skybox\Skybox.hlsli" />
+    <None Include="Engine\Graphics\Shaders\Skybox\Skybox.hlsli">
+      <Filter>Resources\shader\Skybox</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Base\D3DResourceLeakChecker.h">
@@ -120,39 +134,6 @@
     <ClInclude Include="Engine\Manager\TextureManager.h">
       <Filter>ヘッダー ファイル\Engine\Manager</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Graphics\2D\Sprite.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\2D\SpriteCommon.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\Camera.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\CameraManager.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\Model.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\ModelCommon.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\ModelManager.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\Obj3D.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\Obj3DCommon.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\Effect\ParticleEmitter.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Graphics\Effect\ParticleManager.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
-    </ClInclude>
     <ClInclude Include="Game\AbstractSceneFactory.h">
       <Filter>ヘッダー ファイル\Game</Filter>
     </ClInclude>
@@ -174,10 +155,45 @@
     <ClInclude Include="resource\resource.h">
       <Filter>Resources</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\Skybox.h">
-      <Filter>ヘッダー ファイル\Engine\Graphics</Filter>
+    <ClInclude Include="Engine\Graphics\2D\Sprite.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\2D</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\SkyboxCommon.h" />
+    <ClInclude Include="Engine\Graphics\2D\SpriteCommon.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\2D</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\Camera.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\CameraManager.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\Model.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\ModelCommon.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\ModelManager.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\Obj3D.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\Obj3DCommon.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\Skybox.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\SkyboxCommon.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\Effect\ParticleEmitter.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\Effect</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\Effect\ParticleManager.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\Effect</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine\Base\DXCommon.cpp">
@@ -216,39 +232,6 @@
     <ClCompile Include="Engine\Manager\TextureManager.cpp">
       <Filter>ソース ファイル\Engine\Manager</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Graphics\2D\Sprite.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\2D\SpriteCommon.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\Camera.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\CameraManager.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\Model.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\ModelCommon.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\Obj3D.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\Obj3DCommon.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\Effect\ParticleEmitter.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Graphics\Effect\ParticleManager.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
-    </ClCompile>
     <ClCompile Include="Game\GameScene.cpp">
       <Filter>ソース ファイル\Game</Filter>
     </ClCompile>
@@ -261,10 +244,45 @@
     <ClCompile Include="Game\TitleScene.cpp">
       <Filter>ソース ファイル\Game</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\Skybox.cpp">
-      <Filter>ソース ファイル\Engine\Graphics</Filter>
+    <ClCompile Include="Engine\Graphics\2D\Sprite.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\2D</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\SkyboxCommon.cpp" />
+    <ClCompile Include="Engine\Graphics\2D\SpriteCommon.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\2D</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\Model.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\ModelCommon.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\Obj3D.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\Obj3DCommon.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\Camera.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\CameraManager.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\Effect\ParticleEmitter.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\Effect</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\Effect\ParticleManager.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\Effect</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\Skybox.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\SkyboxCommon.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resource\MyGameEngine.rc">
@@ -272,7 +290,31 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Engine\Graphics\Shaders\Skybox\Skybox.PS.hlsl" />
-    <FxCompile Include="Engine\Graphics\Shaders\Skybox\Skybox.VS.hlsl" />
+    <FxCompile Include="Engine\Graphics\Shaders\Obj3D\Object3d.PS.hlsl">
+      <Filter>Resources\shader\Obj3D</Filter>
+    </FxCompile>
+    <FxCompile Include="Engine\Graphics\Shaders\Obj3D\Object3d.VS.hlsl">
+      <Filter>Resources\shader\Obj3D</Filter>
+    </FxCompile>
+    <FxCompile Include="Engine\Graphics\Shaders\Particle\Particle.VS.hlsl">
+      <Filter>Resources\shader\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="Engine\Graphics\Shaders\Particle\Particle.PS.hlsl">
+      <Filter>Resources\shader\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="Engine\Graphics\Shaders\Sprite\Sprite.VS.hlsl">
+      <Filter>Resources\shader\Sprite</Filter>
+    </FxCompile>
+    <FxCompile Include="Engine\Graphics\Shaders\Skybox\Skybox.PS.hlsl">
+      <Filter>Resources\shader\Skybox</Filter>
+    </FxCompile>
+    <FxCompile Include="Engine\Graphics\Shaders\Skybox\Skybox.VS.hlsl">
+      <Filter>Resources\shader\Skybox</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Engine\Graphics\Shaders\Sprite\Sprite.hlsli">
+      <Filter>Resources\shader\Sprite</Filter>
+    </None>
   </ItemGroup>
 </Project>
