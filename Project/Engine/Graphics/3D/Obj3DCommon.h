@@ -6,12 +6,6 @@
 #include "MyMath.h"
 #include "ModelCommon.h"
 
-// --- GPU転送用構造体 ---
-
-struct CameraForGPU{
-	Vector3 worldPosition;
-};
-
 struct PointLight{
 	Vector4 color;
 	Vector3 position;

@@ -38,8 +38,7 @@ public:
 	/// 新しいカメラを作成して登録します
 	/// </summary>
 	/// <param name="name">カメラ識別用の名前</param>
-	void CreateCamera(const std::string& name);
-
+	void CreateCamera(const std::string& name,ID3D12Device* device);
 	/// <summary>
 	/// 使用するカメラを切り替えます
 	/// </summary>

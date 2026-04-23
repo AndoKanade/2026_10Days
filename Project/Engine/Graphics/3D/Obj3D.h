@@ -1,5 +1,6 @@
 #pragma once
 #include "MyMath.h"
+#include "Model.h"
 #include <string>
 #include <vector>
 #include <d3d12.h>
@@ -12,42 +13,48 @@ class Camera;
 
 class Obj3D{
 public:
-    struct TransformationMatrix{
-        Matrix4x4 WVP;
-        Matrix4x4 World;
-        Matrix4x4 WorldInverseTranspose;
-    };
+	struct TransformationMatrix{
+		Matrix4x4 WVP;
+		Matrix4x4 World;
+		Matrix4x4 WorldInverseTranspose;
+	};
 
-    void Initialize(Obj3dCommon* object3dCommon);
-    void Update();
-    void Draw();
+	void Initialize(Obj3dCommon* object3dCommon);
+	void Update();
+	void Draw();
 
-    // Setter
-    void SetParent(const std::weak_ptr<Obj3D>& parent);
-    void SetModel(Model* model){ this->model = model; }
-    void SetModel(const std::string& filePath);
-    void SetCamera(Camera* camera){ this->camera = camera; }
+	// Setter
+	void SetParent(const std::weak_ptr<Obj3D>& parent);
+	void SetModel(Model* model){ this->model = model; }
+	void SetModel(const std::string& filePath);
+	void SetCamera(Camera* camera){ this->camera = camera; }
 
-    void SetScale(const Vector3& scale){ transform.scale = scale; }
-    void SetRotate(const Vector3& rotate){ transform.rotate = rotate; }
-    void SetTranslate(const Vector3& translate){ transform.translate = translate; }
+	void SetScale(const Vector3& scale){ transform.scale = scale; }
+	void SetRotate(const Vector3& rotate){ transform.rotate = rotate; }
+	void SetTranslate(const Vector3& translate){ transform.translate = translate; }
 
-    // Getter
-    const Vector3& GetScale() const{ return transform.scale; }
-    const Vector3& GetRotate() const{ return transform.rotate; }
-    const Vector3& GetTranslate() const{ return transform.translate; }
-    const Matrix4x4& GetWorldMatrix() const{ return transformationMatrixData->World; }
+	// Getter
+	const Vector3& GetScale() const{ return transform.scale; }
+	const Vector3& GetRotate() const{ return transform.rotate; }
+	const Vector3& GetTranslate() const{ return transform.translate; }
+	const Matrix4x4& GetWorldMatrix() const{ return transformationMatrixData->World; }
+	Model::Material* GetMaterial() const{ return materialData; }
 
 private:
-    void CreateTransformationMatrixData();
+	void CreateTransformationMatrixData();
+	void CreateMaterialData();
 
-    Obj3dCommon* object3dCommon = nullptr;
-    Model* model = nullptr;
-    Camera* camera = nullptr;
-    std::weak_ptr<Obj3D> parent_;
+	Obj3dCommon* object3dCommon = nullptr;
+	Model* model = nullptr;
+	Camera* camera = nullptr;
+	std::weak_ptr<Obj3D> parent_;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource;
-    TransformationMatrix* transformationMatrixData = nullptr;
+	// 行列用
+	Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource;
+	TransformationMatrix* transformationMatrixData = nullptr;
 
-    Transform transform;
+	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource;
+	Model::Material* materialData = nullptr;
+
+	Transform transform;
 };

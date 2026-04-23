@@ -32,6 +32,7 @@ private:
 	std::shared_ptr<Obj3D> fenceObj_;
 	std::shared_ptr<Obj3D> sphereObj_;
 	std::shared_ptr<Obj3D> terrainObj_;
+	std::shared_ptr<Obj3D> simpleSkinObj_;
 	std::unique_ptr<ParticleEmitter> particleEmitter_;
 
 	std::unique_ptr<SkyboxCommon> skyboxCommon_;
