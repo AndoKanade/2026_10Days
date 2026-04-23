@@ -15,14 +15,14 @@
 
 namespace{
 	const std::string kTextureChecker = "resource/uvChecker.png";
-	const std::string kTextureBall = "resource/monsterball.png";
+	const std::string kTextureBall = "resource/Sphere/monsterball.png";
 	const std::string kTextureCircle = "resource/Circle.png";
 	const std::string kSkyboxTexture = "resource/Skybox/rostock_laage_airport_4k.dds";
 
-	const std::string kModelPlane = "plane.obj";
-	const std::string kModelFence = "fence.obj";
-	const std::string kModelSphere = "sphere.obj";
-	const std::string kModelTerrain = "terrain.obj";
+	const std::string kModelPlane = "Plane/plane.obj";
+	const std::string kModelFence = "Fence/fence.obj";
+	const std::string kModelSphere = "Sphere/sphere.obj";
+	const std::string kModelTerrain = "Terrain/terrain.obj";
 
 	const std::string kParticleName = "Circle";
 }
