@@ -1,5 +1,4 @@
 #pragma once
-
 #include "MyMath.h"
 #include <string>
 
