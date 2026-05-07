@@ -90,6 +90,14 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std
 	return modelData;
 }
 
+void Model::SetTexture(const std::string& texturefilePath){
+	TextureManager::GetInstance()->LoadTexture(texturefilePath);
+
+	// 2. 新しいSRVインデックスを取得してマテリアル情報を更新
+	modelData.material.textureIndex = TextureManager::GetInstance()->GetSrvIndex(texturefilePath);
+	modelData.material.textureFilePath = texturefilePath;
+}
+
 // 頂点バッファ生成
 void Model::CreateVertexData(){
 	vertexResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeof(VertexData) * modelData.vertices.size());

@@ -28,6 +28,11 @@ public:
 	void SetModel(Model* model){ this->model = model; }
 	void SetModel(const std::string& filePath);
 	void SetCamera(Camera* camera){ this->camera = camera; }
+	void SetTexture(const std::string& filePath){
+		if(model){
+			model->SetTexture(filePath);
+		}
+	}
 
 	void SetScale(const Vector3& scale){ transform.scale = scale; }
 	void SetRotate(const Vector3& rotate){ transform.rotate = rotate; }

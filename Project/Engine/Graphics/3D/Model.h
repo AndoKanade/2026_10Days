@@ -58,6 +58,8 @@ public: // --- メンバ関数 ---
 	// .objファイルの読み込み
 	static ModelData LoadModelFile(const std::string&directoryPath,const std::string& filename);
 
+	void SetTexture(const std::string& texturefilePath);
+
 
 private: // --- メンバ変数 ---
 

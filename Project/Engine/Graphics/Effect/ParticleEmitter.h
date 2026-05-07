@@ -29,14 +29,35 @@ public:
 	/// </summary>
 	void Emit();
 
+	/// <summary>
+	/// パーティクルの色を設定します。
+	/// </summary>
+	/// <param name="color">設定する色 (RGBA)</param>
+	void SetColor(const Vector4& color){ color_ = color; }
+
+	/// <summary>
+	/// パーティクルの初速を設定します。
+	/// </summary>
+	/// <param name="velocity">設定する速度ベクトル</param>
+	void SetVelocity(const Vector3& velocity){ velocity_ = velocity; }
+
+	/// <summary>
+	/// パーティクルの生存時間(寿命)を設定します。
+	/// </summary>
+	/// <param name="lifeTime">設定する生存時間 (秒)</param>
+	void SetLifeTime(float lifeTime){ lifeTime_ = lifeTime; }
+
 private:
-	// --- 設定パラメータ ---
+	// 設定パラメータ
 	std::string name_;       // パーティクルグループ名
 	Transform transform_;    // 発生源の座標
 	uint32_t count_;         // 1回の発生数
 	float frequency_;        // 発生間隔 (秒)
+	Vector4 color_ = {1.0f, 1.0f, 1.0f, 1.0f};
+	Vector3 velocity_ = {0.0f, 0.0f, 0.0f};
+	float lifeTime_ = 1.0f;
 
-	// --- 内部制御用 ---
+	// 内部制御用
 	float timer_ = 0.0f;     // 経過時間計測タイマー
 	const float kDeltaTime_ = 1.0f / 60.0f; // 時間刻み幅 (固定ステップ)
 };
