@@ -16,8 +16,9 @@
 namespace{
 	const std::string kTextureChecker = "resource/uvChecker.png";
 	const std::string kTextureBall = "resource/Sphere/monsterball.png";
-	const std::string kTextureCircle = "resource/Circle.png";
+	const std::string kTextureCircle = "resource/circle.png";
 	const std::string kSkyboxTexture = "resource/Skybox/rostock_laage_airport_4k.dds";
+	const std::string kTextureCircle2 = "resource/circle2.png";
 
 	const std::string kModelPlane = "Plane/plane.obj";
 	const std::string kModelFence = "Fence/fence.obj";
@@ -29,7 +30,6 @@ namespace{
 }
 
 GameScene::GameScene() = default;
-
 GameScene::~GameScene() = default;
 
 void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon* spriteCommon){
@@ -37,11 +37,12 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	input_ = input;
 	spriteCommon_ = spriteCommon;
 
-	// リソースロード
+	// リソースのロード
 	TextureManager::GetInstance()->LoadTexture(kTextureChecker);
 	TextureManager::GetInstance()->LoadTexture(kTextureBall);
 	TextureManager::GetInstance()->LoadTexture(kTextureCircle);
 	TextureManager::GetInstance()->LoadTexture(kSkyboxTexture);
+	TextureManager::GetInstance()->LoadTexture(kTextureCircle2);
 
 	ModelManager::GetInstance()->LoadModel(kModelPlane);
 	ModelManager::GetInstance()->LoadModel(kModelFence);
@@ -51,10 +52,11 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
 
-	// オブジェクト生成
+	// オブジェクトの生成と初期化
 	planeObj_ = std::make_unique<Obj3D>();
 	planeObj_->Initialize(object3dCommon_);
 	planeObj_->SetModel(kModelPlane);
+	planeObj_->SetTexture(kTextureCircle2);
 
 	fenceObj_ = std::make_unique<Obj3D>();
 	fenceObj_->Initialize(object3dCommon_);
@@ -76,21 +78,27 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 
 	auto* simpleSkinMaterial = simpleSkinObj_->GetMaterial();
 	if(simpleSkinMaterial){
-		simpleSkinMaterial->environmentCoefficient = 1.0f; // 映り込みを有効(1.0f)に設定
+		simpleSkinMaterial->environmentCoefficient = 1.0f;
 	}
 
+	// スカイボックスの生成と初期化
 	skyboxCommon_ = std::make_unique<SkyboxCommon>();
 	skyboxCommon_->Initialize(object3dCommon_->GetDxCommon());
 	skybox_ = std::make_unique<Skybox>();
 	skybox_->Initialize(skyboxCommon_.get(),kSkyboxTexture);
 
-	// パーティクル設定
-	ParticleManager::GetInstance()->CreateParticleGroup(kParticleName,kTextureCircle);
+	// パーティクルの設定
+	ParticleManager::GetInstance()->CreateParticleGroup(kParticleName,kTextureCircle2);
 	Transform emitterConfig;
-	emitterConfig.scale = {1.0f, 1.0f, 1.0f};
-	particleEmitter_ = std::make_unique<ParticleEmitter>(kParticleName,emitterConfig,10,0.2f);
+	emitterConfig.translate = {0.0f, 2.0f, 0.0f};
+	emitterConfig.scale = {0.05f, 1.0f, 1.0f};
 
-	// カメラ設定
+	particleEmitter_ = std::make_unique<ParticleEmitter>(kParticleName,emitterConfig,8,0.5f);
+	particleEmitter_->SetVelocity({0.0f, 0.0f, 0.0f});
+	particleEmitter_->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
+	particleEmitter_->SetLifeTime(1.0f);
+
+	// カメラの設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
 	auto* defaultCamera = CameraManager::GetInstance()->GetCamera("default");
 	if(defaultCamera){
@@ -98,43 +106,43 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 		CameraManager::GetInstance()->SetActiveCamera("default");
 	}
 	object3dCommon_->SetDefaultCamera(CameraManager::GetInstance()->GetActiveCamera());
-
-
 }
 
 void GameScene::Finalize(){}
 
 void GameScene::Update(){
+	// 各オブジェクトの更新
 	if(sphereObj_){
 		sphereObj_->Update();
 	}
 	if(terrainObj_){
 		terrainObj_->Update();
 	}
-
 	if(simpleSkinObj_){
 		simpleSkinObj_->Update();
 	}
-
 	if(skybox_){
 		skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
 	}
-
+	if(planeObj_){
+		planeObj_->Update();
+	}
 	if(particleEmitter_){
 		particleEmitter_->Update();
 	}
 
-	if(input_->TriggerKey(DIK_SPACE)){
-		if(!SoundManager::GetInstance()->IsPlaying(kBgmPath_)){
-			SoundManager::GetInstance()->PlayAudio(kBgmPath_,0.5f,true);
-		}
+	// パーティクルマネージャーの更新
+	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
+	if(activeCamera){
+		ParticleManager::GetInstance()->Update(activeCamera);
 	}
 
+#pragma region
 #ifdef USE_IMGUI
-	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
 	if(activeCamera){
 		ImGui::Begin("GameScene Debug");
 
+		// カメラの調整
 		Vector3 camPos = activeCamera->GetTranslate();
 		if(ImGui::DragFloat3("Camera Pos",&camPos.x,0.1f)){
 			activeCamera->SetTranslate(camPos);
@@ -145,37 +153,17 @@ void GameScene::Update(){
 			activeCamera->SetRotate(camRot);
 		}
 
+		// オブジェクトの調整
 		if(planeObj_){
 			Vector3 pPos = planeObj_->GetTranslate();
 			ImGui::DragFloat3("Parent(Plane) Pos",&pPos.x,0.1f);
 			planeObj_->SetTranslate(pPos);
 		}
 
-		if(sphereObj_){
-			ImGui::Separator();
-			ImGui::Text("Sphere Object");
-			Vector3 sPos = sphereObj_->GetTranslate();
-			if(ImGui::DragFloat3("Sphere Pos",&sPos.x,0.1f)){
-				sphereObj_->SetTranslate(sPos);
-			}
-
-			Vector3 sRot = sphereObj_->GetRotate();
-			if(ImGui::DragFloat3("Sphere Rotate",&sRot.x,0.1f)){
-				sphereObj_->SetRotate(sRot);
-			}
-
-			Vector3 sScale = sphereObj_->GetScale();
-			if(ImGui::DragFloat3("Sphere Scale",&sScale.x,0.1f)){
-				sphereObj_->SetScale(sScale);
-			}
-		}
-
-		// --- PointLightの調整用GUI ---
+		// ポイントライトの調整
 		ImGui::Separator();
 		ImGui::Text("Point Light");
 		PointLight* pData = object3dCommon_->GetPointLightData();
-
-		// pDataがnullptrでないかチェック
 		if(pData){
 			ImGui::ColorEdit4("Point Color",&pData->color.x);
 			ImGui::DragFloat3("Point Pos",&pData->position.x,0.1f);
@@ -186,7 +174,7 @@ void GameScene::Update(){
 			ImGui::Text("PointLight Data is Null!");
 		}
 
-		// --- SpotLightの調整用GUI ---
+		// スポットライトの調整
 		SpotLight* sData = object3dCommon_->GetSpotLightData();
 		if(sData){
 			ImGui::Separator();
@@ -197,34 +185,28 @@ void GameScene::Update(){
 			ImGui::DragFloat("Spot Intensity",&sData->intensity,0.1f);
 			ImGui::DragFloat("Spot Distance",&sData->distance,0.1f);
 
-			// 角度（度数法）で入力させて内部でcosに変換する例
-// GameSceneのImGui部分
-			static float spotDegree = 30.0f;       // 外角（度数法）
-			static float spotDegreeStart = 20.0f;  // 内角（度数法）
+			static float spotDegree = 30.0f;
+			static float spotDegreeStart = 20.0f;
 
 			ImGui::DragFloat("Spot Angle",&spotDegree,0.1f,0.0f,90.0f);
 			ImGui::DragFloat("Spot FalloffStart",&spotDegreeStart,0.1f,0.0f,90.0f);
 
-			// 構造体には cos に変換して入れる（これが重要！）
 			sData->cosAngle = cosf(spotDegree * 3.141592f / 180.0f);
 			sData->cosFalloffStart = cosf(spotDegreeStart * 3.141592f / 180.0f);
 		}
 
+		// シンプルスキンオブジェクトの調整
 		if(simpleSkinObj_){
 			ImGui::Separator();
 			ImGui::Text("SimpleSkin Object (Environment)");
 
-			// マテリアルを取得
 			auto* material = simpleSkinObj_->GetMaterial();
 			if(material){
-				// スライダーを追加。数値が変われば即座に映り込みが変わります
 				ImGui::SliderFloat("Env Coefficient",&material->environmentCoefficient,0.0f,1.0f);
 			} else{
-				// スライダーが出ない時、こっちが赤文字で表示されるはず
 				ImGui::TextColored(ImVec4(1,0,0,1),"Material is NULL!");
 			}
 
-			// オブジェクトの座標などもついでにいじれるようにする場合
 			Vector3 skinPos = simpleSkinObj_->GetTranslate();
 			if(ImGui::DragFloat3("Skin Pos",&skinPos.x,0.1f)){
 				simpleSkinObj_->SetTranslate(skinPos);
@@ -235,25 +217,17 @@ void GameScene::Update(){
 		ImGui::End();
 	}
 #endif
+#pragma endregion
 }
 
 void GameScene::Draw(){
-	object3dCommon_->Draw();
 	// 3Dオブジェクトの描画
+	object3dCommon_->Draw();
 
-	//if(terrainObj_){
-	//	terrainObj_->Draw();
-	//}
-
-	//if(sphereObj_){
-	//	sphereObj_->Draw();
-	//}
-
-	if(simpleSkinObj_){
-		simpleSkinObj_->Draw();
-	}
-
-	if(skybox_){
-		skybox_->Draw();
+	// パーティクルの描画
+	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
+	if(activeCamera){
+		Matrix4x4 viewProj = Multiply(activeCamera->GetViewMatrix(),activeCamera->GetProjectionMatrix());
+		ParticleManager::GetInstance()->Draw(viewProj);
 	}
 }

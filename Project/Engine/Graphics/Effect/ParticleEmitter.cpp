@@ -13,7 +13,7 @@ ParticleEmitter::ParticleEmitter(const std::string& name,const Transform& transf
 /// 自身が持つ設定値（座標や発生数）を使って、Managerに発生をリクエストします。
 /// </summary>
 void ParticleEmitter::Emit(){
-	ParticleManager::GetInstance()->Emit(name_,transform_.translate,count_);
+	ParticleManager::GetInstance()->Emit(name_,transform_,count_,color_,velocity_,lifeTime_);
 }
 
 /// <summary>
