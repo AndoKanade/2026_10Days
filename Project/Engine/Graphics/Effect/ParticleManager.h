@@ -65,6 +65,8 @@ struct ParticleGroup{
 
 	// 現在描画すべきインスタンス数
 	uint32_t numInstance = 0;
+
+	bool isRing = false;
 };
 
 /// <summary>
@@ -128,8 +130,7 @@ public:
 	/// </summary>
 	/// <param name="name">グループ名 (Emit時に使用)</param>
 	/// <param name="textureFilePath">使用するテクスチャパス</param>
-	void CreateParticleGroup(const std::string& name,const std::string& textureFilePath);
-
+	void CreateParticleGroup(const std::string& name,const std::string& textureFilePath,bool isRing = false);
 	/// <summary>
 	/// パーティクルの発生 (エミット)
 	/// 指定したグループにパーティクルを追加します。
@@ -152,6 +153,8 @@ private:
 	/// 共通モデル(板ポリゴン)の生成 (初期化時のみ)
 	/// </summary>
 	void CreateModel();
+
+	void CreateRingModel();
 
 	/// <summary>
 	/// 新規パーティクルデータの生成
@@ -189,4 +192,9 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_; // 一時バッファ
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;   // 実際のバッファ
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
+
+	//Ring用のメンバ変数
+	Microsoft::WRL::ComPtr<ID3D12Resource> ringVertexBuffer_;
+	D3D12_VERTEX_BUFFER_VIEW ringVertexBufferView_{};
+	uint32_t ringVertexCount_ = 0;
 };

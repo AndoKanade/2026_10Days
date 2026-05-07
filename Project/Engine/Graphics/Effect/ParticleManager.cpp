@@ -22,6 +22,7 @@ void ParticleManager::Finalize(){
 	rootSignature_.Reset();
 	graphicsPipelineState_.Reset();
 	vertexBuffer_.Reset();
+	ringVertexBuffer_.Reset();
 	vertexResource_.Reset();
 }
 
@@ -40,15 +41,19 @@ void ParticleManager::Initialize(DXCommon* dxCommon,SrvManager* srvManager){
 	// 描画に必要な共通リソースを作成
 	CreateGraphicsPipeline();
 	CreateModel();
+	CreateRingModel();
 }
 
 // パーティクルグループ管理
-void ParticleManager::CreateParticleGroup(const std::string& name,const std::string& textureFilePath){
+void ParticleManager::CreateParticleGroup(const std::string& name,const std::string& textureFilePath,bool isRing){
 	if(particleGroups_.contains(name)){
 		return;
 	}
 
 	std::unique_ptr<ParticleGroup> group = std::make_unique<ParticleGroup>();
+
+	// Ringかどうかのフラグをセット
+	group->isRing = isRing;
 
 	// テクスチャ設定
 	group->textureFilePath = textureFilePath;
@@ -80,7 +85,6 @@ void ParticleManager::CreateParticleGroup(const std::string& name,const std::str
 
 	particleGroups_.insert(std::make_pair(name,std::move(group)));
 }
-
 // 更新・描画
 void ParticleManager::Update(Camera* camera){
 	assert(camera);
@@ -149,13 +153,22 @@ void ParticleManager::Draw(const Matrix4x4& viewProjectionMatrix){
 	// 共通設定
 	commandList->SetGraphicsRootSignature(rootSignature_.Get());
 	commandList->SetPipelineState(graphicsPipelineState_.Get());
-	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-	commandList->IASetVertexBuffers(0,1,&vertexBufferView_);
 
 	// グループごとの描画
 	for(auto& [name,group] : particleGroups_){
 		if(group->numInstance == 0){
 			continue;
+		}
+
+		// トポロジとVBの切り替え
+		if(group->isRing){
+			// Ring用：三角形リスト
+			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			commandList->IASetVertexBuffers(0,1,&ringVertexBufferView_);
+		} else{
+			// 通常：三角形ストリップ
+			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+			commandList->IASetVertexBuffers(0,1,&vertexBufferView_);
 		}
 
 		// テクスチャ SRV をセット
@@ -167,7 +180,11 @@ void ParticleManager::Draw(const Matrix4x4& viewProjectionMatrix){
 		commandList->SetGraphicsRootDescriptorTable(1,instancingSrvHandleGPU);
 
 		// インスタンシング描画実行
-		commandList->DrawInstanced(4,group->numInstance,0,0);
+		if(group->isRing){
+			commandList->DrawInstanced(ringVertexCount_,group->numInstance,0,0);
+		} else{
+			commandList->DrawInstanced(4,group->numInstance,0,0);
+		}
 	}
 }
 
@@ -352,4 +369,73 @@ void ParticleManager::CreateModel(){
 	vertexBufferView_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
 	vertexBufferView_.SizeInBytes = sizeof(vertices);
 	vertexBufferView_.StrideInBytes = sizeof(VertexData);
+}
+
+void ParticleManager::CreateRingModel(){
+	// 資料の定数定義を再現
+	const uint32_t kRingDivide = 32;
+	const float kOuterRadius = 1.0f;
+	const float kInnerRadius = 0.2f;
+	const float radianPerDivide = 2.0f * std::numbers::pi_v<float> / float(kRingDivide);
+
+	// 頂点バッファの準備
+	ringVertexCount_ = kRingDivide * 6;
+	std::vector<VertexData> vertices;
+	vertices.reserve(ringVertexCount_);
+
+	const Vector3 kNormal = {0.0f, 0.0f, -1.0f};
+
+	for(uint32_t index = 0; index < kRingDivide; ++index){
+		float sin = std::sin(index * radianPerDivide);
+		float cos = std::cos(index * radianPerDivide);
+		float sinNext = std::sin((index + 1) * radianPerDivide);
+		float cosNext = std::cos((index + 1) * radianPerDivide);
+
+		float u = float(index) / float(kRingDivide);
+		float uNext = float(index + 1) / float(kRingDivide);
+
+		// 資料の座標とUV定義（①～④）を再現
+		VertexData v1;
+		v1.position = {-sin * kOuterRadius, cos * kOuterRadius, 0.0f, 1.0f};
+		v1.texcoord = {u, 0.0f};
+		v1.normal = kNormal;
+
+		VertexData v2;
+		v2.position = {-sinNext * kOuterRadius, cosNext * kOuterRadius, 0.0f, 1.0f};
+		v2.texcoord = {uNext, 0.0f};
+		v2.normal = kNormal;
+
+		VertexData v3;
+		v3.position = {-sin * kInnerRadius, cos * kInnerRadius, 0.0f, 1.0f};
+		v3.texcoord = {u, 1.0f};
+		v3.normal = kNormal;
+
+		VertexData v4;
+		v4.position = {-sinNext * kInnerRadius, cosNext * kInnerRadius, 0.0f, 1.0f};
+		v4.texcoord = {uNext, 1.0f};
+		v4.normal = kNormal;
+
+		// 三角形リスト形式で頂点を積む (時計回り)
+		vertices.push_back(v1);
+		vertices.push_back(v2);
+		vertices.push_back(v3);
+
+		vertices.push_back(v3);
+		vertices.push_back(v2);
+		vertices.push_back(v4);
+	}
+
+	// GPUバッファ生成とデータ転送
+	size_t bufferSize = sizeof(VertexData) * vertices.size();
+	ringVertexBuffer_ = dxCommon_->CreateBufferResource(bufferSize);
+
+	VertexData* vertexData = nullptr;
+	ringVertexBuffer_->Map(0,nullptr,reinterpret_cast<void**>(&vertexData));
+	std::memcpy(vertexData,vertices.data(),bufferSize);
+	ringVertexBuffer_->Unmap(0,nullptr);
+
+	// ビュー設定
+	ringVertexBufferView_.BufferLocation = ringVertexBuffer_->GetGPUVirtualAddress();
+	ringVertexBufferView_.SizeInBytes = static_cast<UINT>(bufferSize);
+	ringVertexBufferView_.StrideInBytes = sizeof(VertexData);
 }

@@ -19,6 +19,7 @@ namespace{
 	const std::string kTextureCircle = "resource/circle.png";
 	const std::string kSkyboxTexture = "resource/Skybox/rostock_laage_airport_4k.dds";
 	const std::string kTextureCircle2 = "resource/circle2.png";
+	const std::string kTexturegradationLine = "resource/gradationLine.png";
 
 	const std::string kModelPlane = "Plane/plane.obj";
 	const std::string kModelFence = "Fence/fence.obj";
@@ -26,7 +27,8 @@ namespace{
 	const std::string kModelTerrain = "Terrain/terrain.obj";
 	const std::string kModelSimpleSkin = "simpleSkin/simpleSkin.gltf";
 
-	const std::string kParticleName = "Circle";
+	const std::string kParticlePrimitive = "Circle";
+	const std::string kParticleRing = "Ring";
 }
 
 GameScene::GameScene() = default;
@@ -43,6 +45,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	TextureManager::GetInstance()->LoadTexture(kTextureCircle);
 	TextureManager::GetInstance()->LoadTexture(kSkyboxTexture);
 	TextureManager::GetInstance()->LoadTexture(kTextureCircle2);
+	TextureManager::GetInstance()->LoadTexture(kTexturegradationLine);
 
 	ModelManager::GetInstance()->LoadModel(kModelPlane);
 	ModelManager::GetInstance()->LoadModel(kModelFence);
@@ -88,15 +91,23 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	skybox_->Initialize(skyboxCommon_.get(),kSkyboxTexture);
 
 	// パーティクルの設定
-	ParticleManager::GetInstance()->CreateParticleGroup(kParticleName,kTextureCircle2);
-	Transform emitterConfig;
-	emitterConfig.translate = {0.0f, 2.0f, 0.0f};
-	emitterConfig.scale = {0.05f, 1.0f, 1.0f};
+	//  リング状のパーティクル (第3引数 true)
+	ParticleManager::GetInstance()->CreateParticleGroup(kParticleRing,kTexturegradationLine,true);
+	Transform ringConfig;
+	ringConfig.translate = {1.0f, 2.0f, 0.0f}; 
+	ringConfig.scale = {0.5f, 0.5f, 0.5f};
+	ringEmitter_ = std::make_unique<ParticleEmitter>(kParticleRing,ringConfig,1,0.5f);
+	ringEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
+	ringEmitter_->SetLifeTime(1.0f);
 
-	particleEmitter_ = std::make_unique<ParticleEmitter>(kParticleName,emitterConfig,8,0.5f);
-	particleEmitter_->SetVelocity({0.0f, 0.0f, 0.0f});
-	particleEmitter_->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
-	particleEmitter_->SetLifeTime(1.0f);
+	//  板ポリの設定 (第3引数 false)
+	ParticleManager::GetInstance()->CreateParticleGroup(kParticlePrimitive,kTextureCircle2,false);
+	Transform circleConfig;
+	circleConfig.translate = {1.0f, 2.0f, 0.0f}; 
+	circleConfig.scale = {0.05f, 1.0f, 1.0f};
+	circleEmitter_ = std::make_unique<ParticleEmitter>(kParticlePrimitive,circleConfig,3,0.5f);
+	circleEmitter_->SetVelocity({0.0f, 0.5f, 0.0f}); 
+	circleEmitter_->SetLifeTime(1.0f);
 
 	// カメラの設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
@@ -127,8 +138,11 @@ void GameScene::Update(){
 	if(planeObj_){
 		planeObj_->Update();
 	}
-	if(particleEmitter_){
-		particleEmitter_->Update();
+	if(ringEmitter_){
+		ringEmitter_->Update();
+	}
+	if(circleEmitter_){
+		circleEmitter_->Update();
 	}
 
 	// パーティクルマネージャーの更新
@@ -223,6 +237,11 @@ void GameScene::Update(){
 void GameScene::Draw(){
 	// 3Dオブジェクトの描画
 	object3dCommon_->Draw();
+
+	if(terrainObj_){
+		terrainObj_->Draw();
+
+	}
 
 	// パーティクルの描画
 	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
