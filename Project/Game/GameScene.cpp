@@ -29,6 +29,7 @@ namespace{
 
 	const std::string kParticlePrimitive = "Circle";
 	const std::string kParticleRing = "Ring";
+	const std::string kParticleCylinder = "Cylinder";
 }
 
 GameScene::GameScene() = default;
@@ -92,7 +93,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 
 	// パーティクルの設定
 	//  リング状のパーティクル (第3引数 true)
-	ParticleManager::GetInstance()->CreateParticleGroup(kParticleRing,kTexturegradationLine,true);
+	ParticleManager::GetInstance()->CreateParticleGroup(kParticleRing,kTexturegradationLine,true,false);
 	Transform ringConfig;
 	ringConfig.translate = {1.0f, 2.0f, 0.0f}; 
 	ringConfig.scale = {0.5f, 0.5f, 0.5f};
@@ -101,13 +102,24 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	ringEmitter_->SetLifeTime(1.0f);
 
 	//  板ポリの設定 (第3引数 false)
-	ParticleManager::GetInstance()->CreateParticleGroup(kParticlePrimitive,kTextureCircle2,false);
+	ParticleManager::GetInstance()->CreateParticleGroup(kParticlePrimitive,kTextureCircle2,false,false);
 	Transform circleConfig;
 	circleConfig.translate = {1.0f, 2.0f, 0.0f}; 
 	circleConfig.scale = {0.05f, 1.0f, 1.0f};
 	circleEmitter_ = std::make_unique<ParticleEmitter>(kParticlePrimitive,circleConfig,3,0.5f);
 	circleEmitter_->SetVelocity({0.0f, 0.5f, 0.0f}); 
 	circleEmitter_->SetLifeTime(1.0f);
+
+	ParticleManager::GetInstance()->CreateParticleGroup(kParticleCylinder,kTexturegradationLine,false,true);
+
+	Transform cylinderConfig;
+	cylinderConfig.translate = {0.0f, 0.0f, 0.0f};
+	cylinderConfig.scale = {1.0f, 1.0f, 1.0f}; // 縦に長くして柱にする
+
+	cylinderEmitter_ = std::make_unique<ParticleEmitter>(kParticleCylinder,cylinderConfig,1,0.1f);
+	cylinderEmitter_->SetColor({0.2f, 0.5f, 1.0f, 0.8f}); // ポータルらしい青色
+	cylinderEmitter_->SetLifeTime(2.0f);
+	cylinderEmitter_->SetVelocity({0.0f, 0.0f, 0.0f});   // その場に固定
 
 	// カメラの設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
@@ -143,6 +155,10 @@ void GameScene::Update(){
 	}
 	if(circleEmitter_){
 		circleEmitter_->Update();
+	}
+
+	if(cylinderEmitter_){
+		cylinderEmitter_->Update();
 	}
 
 	// パーティクルマネージャーの更新

@@ -1,4 +1,4 @@
-#include"Particle.hlsli"
+#include "Particle.hlsli"
 
 struct TransformationMatrix
 {
@@ -11,9 +11,9 @@ struct ParticleForGPU
     float32_t4x4 WVP;
     float32_t4x4 World;
     float32_t4 color;
+    float32_t2 uvOffset;
 };
 
-//StructuredBuffer<TransformationMatrix> gTransformationMatrices : register(t0);
 StructuredBuffer<ParticleForGPU> gParticle : register(t0);
 
 struct VertexShaderInput
@@ -26,11 +26,18 @@ struct VertexShaderInput
 VertexShaderOutput main(VertexShaderInput input, uint32_t instanceId : SV_InstanceID)
 {
     VertexShaderOutput output;
+
+	// 行列による座標変換
     output.position = mul(input.position, gParticle[instanceId].WVP);
-    output.texcoord = input.texcoord;
+
+	// 元のUV座標に、インスタンスごとのオフセット値を足す
+    output.texcoord = input.texcoord + gParticle[instanceId].uvOffset;
+
+	// 法線の変換
     output.normal = normalize(mul(input.normal, (float32_t3x3) gParticle[instanceId].World));
+
+	// 色の受け渡し
     output.color = gParticle[instanceId].color;
-    
+
     return output;
 }
-
