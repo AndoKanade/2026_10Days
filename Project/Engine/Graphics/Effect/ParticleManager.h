@@ -38,6 +38,7 @@ struct ParticleForGPU{
 	Matrix4x4 WVP;   // World * View * Projection 行列
 	Matrix4x4 World; // World 行列
 	Vector4 color;   // 色
+	Vector2 uvOffset; // UVオフセット (アニメーション用)
 };
 
 /// <summary>
@@ -67,6 +68,7 @@ struct ParticleGroup{
 	uint32_t numInstance = 0;
 
 	bool isRing = false;
+	bool isCylinder = false;
 };
 
 /// <summary>
@@ -130,7 +132,7 @@ public:
 	/// </summary>
 	/// <param name="name">グループ名 (Emit時に使用)</param>
 	/// <param name="textureFilePath">使用するテクスチャパス</param>
-	void CreateParticleGroup(const std::string& name,const std::string& textureFilePath,bool isRing = false);
+	void CreateParticleGroup(const std::string& name,const std::string& textureFilePath,bool isRing = false,bool isCylinder = false);
 	/// <summary>
 	/// パーティクルの発生 (エミット)
 	/// 指定したグループにパーティクルを追加します。
@@ -155,6 +157,8 @@ private:
 	void CreateModel();
 
 	void CreateRingModel();
+
+	void CreateCylinderModel();
 
 	/// <summary>
 	/// 新規パーティクルデータの生成
@@ -197,4 +201,9 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> ringVertexBuffer_;
 	D3D12_VERTEX_BUFFER_VIEW ringVertexBufferView_{};
 	uint32_t ringVertexCount_ = 0;
+
+	// Cylinder用のメンバ変数
+	Microsoft::WRL::ComPtr<ID3D12Resource> cylinderVertexBuffer_;
+	D3D12_VERTEX_BUFFER_VIEW cylinderVertexBufferView_{};
+	uint32_t cylinderVertexCount_ = 0;
 };

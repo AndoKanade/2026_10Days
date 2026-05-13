@@ -35,6 +35,7 @@ private:
 	std::shared_ptr<Obj3D> simpleSkinObj_;
 	std::unique_ptr<ParticleEmitter> ringEmitter_;      // Ring用
 	std::unique_ptr<ParticleEmitter> circleEmitter_;    // 板ポリ用
+	std::unique_ptr<ParticleEmitter> cylinderEmitter_;// Cylinder用
 
 	std::unique_ptr<SkyboxCommon> skyboxCommon_;
 	std::unique_ptr<Skybox> skybox_;

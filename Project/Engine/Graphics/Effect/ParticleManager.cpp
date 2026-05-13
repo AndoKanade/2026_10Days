@@ -23,6 +23,7 @@ void ParticleManager::Finalize(){
 	graphicsPipelineState_.Reset();
 	vertexBuffer_.Reset();
 	ringVertexBuffer_.Reset();
+	cylinderVertexBuffer_.Reset();
 	vertexResource_.Reset();
 }
 
@@ -42,18 +43,20 @@ void ParticleManager::Initialize(DXCommon* dxCommon,SrvManager* srvManager){
 	CreateGraphicsPipeline();
 	CreateModel();
 	CreateRingModel();
+	CreateCylinderModel();
 }
 
 // パーティクルグループ管理
-void ParticleManager::CreateParticleGroup(const std::string& name,const std::string& textureFilePath,bool isRing){
+void ParticleManager::CreateParticleGroup(const std::string& name,const std::string& textureFilePath,bool isRing,bool isCylinder){
 	if(particleGroups_.contains(name)){
 		return;
 	}
 
 	std::unique_ptr<ParticleGroup> group = std::make_unique<ParticleGroup>();
 
-	// Ringかどうかのフラグをセット
+	// フラグをセット
 	group->isRing = isRing;
+	group->isCylinder = isCylinder;
 
 	// テクスチャ設定
 	group->textureFilePath = textureFilePath;
@@ -61,6 +64,7 @@ void ParticleManager::CreateParticleGroup(const std::string& name,const std::str
 	group->textureSrvIndex = TextureManager::GetInstance()->GetSrvIndex(textureFilePath);
 
 	// インスタンシング用リソース生成
+	// uvOffsetを追加したParticleForGPUのサイズでバッファを確保
 	group->instancingResource = dxCommon_->CreateBufferResource(sizeof(ParticleForGPU) * group->kNumMaxInstance);
 	group->instancingResource->Map(0,nullptr,reinterpret_cast<void**>(&group->instancingData));
 
@@ -73,7 +77,7 @@ void ParticleManager::CreateParticleGroup(const std::string& name,const std::str
 	instancingSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	instancingSrvDesc.Buffer.FirstElement = 0;
 	instancingSrvDesc.Buffer.NumElements = group->kNumMaxInstance;
-	instancingSrvDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
+	instancingSrvDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU); // 構造体サイズを指定
 	instancingSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
 	srvManager_->CreateSRVforStructuredBuffer(
@@ -85,6 +89,7 @@ void ParticleManager::CreateParticleGroup(const std::string& name,const std::str
 
 	particleGroups_.insert(std::make_pair(name,std::move(group)));
 }
+
 // 更新・描画
 void ParticleManager::Update(Camera* camera){
 	assert(camera);
@@ -120,11 +125,25 @@ void ParticleManager::Update(Camera* camera){
 			// アルファ値計算
 			float alpha = 1.0f - (it->currentTime / it->lifeTime);
 
-			// ワールド行列計算
+			// UVスクロールの計算
+			// 横方向(U)にスクロールさせる。速度は 2.0f などお好みで調整
+			Vector2 uvOffset = {0.0f, 0.0f};
+			if(group->isCylinder || group->isRing){
+				uvOffset.x = it->currentTime * 2.0f;
+			}
+
+			// 各種行列計算
 			Matrix4x4 scaleMatrix = MakeScaleMatrix(it->transform.scale);
 			Matrix4x4 rotateMatrix = MakeRotateZMatrix(it->transform.rotate.z);
 			Matrix4x4 translateMatrix = MakeTranslateMatrix(it->transform.translate);
-			Matrix4x4 worldMatrix = Multiply(scaleMatrix,Multiply(rotateMatrix,Multiply(billboardMatrix,translateMatrix)));
+
+			// ワールド行列の合成
+			Matrix4x4 worldMatrix;
+			if(group->isCylinder){
+				worldMatrix = Multiply(scaleMatrix,Multiply(rotateMatrix,translateMatrix));
+			} else{
+				worldMatrix = Multiply(scaleMatrix,Multiply(rotateMatrix,Multiply(billboardMatrix,translateMatrix)));
+			}
 
 			// WVP行列計算
 			Matrix4x4 wvpMatrix = Multiply(worldMatrix,viewProjectionMatrix);
@@ -135,13 +154,12 @@ void ParticleManager::Update(Camera* camera){
 				group->instancingData[numInstance].World = worldMatrix;
 				group->instancingData[numInstance].color = it->color;
 				group->instancingData[numInstance].color.w = alpha;
+				group->instancingData[numInstance].uvOffset = uvOffset; // ★ 追加
 
 				++numInstance;
 			}
 			++it;
 		}
-
-		// 描画するインスタンス数を保存
 		group->numInstance = numInstance;
 	}
 }
@@ -150,57 +168,54 @@ void ParticleManager::Draw(const Matrix4x4& viewProjectionMatrix){
 	assert(dxCommon_);
 	auto commandList = dxCommon_->GetCommandList();
 
-	// 共通設定
 	commandList->SetGraphicsRootSignature(rootSignature_.Get());
 	commandList->SetPipelineState(graphicsPipelineState_.Get());
 
-	// グループごとの描画
 	for(auto& [name,group] : particleGroups_){
-		if(group->numInstance == 0){
-			continue;
-		}
+		if(group->numInstance == 0) continue;
 
-		// トポロジとVBの切り替え
-		if(group->isRing){
-			// Ring用：三角形リスト
+		uint32_t vertexCount = 4; // デフォルトは板ポリ
+
+		if(group->isCylinder){
+			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			commandList->IASetVertexBuffers(0,1,&cylinderVertexBufferView_);
+			vertexCount = cylinderVertexCount_;
+		} else if(group->isRing){
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			commandList->IASetVertexBuffers(0,1,&ringVertexBufferView_);
+			vertexCount = ringVertexCount_;
 		} else{
-			// 通常：三角形ストリップ
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 			commandList->IASetVertexBuffers(0,1,&vertexBufferView_);
+			vertexCount = 4;
 		}
 
-		// テクスチャ SRV をセット
-		D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandleGPU = srvManager_->GetGPUDescriptorHandle(group->textureSrvIndex);
-		commandList->SetGraphicsRootDescriptorTable(0,textureSrvHandleGPU);
+		// SRVセット
+		commandList->SetGraphicsRootDescriptorTable(0,srvManager_->GetGPUDescriptorHandle(group->textureSrvIndex));
+		commandList->SetGraphicsRootDescriptorTable(1,srvManager_->GetGPUDescriptorHandle(group->instancingSrvIndex));
 
-		// インスタンシング用 SRV をセット
-		D3D12_GPU_DESCRIPTOR_HANDLE instancingSrvHandleGPU = srvManager_->GetGPUDescriptorHandle(group->instancingSrvIndex);
-		commandList->SetGraphicsRootDescriptorTable(1,instancingSrvHandleGPU);
-
-		// インスタンシング描画実行
-		if(group->isRing){
-			commandList->DrawInstanced(ringVertexCount_,group->numInstance,0,0);
-		} else{
-			commandList->DrawInstanced(4,group->numInstance,0,0);
-		}
+		// 描画実行
+		commandList->DrawInstanced(vertexCount,group->numInstance,0,0);
 	}
 }
+
 
 // 内部ヘルパー
 Particle ParticleManager::MakeNewParticle(const Vector3& translate){
 	Particle particle;
 
 	// 乱数分布の設定
-	std::uniform_real_distribution<float> distributionPos(-1.0f,1.0f);
+	std::uniform_real_distribution<float> distributionPos(-1.0f,1.0f); // 位置ランダム用（残しておく）
 	std::uniform_real_distribution<float> distributionVel(-1.0f,1.0f);
 	std::uniform_real_distribution<float> distColor(0.0f,1.0f);
 	std::uniform_real_distribution<float> distTime(1.0f,3.0f);
 
 	// 初期値設定
-	Vector3 randomTranslate = {distributionPos(randomEngine_), distributionPos(randomEngine_), distributionPos(randomEngine_)};
-	particle.transform.translate = translate + randomTranslate;
+	// --- 位置ランダムを残したい場合は下の2行を入れ替える ---
+	// Vector3 randomTranslate = { distributionPos(randomEngine_), distributionPos(randomEngine_), distributionPos(randomEngine_) };
+	// particle.transform.translate = translate + randomTranslate;
+	particle.transform.translate = translate; // 現在は固定設定
+
 	particle.velocity = {distributionVel(randomEngine_), distributionVel(randomEngine_), distributionVel(randomEngine_)};
 	particle.color = {distColor(randomEngine_), distColor(randomEngine_), distColor(randomEngine_), 1.0f};
 	particle.lifeTime = distTime(randomEngine_);
@@ -223,13 +238,20 @@ void ParticleManager::Emit(const std::string& name,const Transform& emitterTrans
 			Particle newParticle = MakeNewParticle(emitterTransform.translate);
 
 			// パラメータの上書き
-			newParticle.transform.translate = emitterTransform.translate;
-			newParticle.transform.scale = {
-				emitterTransform.scale.x,
-				emitterTransform.scale.y * distScale(randomEngine_),
-				emitterTransform.scale.z
-			};
-			newParticle.transform.rotate = {0.0f, 0.0f, distRotate(randomEngine_)};
+			// --- Cylinderの場合のみランダムを無効化する設定 ---
+			if(group->isCylinder){
+				newParticle.transform.scale = emitterTransform.scale;     // スケール固定
+				newParticle.transform.rotate = {0.0f, 0.0f, 0.0f};      // 回転固定
+			} else{
+				// 通常・Ringはランダム性を維持
+				newParticle.transform.scale = {
+					emitterTransform.scale.x,
+					emitterTransform.scale.y * distScale(randomEngine_),
+					emitterTransform.scale.z
+				};
+				newParticle.transform.rotate = {0.0f, 0.0f, distRotate(randomEngine_)};
+			}
+
 			newParticle.color = color;
 			newParticle.velocity = velocity;
 			newParticle.lifeTime = lifeTime;
@@ -438,4 +460,74 @@ void ParticleManager::CreateRingModel(){
 	ringVertexBufferView_.BufferLocation = ringVertexBuffer_->GetGPUVirtualAddress();
 	ringVertexBufferView_.SizeInBytes = static_cast<UINT>(bufferSize);
 	ringVertexBufferView_.StrideInBytes = sizeof(VertexData);
+}
+
+void ParticleManager::CreateCylinderModel(){
+	const uint32_t kCylinderDivide = 32;
+	const float kTopRadius = 1.0f;
+	const float kBottomRadius = 1.0f;
+	const float kHeight = 3.0f;
+	const float radianPerDivide = 2.0f * std::numbers::pi_v<float> / float(kCylinderDivide);
+
+	// 1分割あたり三角形2つ（頂点6個）を使用
+	cylinderVertexCount_ = kCylinderDivide * 6;
+	std::vector<VertexData> vertices;
+	vertices.reserve(cylinderVertexCount_);
+
+	for(uint32_t index = 0; index < kCylinderDivide; ++index){
+		float sin = std::sin(index * radianPerDivide);
+		float cos = std::cos(index * radianPerDivide);
+		float sinNext = std::sin((index + 1) * radianPerDivide);
+		float cosNext = std::cos((index + 1) * radianPerDivide);
+
+		float u = float(index) / float(kCylinderDivide);
+		float uNext = float(index + 1) / float(kCylinderDivide);
+
+		// 上段(Top)
+		VertexData v1;
+		v1.position = {-sin * kTopRadius, kHeight, cos * kTopRadius, 1.0f};
+		v1.texcoord = {u, 1.0f};
+		v1.normal = {-sin, 0.0f, cos};
+
+		VertexData v2;
+		v2.position = {-sinNext * kTopRadius, kHeight, cosNext * kTopRadius, 1.0f};
+		v2.texcoord = {uNext, 1.0f};
+		v2.normal = {-sinNext, 0.0f, cosNext};
+
+		// 下段(Bottom)
+		VertexData v3;
+		v3.position = {-sin * kBottomRadius, 0.0f, cos * kBottomRadius, 1.0f};
+		v3.texcoord = {u, 0.0f};
+		v3.normal = {-sin, 0.0f, cos};
+
+		VertexData v4;
+		v4.position = {-sinNext * kBottomRadius, 0.0f, cosNext * kBottomRadius, 1.0f};
+		v4.texcoord = {uNext, 0.0f};
+		v4.normal = {-sinNext, 0.0f, cosNext};
+
+		// 三角形1
+		vertices.push_back(v1);
+		vertices.push_back(v2);
+		vertices.push_back(v3);
+
+		// 三角形2
+		vertices.push_back(v3);
+		vertices.push_back(v2);
+		vertices.push_back(v4);
+	}
+
+	// GPUバッファ生成
+	size_t bufferSize = sizeof(VertexData) * vertices.size();
+	cylinderVertexBuffer_ = dxCommon_->CreateBufferResource(bufferSize);
+
+	// データ転送
+	VertexData* vertexData = nullptr;
+	cylinderVertexBuffer_->Map(0,nullptr,reinterpret_cast<void**>(&vertexData));
+	std::memcpy(vertexData,vertices.data(),bufferSize);
+	cylinderVertexBuffer_->Unmap(0,nullptr);
+
+	// ビュー設定
+	cylinderVertexBufferView_.BufferLocation = cylinderVertexBuffer_->GetGPUVirtualAddress();
+	cylinderVertexBufferView_.SizeInBytes = static_cast<UINT>(bufferSize);
+	cylinderVertexBufferView_.StrideInBytes = sizeof(VertexData);
 }
