@@ -82,6 +82,12 @@
     <Filter Include="Resources\shader\PostEffect">
       <UniqueIdentifier>{3ab180dc-6cfc-405e-ad14-24f8d876eb5d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\Engine\Graphics\3D\Animation">
+      <UniqueIdentifier>{030c19da-f515-45be-87f9-cb5e0fd086f0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\Engine\Graphics\3D\Animation">
+      <UniqueIdentifier>{8c410127-093b-48f9-ac64-13e8ffa7be24}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="Engine\Graphics\Shaders\Obj3D\Object3d.hlsli">
@@ -206,6 +212,9 @@
     <ClInclude Include="Engine\Graphics\Effect\RenderTexture.h">
       <Filter>ヘッダー ファイル\Engine\Graphics\Effect</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\Animation\Animation.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D\Animation</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine\Base\DXCommon.cpp">
@@ -300,6 +309,9 @@
     </ClCompile>
     <ClCompile Include="Engine\Graphics\Effect\PostProcess.cpp">
       <Filter>ソース ファイル\Engine\Graphics\Effect</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\Animation\Animation.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D\Animation</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

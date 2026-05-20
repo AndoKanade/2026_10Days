@@ -31,6 +31,11 @@ struct Vector3{
 	float x,y,z;
 };
 
+// Vector3 - Vector3
+inline Vector3 operator-(const Vector3& v1,const Vector3& v2){
+	return {v1.x - v2.x, v1.y - v2.y, v1.z - v2.z};
+}
+
 inline Vector3 Normalize(const Vector3& v){
 	Vector3 result = {0, 0, 0};
 
@@ -308,5 +313,109 @@ inline Matrix4x4 Transpose(const Matrix4x4& m){
 			result.m[i][j] = m.m[j][i];
 		}
 	}
+	return result;
+}
+// -------------------------------------------------
+// Quaternion & Interpolation Functions
+// -------------------------------------------------
+// 既存の struct Quaternion の中に追加してください
+struct Quaternion{
+	float x,y,z,w;
+
+	// 追加部分: 単項マイナス（各成分の反転）
+	Quaternion operator-() const{
+		return {-x, -y, -z, -w};
+	}
+
+	// 追加部分: クォータニオン同士の足し算
+	Quaternion operator+(const Quaternion& other) const{
+		return {x + other.x, y + other.y, z + other.z, w + other.w};
+	}
+
+	// 追加部分: クォータニオン×実数の掛け算
+	Quaternion operator*(float scalar) const{
+		return {x * scalar, y * scalar, z * scalar, w * scalar};
+	}
+};
+
+inline float Dot(const Quaternion& q1,const Quaternion& q2){
+	return q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
+}
+
+// 追加部分: 実数×クォータニオンの掛け算（struct Quaternion の外に記述してください）
+inline Quaternion operator*(float scalar,const Quaternion& quat){
+	return {quat.x * scalar, quat.y * scalar, quat.z * scalar, quat.w * scalar};
+}
+
+// Vector3の線形補間 (Lerp)
+inline Vector3 Lerp(const Vector3& v1,const Vector3& v2,float t){
+	return v1 + (v2 - v1) * t;
+}
+
+// Quaternionの球面線形補間 (Slerp)
+inline Quaternion Slerp(const Quaternion& q1,const Quaternion& q2,float t){
+	Quaternion result;
+
+	// 2つのクォータニオンの内積を計算
+	float dot = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
+
+	// 内積が負の場合、逆回りのルートを避けるために片方を反転する
+	Quaternion targetQ2 = q2;
+	if(dot < 0.0f){
+		targetQ2.x = -q2.x;
+		targetQ2.y = -q2.y;
+		targetQ2.z = -q2.z;
+		targetQ2.w = -q2.w;
+		dot = -dot;
+	}
+
+	// 角度が非常に小さい場合は、誤差を防ぐために通常の線形補間(Lerp)に切り替える
+	if(dot > 0.9995f){
+		result.x = q1.x + t * (targetQ2.x - q1.x);
+		result.y = q1.y + t * (targetQ2.y - q1.y);
+		result.z = q1.z + t * (targetQ2.z - q1.z);
+		result.w = q1.w + t * (targetQ2.w - q1.w);
+
+		// 正規化
+		float len = std::sqrtf(result.x * result.x + result.y * result.y + result.z * result.z + result.w * result.w);
+		if(len != 0.0f){
+			result.x /= len; result.y /= len; result.z /= len; result.w /= len;
+		}
+		return result;
+	}
+
+	// なす角を計算
+	float theta_0 = std::acosf(dot);
+	float theta = theta_0 * t;
+	float sin_theta = std::sinf(theta);
+	float sin_theta_0 = std::sinf(theta_0);
+
+	float s0 = std::cosf(theta) - dot * sin_theta / sin_theta_0;
+	float s1 = sin_theta / sin_theta_0;
+
+	result.x = s0 * q1.x + s1 * targetQ2.x;
+	result.y = s0 * q1.y + s1 * targetQ2.y;
+	result.z = s0 * q1.z + s1 * targetQ2.z;
+	result.w = s0 * q1.w + s1 * targetQ2.w;
+
+	return result;
+}
+
+inline Matrix4x4 MakeRotateMatrix(const Quaternion& q){
+	Matrix4x4 result = MakeIdentity4x4(); // 最初に単位行列で初期化
+
+	// 以前に調整した180度反転時の符号判定バグを考慮した、クォータニオン行列変換の正規化式
+	result.m[0][0] = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+	result.m[0][1] = 2.0f * (q.x * q.y + q.w * q.z);
+	result.m[0][2] = 2.0f * (q.x * q.z - q.w * q.y);
+
+	result.m[1][0] = 2.0f * (q.x * q.y - q.w * q.z);
+	result.m[1][1] = 1.0f - 2.0f * (q.x * q.x + q.z * q.z);
+	result.m[1][2] = 2.0f * (q.y * q.z + q.w * q.x);
+
+	result.m[2][0] = 2.0f * (q.x * q.z + q.w * q.y);
+	result.m[2][1] = 2.0f * (q.y * q.z - q.w * q.x);
+	result.m[2][2] = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
+
 	return result;
 }

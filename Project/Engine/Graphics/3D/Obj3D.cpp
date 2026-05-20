@@ -34,7 +34,18 @@ void Obj3D::Initialize(Obj3dCommon* object3dCommon){
 
 void Obj3D::Update(){
     // 1. ローカル行列の計算 (S * R * T)
-    Matrix4x4 localMatrix = MakeAffineMatrix(transform.scale,transform.rotate,transform.translate);
+    Matrix4x4 localMatrix;
+
+    if(isUseQuaternion_){
+        // クォータニオンを使用する場合の正しい行列合成
+        Matrix4x4 matScale = MakeScaleMatrix(transform.scale);
+        Matrix4x4 matRotate = MakeRotateMatrix(quaternion_); // クォータニオン用の回転行列生成関数
+        Matrix4x4 matTranslate = MakeTranslateMatrix(transform.translate);
+        localMatrix = Multiply(Multiply(matScale,matRotate),matTranslate);
+    } else{
+        // 従来の Vector3 (オイラー角) を使用する場合
+        localMatrix = MakeAffineMatrix(transform.scale,transform.rotate,transform.translate);
+    }
 
     // 2. ワールド行列の計算
     Matrix4x4 worldMatrix = localMatrix;
