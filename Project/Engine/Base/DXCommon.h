@@ -1,12 +1,10 @@
 #pragma once
 #include "WinAPI.h"
-
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <dxcapi.h>
 #include <DirectXTex.h>
 #include <wrl.h>
-
 #include <array>
 #include <chrono>
 #include <string>
@@ -17,13 +15,15 @@
 #pragma comment(lib, "dxguid.lib")
 #pragma comment(lib, "dxcompiler.lib")
 
+// 前方宣言
+class RenderTexture;
+
 class DXCommon{
 public:
 	// 名前空間の省略 (メンバ変数定義用)
 	template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 #pragma region メンバ変数
-
 public:
 	// --- Direct3D Core ---
 	ComPtr<IDXGIFactory7> dxgiFactory;
@@ -52,6 +52,9 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle;
 	uint32_t descriptorSizeDSV = 0;
 
+	// --- ポストプロセス用深度SRV ---
+	D3D12_GPU_DESCRIPTOR_HANDLE depthSrvHandleGpu_;
+
 	// --- Synchronization (Fence) ---
 	ComPtr<ID3D12Fence> fence = nullptr;
 	uint64_t fenceValue = 0;
@@ -66,11 +69,9 @@ public:
 	ComPtr<IDxcUtils> dxcUtils = nullptr;
 	ComPtr<IDxcCompiler3> dxcCompiler = nullptr;
 	IDxcIncludeHandler* includeHandler = nullptr;
-
 #pragma endregion
 
 #pragma region メンバ関数
-
 public:
 	// --- 初期化フロー ---
 	void Initialize(WinAPI* winApi);
@@ -82,19 +83,18 @@ public:
 	void CreateDescriptorHeaps();
 	void InitRenderTargetView();
 	void InitDepthStancilView();
+	void InitDepthShaderResourceView();
 	void InitFence();
 	void InitViewportRect();
 	void InitScissorRect();
 	void CreateDXCCompiler();
 
 	// --- 描画フロー ---
-	void PreDraw();
+	void PreDraw(RenderTexture* renderTexture = nullptr);
 	void PostDraw();
-
 #pragma endregion
 
 #pragma region ユーティリティ関数
-
 	ComPtr<ID3D12DescriptorHeap> CreateDiscriptorHeap(
 		D3D12_DESCRIPTOR_HEAP_TYPE heapType,
 		UINT numDescriptors,
@@ -114,7 +114,6 @@ public:
 		const ComPtr<ID3D12Resource>& texture,
 		const DirectX::ScratchImage& mipImages
 	);
-
 #pragma endregion
 
 	// --- アクセッサ ---
@@ -122,6 +121,10 @@ public:
 	ID3D12GraphicsCommandList* GetCommandList() const{ return commandList.Get(); }
 	ID3D12CommandQueue* GetCommandQueue() const{ return commandQueue.Get(); }
 	size_t GetSwapChainResourcesNum() const{ return swapChainResources.size(); }
+	D3D12_CPU_DESCRIPTOR_HANDLE GetDsvHandle() const{ return dsvHandle; }
+	D3D12_GPU_DESCRIPTOR_HANDLE GetDepthSrvHandleGpu() const{ return depthSrvHandleGpu_; }
+
+	void SetDepthSrvHandleGpu(D3D12_GPU_DESCRIPTOR_HANDLE handle){ depthSrvHandleGpu_ = handle; }
 
 private:
 	WinAPI* winApi_ = nullptr;
@@ -137,7 +140,7 @@ private:
 		uint32_t descriptorSize,
 		uint32_t index){
 		D3D12_CPU_DESCRIPTOR_HANDLE handleCPU = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-		handleCPU.ptr += descriptorSize * index;
+		handleCPU.ptr += (size_t)descriptorSize * index;
 		return handleCPU;
 	}
 
@@ -146,7 +149,7 @@ private:
 		uint32_t descriptorSize,
 		uint32_t index){
 		D3D12_GPU_DESCRIPTOR_HANDLE handleGPU = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-		handleGPU.ptr += descriptorSize * index;
+		handleGPU.ptr += (size_t)descriptorSize * index;
 		return handleGPU;
 	}
 };
