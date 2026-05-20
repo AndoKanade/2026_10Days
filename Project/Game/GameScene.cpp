@@ -12,6 +12,7 @@
 #include "Obj3dCommon.h"
 #include "ParticleEmitter.h"
 #include "SpriteCommon.h"
+#include "Application.h" // ポストプロセスUI呼び出しのために追加
 
 namespace{
 	const std::string kTextureChecker = "resource/uvChecker.png";
@@ -95,7 +96,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	//  リング状のパーティクル (第3引数 true)
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticleRing,kTexturegradationLine,true,false);
 	Transform ringConfig;
-	ringConfig.translate = {1.0f, 2.0f, 0.0f}; 
+	ringConfig.translate = {1.0f, 2.0f, 0.0f};
 	ringConfig.scale = {0.5f, 0.5f, 0.5f};
 	ringEmitter_ = std::make_unique<ParticleEmitter>(kParticleRing,ringConfig,1,0.5f);
 	ringEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
@@ -104,10 +105,10 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	//  板ポリの設定 (第3引数 false)
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticlePrimitive,kTextureCircle2,false,false);
 	Transform circleConfig;
-	circleConfig.translate = {1.0f, 2.0f, 0.0f}; 
+	circleConfig.translate = {1.0f, 2.0f, 0.0f};
 	circleConfig.scale = {0.05f, 1.0f, 1.0f};
 	circleEmitter_ = std::make_unique<ParticleEmitter>(kParticlePrimitive,circleConfig,3,0.5f);
-	circleEmitter_->SetVelocity({0.0f, 0.5f, 0.0f}); 
+	circleEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
 	circleEmitter_->SetLifeTime(1.0f);
 
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticleCylinder,kTexturegradationLine,false,true);
@@ -167,7 +168,7 @@ void GameScene::Update(){
 		ParticleManager::GetInstance()->Update(activeCamera);
 	}
 
-#pragma region
+#pragma region デバッグUI
 #ifdef USE_IMGUI
 	if(activeCamera){
 		ImGui::Begin("GameScene Debug");
@@ -245,6 +246,9 @@ void GameScene::Update(){
 
 		ModelManager::GetInstance()->UpdateLightGui();
 		ImGui::End();
+
+		// --- アプリケーション共通のポストプロセスUIを表示 ---
+		Application::GetInstance()->ShowPostProcessUI();
 	}
 #endif
 #pragma endregion
@@ -256,7 +260,6 @@ void GameScene::Draw(){
 
 	if(terrainObj_){
 		terrainObj_->Draw();
-
 	}
 
 	// パーティクルの描画

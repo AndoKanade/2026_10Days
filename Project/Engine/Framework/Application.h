@@ -1,6 +1,10 @@
 #pragma once
 #include "Framework.h"
 #include "SceneManager.h"
+#include "RenderTexture.h"
+#include "PostProcess.h"
+#include <memory>
+#include <string>
 
 /// <summary>
 /// アプリケーションクラス
@@ -16,6 +20,9 @@ public:
 	// デストラクタ
 	// 基底クラスの仮想デストラクタをオーバーライドします
 	~Application() override;
+
+	// --- シングルトンアクセサ ---
+	static Application* GetInstance(){ return instance_; }
 
 	// --- Frameworkの純粋仮想関数をオーバーライド ---
 
@@ -44,4 +51,26 @@ public:
 	/// 毎フレーム呼ばれ、画面への描画コマンドを発行します。
 	/// </summary>
 	void Draw() override;
+
+	// --- デバッグUI関数 ---
+
+	/// <summary>
+	/// ポストプロセスのデバッグUIを表示します。
+	/// </summary>
+	void ShowPostProcessUI();
+
+private:
+	// --- 静的メンバ変数 ---
+	static Application* instance_;
+
+	// --- ポストプロセス関連リソース ---
+	std::unique_ptr<RenderTexture> renderTexture_;
+	std::unique_ptr<PostProcess> postProcess_;
+	PostProcess::Type currentPPType_ = PostProcess::Type::PostProcess;
+	std::string currentMaskPath_;
+
+	// --- Dissolveアニメーション用メンバ変数 ---
+	bool isDissolving_ = false;           // アニメーション中かどうかのフラグ
+	float dissolveTimer_ = 0.0f;          // アニメーションの経過時間
+	const float kDissolveDuration = 2.0f; // アニメーションの合計時間（秒）
 };
