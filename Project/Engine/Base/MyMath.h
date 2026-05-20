@@ -318,9 +318,34 @@ inline Matrix4x4 Transpose(const Matrix4x4& m){
 // -------------------------------------------------
 // Quaternion & Interpolation Functions
 // -------------------------------------------------
+// 既存の struct Quaternion の中に追加してください
 struct Quaternion{
 	float x,y,z,w;
+
+	// 追加部分: 単項マイナス（各成分の反転）
+	Quaternion operator-() const{
+		return {-x, -y, -z, -w};
+	}
+
+	// 追加部分: クォータニオン同士の足し算
+	Quaternion operator+(const Quaternion& other) const{
+		return {x + other.x, y + other.y, z + other.z, w + other.w};
+	}
+
+	// 追加部分: クォータニオン×実数の掛け算
+	Quaternion operator*(float scalar) const{
+		return {x * scalar, y * scalar, z * scalar, w * scalar};
+	}
 };
+
+inline float Dot(const Quaternion& q1,const Quaternion& q2){
+	return q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
+}
+
+// 追加部分: 実数×クォータニオンの掛け算（struct Quaternion の外に記述してください）
+inline Quaternion operator*(float scalar,const Quaternion& quat){
+	return {quat.x * scalar, quat.y * scalar, quat.z * scalar, quat.w * scalar};
+}
 
 // Vector3の線形補間 (Lerp)
 inline Vector3 Lerp(const Vector3& v1,const Vector3& v2,float t){
@@ -372,6 +397,25 @@ inline Quaternion Slerp(const Quaternion& q1,const Quaternion& q2,float t){
 	result.y = s0 * q1.y + s1 * targetQ2.y;
 	result.z = s0 * q1.z + s1 * targetQ2.z;
 	result.w = s0 * q1.w + s1 * targetQ2.w;
+
+	return result;
+}
+
+inline Matrix4x4 MakeRotateMatrix(const Quaternion& q){
+	Matrix4x4 result = MakeIdentity4x4(); // 最初に単位行列で初期化
+
+	// 以前に調整した180度反転時の符号判定バグを考慮した、クォータニオン行列変換の正規化式
+	result.m[0][0] = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+	result.m[0][1] = 2.0f * (q.x * q.y + q.w * q.z);
+	result.m[0][2] = 2.0f * (q.x * q.z - q.w * q.y);
+
+	result.m[1][0] = 2.0f * (q.x * q.y - q.w * q.z);
+	result.m[1][1] = 1.0f - 2.0f * (q.x * q.x + q.z * q.z);
+	result.m[1][2] = 2.0f * (q.y * q.z + q.w * q.x);
+
+	result.m[2][0] = 2.0f * (q.x * q.z + q.w * q.y);
+	result.m[2][1] = 2.0f * (q.y * q.z - q.w * q.x);
+	result.m[2][2] = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
 
 	return result;
 }

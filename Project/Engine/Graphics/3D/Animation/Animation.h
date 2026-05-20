@@ -1,7 +1,10 @@
 #pragma once
 #include "MyMath.h"
-#include<vector>
+#include <vector>
+#include <string>
+#include <map>
 
+// キーフレーム構造体
 template <typename tValue>
 struct Keyframe{
 	float time;
@@ -11,35 +14,55 @@ struct Keyframe{
 using KeyframeVector3 = Keyframe<Vector3>;
 using KeyframeQuaternion = Keyframe<Quaternion>;
 
-class Animation{
+// ノードアニメーション
+struct NodeAnimation{
+	std::vector<KeyframeVector3> translateKeyframes;
+	std::vector<KeyframeQuaternion> rotateKeyframes;
+	std::vector<KeyframeVector3> scaleKeyframes;
+};
+
+// アニメーションデータ全体
+struct Animation{
+	float duration; // アニメーション全体の尺（秒）
+	std::map<std::string,NodeAnimation> nodeAnimations;
+};
+
+// アニメーション制御クラス
+class AnimationController{
 public:
 	void Initialize();
 	void Update(float deltaTime);
-
 	void Play(){ isPlaying_ = true; }
 	void Stop(){ isPlaying_ = false; }
 
-	void CreateTestAnimation();
+	// アニメーションデータを更新してSRTを計算する関数
+	void UpdateKeyframes(const Animation& animation,float deltaTime);
 
 	Vector3 GetCurrentScale() const{ return currentScale_; }
 	Vector3 GetCurrentTranslate() const{ return currentTranslate_; }
 	Quaternion GetCurrentRotate() const{ return currentRotate_; }
 
 private:
+	// 補間計算関数
 	Vector3 CalculateInterpolatedScale(float time);
 	Vector3 CalculateInterpolatedTranslate(float time);
 	Quaternion CalculateInterpolatedRotate(float time);
+	NodeAnimation CalculateInterpolatedNode(const NodeAnimation& nodeAnim,float time);
 
 private:
 	std::vector<KeyframeVector3> scaleKeyframes_;
 	std::vector<KeyframeVector3> translateKeyframes_;
 	std::vector<KeyframeQuaternion> rotateKeyframes_;
 
-	float duration_ = 0.0f;
-	float currentTime_ = 0.0f;
-	bool isPlaying_ = false;
+	Vector3 currentScale_;
+	Vector3 currentTranslate_;
+	Quaternion currentRotate_;
 
-	Vector3 currentScale_ = {1.0f, 1.0f, 1.0f};
-	Vector3 currentTranslate_ = {0.0f, 0.0f, 0.0f};
-	Quaternion currentRotate_ = {0.0f, 0.0f, 0.0f, 1.0f};
+	float currentTime_;
+	float duration_;
+	bool isPlaying_;
+	float animationTime_ = 0.0f;
 };
+
+// アニメーションファイルの読み込み（単独関数）
+Animation LoadAnimationFile(const std::string& directoryPath,const std::string& filename);

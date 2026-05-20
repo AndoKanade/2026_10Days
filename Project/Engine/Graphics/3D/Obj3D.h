@@ -35,8 +35,9 @@ public:
 	}
 
 	void SetScale(const Vector3& scale){ transform.scale = scale; }
-	void SetRotate(const Vector3& rotate){ transform.rotate = rotate; }
+	void SetRotate(const Vector3& rotate){ transform.rotate = rotate; isUseQuaternion_ = false; }	
 	void SetTranslate(const Vector3& translate){ transform.translate = translate; }
+	void SetQuaternion(const Quaternion& quat){ quaternion_ = quat; isUseQuaternion_ = true; }
 
 	// Getter
 	const Vector3& GetScale() const{ return transform.scale; }
@@ -62,4 +63,6 @@ private:
 	Model::Material* materialData = nullptr;
 
 	Transform transform;
+	Quaternion quaternion_ = {0.0f, 0.0f, 0.0f, 1.0f};
+	bool isUseQuaternion_ = false;
 };

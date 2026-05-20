@@ -12,7 +12,8 @@
 #include "Obj3dCommon.h"
 #include "ParticleEmitter.h"
 #include "SpriteCommon.h"
-#include "Application.h" // ポストプロセスUI呼び出しのために追加
+#include "Animation.h"
+#include "Application.h"
 
 namespace{
 	const std::string kTextureChecker = "resource/uvChecker.png";
@@ -27,6 +28,7 @@ namespace{
 	const std::string kModelSphere = "Sphere/sphere.obj";
 	const std::string kModelTerrain = "Terrain/terrain.obj";
 	const std::string kModelSimpleSkin = "simpleSkin/simpleSkin.gltf";
+	const std::string kModelAnimationCube = "AnimatedCube/AnimatedCube.gltf";
 
 	const std::string kParticlePrimitive = "Circle";
 	const std::string kParticleRing = "Ring";
@@ -54,6 +56,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	ModelManager::GetInstance()->LoadModel(kModelSphere);
 	ModelManager::GetInstance()->LoadModel(kModelTerrain);
 	ModelManager::GetInstance()->LoadModel(kModelSimpleSkin);
+	ModelManager::GetInstance()->LoadModel(kModelAnimationCube);
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
 
@@ -92,8 +95,16 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	skybox_ = std::make_unique<Skybox>();
 	skybox_->Initialize(skyboxCommon_.get(),kSkyboxTexture);
 
+	// アニメーションキューブの生成と初期化
+	animationCube_ = std::make_shared<Obj3D>();
+	animationCube_->Initialize(object3dCommon_);
+	animationCube_->SetModel(kModelAnimationCube);
+
+	animation_ = LoadAnimationFile("resource/AnimatedCube/","AnimatedCube.gltf");
+	animationController_.Initialize();
+	animationController_.Play();
+
 	// パーティクルの設定
-	//  リング状のパーティクル (第3引数 true)
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticleRing,kTexturegradationLine,true,false);
 	Transform ringConfig;
 	ringConfig.translate = {1.0f, 2.0f, 0.0f};
@@ -102,7 +113,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	ringEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
 	ringEmitter_->SetLifeTime(1.0f);
 
-	//  板ポリの設定 (第3引数 false)
+	// 板ポリの設定
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticlePrimitive,kTextureCircle2,false,false);
 	Transform circleConfig;
 	circleConfig.translate = {1.0f, 2.0f, 0.0f};
@@ -111,16 +122,15 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	circleEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
 	circleEmitter_->SetLifeTime(1.0f);
 
+	// 円柱パーティクルの設定
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticleCylinder,kTexturegradationLine,false,true);
-
 	Transform cylinderConfig;
 	cylinderConfig.translate = {0.0f, 0.0f, 0.0f};
-	cylinderConfig.scale = {1.0f, 1.0f, 1.0f}; // 縦に長くして柱にする
-
+	cylinderConfig.scale = {1.0f, 1.0f, 1.0f};
 	cylinderEmitter_ = std::make_unique<ParticleEmitter>(kParticleCylinder,cylinderConfig,1,0.1f);
-	cylinderEmitter_->SetColor({0.2f, 0.5f, 1.0f, 0.8f}); // ポータルらしい青色
+	cylinderEmitter_->SetColor({0.2f, 0.5f, 1.0f, 0.8f});
 	cylinderEmitter_->SetLifeTime(2.0f);
-	cylinderEmitter_->SetVelocity({0.0f, 0.0f, 0.0f});   // その場に固定
+	cylinderEmitter_->SetVelocity({0.0f, 0.0f, 0.0f});
 
 	// カメラの設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
@@ -157,9 +167,19 @@ void GameScene::Update(){
 	if(circleEmitter_){
 		circleEmitter_->Update();
 	}
-
 	if(cylinderEmitter_){
 		cylinderEmitter_->Update();
+	}
+
+	// アニメーション時間を進める
+	animationController_.UpdateKeyframes(animation_,1.0f / 60.0f);
+
+	// 計算された結果を適用
+	if(animationCube_){
+		animationCube_->SetScale(animationController_.GetCurrentScale());
+		animationCube_->SetTranslate(animationController_.GetCurrentTranslate());
+		animationCube_->SetQuaternion(animationController_.GetCurrentRotate());
+		animationCube_->Update();
 	}
 
 	// パーティクルマネージャーの更新
@@ -168,7 +188,7 @@ void GameScene::Update(){
 		ParticleManager::GetInstance()->Update(activeCamera);
 	}
 
-#pragma region デバッグUI
+	// デバッグUIの表示
 #ifdef USE_IMGUI
 	if(activeCamera){
 		ImGui::Begin("GameScene Debug");
@@ -247,25 +267,18 @@ void GameScene::Update(){
 		ModelManager::GetInstance()->UpdateLightGui();
 		ImGui::End();
 
-		// --- アプリケーション共通のポストプロセスUIを表示 ---
+		// アプリケーション共通のポストプロセスUIを表示
 		Application::GetInstance()->ShowPostProcessUI();
 	}
 #endif
-#pragma endregion
 }
 
 void GameScene::Draw(){
 	// 3Dオブジェクトの描画
 	object3dCommon_->Draw();
 
-	if(terrainObj_){
-		terrainObj_->Draw();
-	}
-
-	// パーティクルの描画
-	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
-	if(activeCamera){
-		Matrix4x4 viewProj = Multiply(activeCamera->GetViewMatrix(),activeCamera->GetProjectionMatrix());
-		ParticleManager::GetInstance()->Draw(viewProj);
+	// アニメーションキューブの描画
+	if(animationCube_){
+		animationCube_->Draw();
 	}
 }

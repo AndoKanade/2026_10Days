@@ -1,5 +1,6 @@
 #pragma once
 #include "BaseScene.h"
+#include "Animation.h"
 #include <memory>
 #include <string>
 
@@ -10,7 +11,7 @@ class ParticleEmitter;
 class SpriteCommon;
 class Skybox;
 class SkyboxCommon;
-class Application; 
+class Application;
 
 class GameScene : public BaseScene{
 public:
@@ -23,26 +24,35 @@ public:
 	void Draw() override;
 
 private:
-	// 外部依存
+	// 外部依存ポインタ
 	Obj3dCommon* object3dCommon_ = nullptr;
 	Input* input_ = nullptr;
 	SpriteCommon* spriteCommon_ = nullptr;
-	Application* app_ = nullptr; // アプリケーションへのポインタを追加
+	Application* app_ = nullptr;
 
-	// 内部リソース
+	// 3Dオブジェクト
 	std::shared_ptr<Obj3D> planeObj_;
 	std::shared_ptr<Obj3D> fenceObj_;
 	std::shared_ptr<Obj3D> sphereObj_;
 	std::shared_ptr<Obj3D> terrainObj_;
 	std::shared_ptr<Obj3D> simpleSkinObj_;
-	std::unique_ptr<ParticleEmitter> ringEmitter_;      // Ring用
-	std::unique_ptr<ParticleEmitter> circleEmitter_;    // 板ポリ用
-	std::unique_ptr<ParticleEmitter> cylinderEmitter_;  // Cylinder用
+	std::shared_ptr<Obj3D> animationCube_;
 
+	// パーティクル
+	std::unique_ptr<ParticleEmitter> ringEmitter_;
+	std::unique_ptr<ParticleEmitter> circleEmitter_;
+	std::unique_ptr<ParticleEmitter> cylinderEmitter_;
+
+	// スカイボックス
 	std::unique_ptr<SkyboxCommon> skyboxCommon_;
 	std::unique_ptr<Skybox> skybox_;
 
-	// パラメータ・フラグ
+	// アニメーションデータと制御
+	Animation animation_;
+	AnimationController animationController_;
+	float animationTime_ = 0.0f;
+
+	// 音声と状態フラグ
 	const std::string kBgmPath_ = "resource/You_and_Me.mp3";
 	bool isPaused_ = false;
 };
