@@ -9,47 +9,48 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-// 初期化
+// ====================================================================
+// 初期化・リソース生成
+// ====================================================================
 void Model::Initialize(ModelCommon* modelCommon,const std::string& directorypath,const std::string& filename){
 	this->modelCommon_ = modelCommon;
 
-	// モデルデータの読み込み
 	modelData = LoadModelFile(directorypath,filename);
 
-	// テクスチャの読み込みとIndex保持
 	TextureManager::GetInstance()->LoadTexture(modelData.material.textureFilePath);
 	modelData.material.textureIndex = TextureManager::GetInstance()->GetSrvIndex(modelData.material.textureFilePath);
 
-	// 各種リソース生成
 	CreateVertexData();
 	CreateMaterialData();
 }
 
-// 描画
-void Model::Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress){
-	auto* commandList = modelCommon_->GetDxCommon()->commandList.Get();
+void Model::CreateVertexData(){
+	vertexResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeof(VertexData) * modelData.vertices.size());
+	vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
+	vertexBufferView.SizeInBytes = UINT(sizeof(VertexData) * modelData.vertices.size());
+	vertexBufferView.StrideInBytes = sizeof(VertexData);
 
-	// 1. 頂点バッファ(VBV)をセット
-	commandList->IASetVertexBuffers(0,1,&vertexBufferView);
-
-	// 2. テクスチャSRVをセット (register t0)
-	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle = SrvManager::GetInstance()->GetGPUDescriptorHandle(modelData.material.textureIndex);
-	commandList->SetGraphicsRootDescriptorTable(2,textureSrvHandle);
-
-	// 3. 環境マップ用SRVをセット (register t1)
-	D3D12_GPU_DESCRIPTOR_HANDLE skyboxSrvHandle = SrvManager::GetInstance()->GetGPUDescriptorHandle(skyboxTextureIndex);
-	commandList->SetGraphicsRootDescriptorTable(3,skyboxSrvHandle);
-
-	// 4. カメラCBufferをセット (register b3)
-	commandList->SetGraphicsRootConstantBufferView(5,cameraAddress);
-
-	// ※ マテリアル(b0)と行列(b1)は Obj3D::Draw 側でセットするため、ここでは行わない
-
-	// 5. 描画コマンド発行
-	commandList->DrawInstanced(UINT(modelData.vertices.size()),1,0,0);
+	VertexData* ptr = nullptr;
+	vertexResource->Map(0,nullptr,reinterpret_cast<void**>(&ptr));
+	std::memcpy(ptr,modelData.vertices.data(),sizeof(VertexData) * modelData.vertices.size());
+	vertexResource->Unmap(0,nullptr);
 }
 
-// .objファイルの読み込み (Assimp使用)
+void Model::CreateMaterialData(){
+	size_t sizeInBytes = (sizeof(Material) + 0xff) & ~0xff;
+	materialResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeInBytes);
+	materialResource->Map(0,nullptr,reinterpret_cast<void**>(&materialData));
+
+	materialData->color = {1.0f, 1.0f, 1.0f, 1.0f};
+	materialData->enableLighting = 1;
+	materialData->uvTransform = MakeIdentity4x4();
+	materialData->shininess = 50.0f;
+	materialData->environmentCoefficient = 0.0f;
+}
+
+// ====================================================================
+// ファイル読み込み処理 (Assimp)
+// ====================================================================
 Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std::string& filename){
 	ModelData modelData;
 	Assimp::Importer importer;
@@ -57,6 +58,10 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std
 
 	const aiScene* scene = importer.ReadFile(filePath.c_str(),aiProcess_FlipWindingOrder | aiProcess_FlipUVs | aiProcess_Triangulate);
 	assert(scene && scene->HasMeshes());
+
+	if(scene->mRootNode){
+		modelData.rootNode = ReadNode(scene->mRootNode);
+	}
 
 	for(uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex){
 		aiMesh* mesh = scene->mMeshes[meshIndex];
@@ -90,37 +95,54 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std
 	return modelData;
 }
 
+Node Model::ReadNode(aiNode* node){
+	Node result;
+	result.name = node->mName.C_Str();
+
+	aiVector3D scale,translate;
+	aiQuaternion rotate;
+	node->mTransformation.Decompose(scale,rotate,translate);
+
+	result.transform.scale = {scale.x, scale.y, scale.z};
+	result.transform.rotate = {rotate.x, -rotate.y, -rotate.z, rotate.w};
+	result.transform.translate = {-translate.x, translate.y, translate.z};
+
+	Matrix4x4 matScale = MakeScaleMatrix(result.transform.scale);
+	Matrix4x4 matRotate = MakeRotateMatrix(result.transform.rotate);
+	Matrix4x4 matTranslate = MakeTranslateMatrix(result.transform.translate);
+
+	result.localMatrix = Multiply(Multiply(matScale,matRotate),matTranslate);
+
+	result.children.resize(node->mNumChildren);
+	for(uint32_t i = 0; i < node->mNumChildren; ++i){
+		result.children[i] = ReadNode(node->mChildren[i]);
+	}
+
+	return result;
+}
+
+// ====================================================================
+// 描画・更新処理
+// ====================================================================
+void Model::Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress){
+	auto* commandList = modelCommon_->GetDxCommon()->commandList.Get();
+
+	commandList->IASetVertexBuffers(0,1,&vertexBufferView);
+
+	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle = SrvManager::GetInstance()->GetGPUDescriptorHandle(modelData.material.textureIndex);
+	commandList->SetGraphicsRootDescriptorTable(2,textureSrvHandle);
+
+	D3D12_GPU_DESCRIPTOR_HANDLE skyboxSrvHandle = SrvManager::GetInstance()->GetGPUDescriptorHandle(skyboxTextureIndex);
+	commandList->SetGraphicsRootDescriptorTable(3,skyboxSrvHandle);
+
+	commandList->SetGraphicsRootConstantBufferView(5,cameraAddress);
+
+	commandList->DrawInstanced(UINT(modelData.vertices.size()),1,0,0);
+}
+
 void Model::SetTexture(const std::string& texturefilePath){
 	TextureManager::GetInstance()->LoadTexture(texturefilePath);
 
-	// 2. 新しいSRVインデックスを取得してマテリアル情報を更新
 	modelData.material.textureIndex = TextureManager::GetInstance()->GetSrvIndex(texturefilePath);
 	modelData.material.textureFilePath = texturefilePath;
-}
-
-// 頂点バッファ生成
-void Model::CreateVertexData(){
-	vertexResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeof(VertexData) * modelData.vertices.size());
-	vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
-	vertexBufferView.SizeInBytes = UINT(sizeof(VertexData) * modelData.vertices.size());
-	vertexBufferView.StrideInBytes = sizeof(VertexData);
-
-	VertexData* ptr = nullptr;
-	vertexResource->Map(0,nullptr,reinterpret_cast<void**>(&ptr));
-	std::memcpy(ptr,modelData.vertices.data(),sizeof(VertexData) * modelData.vertices.size());
-	vertexResource->Unmap(0,nullptr);
-}
-
-// マテリアルバッファ生成
-void Model::CreateMaterialData(){
-	size_t sizeInBytes = (sizeof(Material) + 0xff) & ~0xff;
-	materialResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeInBytes);
-	materialResource->Map(0,nullptr,reinterpret_cast<void**>(&materialData));
-
-	// 初期値設定
-	materialData->color = {1.0f, 1.0f, 1.0f, 1.0f};
-	materialData->enableLighting = 1;
-	materialData->uvTransform = MakeIdentity4x4();
-	materialData->shininess = 50.0f;
-	materialData->environmentCoefficient = 0.0f; // ★環境マップ係数の初期化を追加
 }

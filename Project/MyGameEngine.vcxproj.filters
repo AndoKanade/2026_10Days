@@ -215,6 +215,9 @@
     <ClInclude Include="Engine\Graphics\3D\Animation\Animation.h">
       <Filter>ヘッダー ファイル\Engine\Graphics\3D\Animation</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\Animation\Skeleton.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D\Animation</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine\Base\DXCommon.cpp">
@@ -311,6 +314,9 @@
       <Filter>ソース ファイル\Engine\Graphics\Effect</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\3D\Animation\Animation.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D\Animation</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\Animation\Skeleton.cpp">
       <Filter>ソース ファイル\Engine\Graphics\3D\Animation</Filter>
     </ClCompile>
   </ItemGroup>

@@ -308,6 +308,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClInclude Include="Engine\Framework\Framework.h" />
     <ClInclude Include="Engine\Graphics\2D\Sprite.h" />
     <ClInclude Include="Engine\Graphics\2D\SpriteCommon.h" />
+    <ClInclude Include="Engine\Graphics\3D\Animation\Skeleton.h" />
     <ClInclude Include="Engine\Graphics\3D\Camera.h" />
     <ClInclude Include="Engine\Graphics\3D\CameraManager.h" />
     <ClInclude Include="Engine\Graphics\3D\Model.h" />
@@ -345,6 +346,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClCompile Include="Engine\Framework\main.cpp" />
     <ClCompile Include="Engine\Graphics\2D\Sprite.cpp" />
     <ClCompile Include="Engine\Graphics\2D\SpriteCommon.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\Animation\Skeleton.cpp" />
     <ClCompile Include="Engine\Graphics\3D\Camera.cpp" />
     <ClCompile Include="Engine\Graphics\3D\CameraManager.cpp" />
     <ClCompile Include="Engine\Graphics\3D\Model.cpp" />

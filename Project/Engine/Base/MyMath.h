@@ -405,3 +405,17 @@ inline Matrix4x4 MakeRotateMatrix(const Quaternion& q){
 
 	return result;
 }
+
+// オイラー角用トランスフォーム
+struct EulerTransform{
+	Vector3 scale;
+	Vector3 rotate;
+	Vector3 translate;
+};
+
+// クォータニオン用トランスフォーム
+struct QuaternionTransform{
+	Vector3 scale;
+	Quaternion rotate;
+	Vector3 translate;
+};

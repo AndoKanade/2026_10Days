@@ -1,9 +1,11 @@
 #pragma once
+
 #include "BaseScene.h"
-#include "Animation.h"
 #include <memory>
 #include <string>
+#include <vector>
 
+// 前方宣言
 class Input;
 class Obj3D;
 class Obj3dCommon;
@@ -12,6 +14,9 @@ class SpriteCommon;
 class Skybox;
 class SkyboxCommon;
 class Application;
+class Animation;
+class AnimationController;
+class Skeleton;
 
 class GameScene : public BaseScene{
 public:
@@ -37,6 +42,7 @@ private:
 	std::shared_ptr<Obj3D> terrainObj_;
 	std::shared_ptr<Obj3D> simpleSkinObj_;
 	std::shared_ptr<Obj3D> animationCube_;
+	std::shared_ptr<Obj3D> humanObj_;
 
 	// パーティクル
 	std::unique_ptr<ParticleEmitter> ringEmitter_;
@@ -48,9 +54,14 @@ private:
 	std::unique_ptr<Skybox> skybox_;
 
 	// アニメーションデータと制御
-	Animation animation_;
-	AnimationController animationController_;
+	std::unique_ptr<Animation> animation_;
+	std::unique_ptr<AnimationController> animationController_;
 	float animationTime_ = 0.0f;
+
+	std::unique_ptr<Animation> humanAnimation_;
+	std::unique_ptr<Skeleton> humanSkeleton_;
+	std::vector<std::unique_ptr<Obj3D>> skeletonDebugSpheres_;
+	float humanAnimationTime_ = 0.0f;
 
 	// 音声と状態フラグ
 	const std::string kBgmPath_ = "resource/You_and_Me.mp3";

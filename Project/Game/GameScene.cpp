@@ -29,6 +29,7 @@ namespace{
 	const std::string kModelTerrain = "Terrain/terrain.obj";
 	const std::string kModelSimpleSkin = "simpleSkin/simpleSkin.gltf";
 	const std::string kModelAnimationCube = "AnimatedCube/AnimatedCube.gltf";
+	const std::string kModelHuman = "human/walk.gltf";
 
 	const std::string kParticlePrimitive = "Circle";
 	const std::string kParticleRing = "Ring";
@@ -43,7 +44,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	input_ = input;
 	spriteCommon_ = spriteCommon;
 
-	// リソースのロード
+	// --- リソースのロード ---
 	TextureManager::GetInstance()->LoadTexture(kTextureChecker);
 	TextureManager::GetInstance()->LoadTexture(kTextureBall);
 	TextureManager::GetInstance()->LoadTexture(kTextureCircle);
@@ -57,10 +58,11 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	ModelManager::GetInstance()->LoadModel(kModelTerrain);
 	ModelManager::GetInstance()->LoadModel(kModelSimpleSkin);
 	ModelManager::GetInstance()->LoadModel(kModelAnimationCube);
+	ModelManager::GetInstance()->LoadModel(kModelHuman);
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
 
-	// オブジェクトの生成と初期化
+	// --- オブジェクトの生成と初期化 ---
 	planeObj_ = std::make_unique<Obj3D>();
 	planeObj_->Initialize(object3dCommon_);
 	planeObj_->SetModel(kModelPlane);
@@ -83,28 +85,50 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	simpleSkinObj_ = std::make_unique<Obj3D>();
 	simpleSkinObj_->Initialize(object3dCommon_);
 	simpleSkinObj_->SetModel(kModelSimpleSkin);
-
 	auto* simpleSkinMaterial = simpleSkinObj_->GetMaterial();
 	if(simpleSkinMaterial){
 		simpleSkinMaterial->environmentCoefficient = 1.0f;
 	}
 
-	// スカイボックスの生成と初期化
+	// --- スカイボックスの生成と初期化 ---
 	skyboxCommon_ = std::make_unique<SkyboxCommon>();
 	skyboxCommon_->Initialize(object3dCommon_->GetDxCommon());
 	skybox_ = std::make_unique<Skybox>();
 	skybox_->Initialize(skyboxCommon_.get(),kSkyboxTexture);
 
-	// アニメーションキューブの生成と初期化
+	// --- アニメーションオブジェクトの生成と初期化 ---
 	animationCube_ = std::make_shared<Obj3D>();
 	animationCube_->Initialize(object3dCommon_);
 	animationCube_->SetModel(kModelAnimationCube);
 
-	animation_ = LoadAnimationFile("resource/AnimatedCube/","AnimatedCube.gltf");
-	animationController_.Initialize();
-	animationController_.Play();
+	animation_ = std::make_unique<Animation>();
+	*animation_ = LoadAnimationFile("resource/AnimatedCube/","AnimatedCube.gltf");
+	animationController_ = std::make_unique<AnimationController>();
+	animationController_->Initialize();
+	animationController_->Play();
 
-	// パーティクルの設定
+	// --- キャラクターとスケルトンの生成と初期化 ---
+	humanObj_ = std::make_shared<Obj3D>();
+	humanObj_->Initialize(object3dCommon_);
+	humanObj_->SetModel(kModelHuman);
+
+	humanAnimation_ = std::make_unique<Animation>();
+	*humanAnimation_ = LoadAnimationFile("resource/human/","walk.gltf");
+
+	const Node& humanRootNode = ModelManager::GetInstance()->FindModel(kModelHuman)->GetRootNode();
+	humanSkeleton_ = std::make_unique<Skeleton>();
+	humanSkeleton_->Create(humanRootNode);
+
+	skeletonDebugSpheres_.clear();
+	for(size_t i = 0; i < humanSkeleton_->joints.size(); ++i){
+		auto sphere = std::make_unique<Obj3D>();
+		sphere->Initialize(object3dCommon_);
+		sphere->SetModel(kModelSphere);
+		sphere->SetScale({0.2f, 0.2f, 0.2f});
+		skeletonDebugSpheres_.push_back(std::move(sphere));
+	}
+
+	// --- パーティクルの設定 ---
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticleRing,kTexturegradationLine,true,false);
 	Transform ringConfig;
 	ringConfig.translate = {1.0f, 2.0f, 0.0f};
@@ -113,7 +137,6 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	ringEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
 	ringEmitter_->SetLifeTime(1.0f);
 
-	// 板ポリの設定
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticlePrimitive,kTextureCircle2,false,false);
 	Transform circleConfig;
 	circleConfig.translate = {1.0f, 2.0f, 0.0f};
@@ -122,7 +145,6 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	circleEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
 	circleEmitter_->SetLifeTime(1.0f);
 
-	// 円柱パーティクルの設定
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticleCylinder,kTexturegradationLine,false,true);
 	Transform cylinderConfig;
 	cylinderConfig.translate = {0.0f, 0.0f, 0.0f};
@@ -132,7 +154,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	cylinderEmitter_->SetLifeTime(2.0f);
 	cylinderEmitter_->SetVelocity({0.0f, 0.0f, 0.0f});
 
-	// カメラの設定
+	// --- カメラの設定 ---
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
 	auto* defaultCamera = CameraManager::GetInstance()->GetCamera("default");
 	if(defaultCamera){
@@ -145,55 +167,59 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 void GameScene::Finalize(){}
 
 void GameScene::Update(){
-	// 各オブジェクトの更新
-	if(sphereObj_){
-		sphereObj_->Update();
-	}
-	if(terrainObj_){
-		terrainObj_->Update();
-	}
-	if(simpleSkinObj_){
-		simpleSkinObj_->Update();
-	}
-	if(skybox_){
-		skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
-	}
-	if(planeObj_){
-		planeObj_->Update();
-	}
-	if(ringEmitter_){
-		ringEmitter_->Update();
-	}
-	if(circleEmitter_){
-		circleEmitter_->Update();
-	}
-	if(cylinderEmitter_){
-		cylinderEmitter_->Update();
+	// --- 基本オブジェクトの更新 ---
+	if(sphereObj_) sphereObj_->Update();
+	if(terrainObj_) terrainObj_->Update();
+	if(simpleSkinObj_) simpleSkinObj_->Update();
+	if(skybox_) skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
+	if(planeObj_) planeObj_->Update();
+
+	// --- パーティクルの更新 ---
+	if(ringEmitter_) ringEmitter_->Update();
+	if(circleEmitter_) circleEmitter_->Update();
+	if(cylinderEmitter_) cylinderEmitter_->Update();
+
+	// --- キャラクターアニメーションと骨格の更新 ---
+	if(humanObj_){
+		if(humanAnimation_->duration > 0.0f){
+			humanAnimationTime_ += 1.0f / 60.0f;
+			humanAnimationTime_ = std::fmod(humanAnimationTime_,humanAnimation_->duration);
+		}
+
+		humanSkeleton_->ApplyAnimation(*humanAnimation_,humanAnimationTime_);
+		humanSkeleton_->Update();
+		humanObj_->Update();
+
+		for(size_t i = 0; i < humanSkeleton_->joints.size(); ++i){
+			const Joint& joint = humanSkeleton_->joints[i];
+			Matrix4x4 jointWorldMatrix = Multiply(joint.skeletonSpaceMatrix,humanObj_->GetWorldMatrix());
+			Vector3 pos = {jointWorldMatrix.m[3][0], jointWorldMatrix.m[3][1], jointWorldMatrix.m[3][2]};
+
+			skeletonDebugSpheres_[i]->SetTranslate(pos);
+			skeletonDebugSpheres_[i]->Update();
+		}
 	}
 
-	// アニメーション時間を進める
-	animationController_.UpdateKeyframes(animation_,1.0f / 60.0f);
-
-	// 計算された結果を適用
+	// --- アニメーションキューブの更新 ---
+	animationController_->UpdateKeyframes(*animation_,1.0f / 60.0f);
 	if(animationCube_){
-		animationCube_->SetScale(animationController_.GetCurrentScale());
-		animationCube_->SetTranslate(animationController_.GetCurrentTranslate());
-		animationCube_->SetQuaternion(animationController_.GetCurrentRotate());
+		animationCube_->SetScale(animationController_->GetCurrentScale());
+		animationCube_->SetTranslate(animationController_->GetCurrentTranslate());
+		animationCube_->SetQuaternion(animationController_->GetCurrentRotate());
 		animationCube_->Update();
 	}
 
-	// パーティクルマネージャーの更新
+	// --- カメラ依存の更新 ---
 	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
 	if(activeCamera){
 		ParticleManager::GetInstance()->Update(activeCamera);
 	}
 
-	// デバッグUIの表示
+	// --- デバッグUIの表示 ---
 #ifdef USE_IMGUI
 	if(activeCamera){
 		ImGui::Begin("GameScene Debug");
 
-		// カメラの調整
 		Vector3 camPos = activeCamera->GetTranslate();
 		if(ImGui::DragFloat3("Camera Pos",&camPos.x,0.1f)){
 			activeCamera->SetTranslate(camPos);
@@ -204,14 +230,12 @@ void GameScene::Update(){
 			activeCamera->SetRotate(camRot);
 		}
 
-		// オブジェクトの調整
 		if(planeObj_){
 			Vector3 pPos = planeObj_->GetTranslate();
 			ImGui::DragFloat3("Parent(Plane) Pos",&pPos.x,0.1f);
 			planeObj_->SetTranslate(pPos);
 		}
 
-		// ポイントライトの調整
 		ImGui::Separator();
 		ImGui::Text("Point Light");
 		PointLight* pData = object3dCommon_->GetPointLightData();
@@ -225,7 +249,6 @@ void GameScene::Update(){
 			ImGui::Text("PointLight Data is Null!");
 		}
 
-		// スポットライトの調整
 		SpotLight* sData = object3dCommon_->GetSpotLightData();
 		if(sData){
 			ImGui::Separator();
@@ -246,7 +269,6 @@ void GameScene::Update(){
 			sData->cosFalloffStart = cosf(spotDegreeStart * 3.141592f / 180.0f);
 		}
 
-		// シンプルスキンオブジェクトの調整
 		if(simpleSkinObj_){
 			ImGui::Separator();
 			ImGui::Text("SimpleSkin Object (Environment)");
@@ -267,18 +289,16 @@ void GameScene::Update(){
 		ModelManager::GetInstance()->UpdateLightGui();
 		ImGui::End();
 
-		// アプリケーション共通のポストプロセスUIを表示
 		Application::GetInstance()->ShowPostProcessUI();
 	}
 #endif
 }
 
 void GameScene::Draw(){
-	// 3Dオブジェクトの描画
 	object3dCommon_->Draw();
+	humanObj_->Draw();
 
-	// アニメーションキューブの描画
-	if(animationCube_){
-		animationCube_->Draw();
+	for(auto& sphere : skeletonDebugSpheres_){
+		sphere->Draw();
 	}
 }
