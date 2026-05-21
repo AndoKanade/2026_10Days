@@ -29,6 +29,7 @@ public:
 	// モデルデータ全体
 	struct ModelData{
 		std::vector<VertexData> vertices;
+		std::vector<uint32_t> indices;
 		MaterialData material;
 		Node rootNode;
 	};
@@ -66,6 +67,9 @@ private:
 	// 頂点バッファの作成
 	void CreateVertexData();
 
+	// インデックスバッファの作成
+	void CreateIndexData();
+
 	// マテリアルバッファの作成
 	void CreateMaterialData();
 
@@ -83,6 +87,10 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource;
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView{};
 	VertexData* vertexData = nullptr;
+
+	// インデックスバッファ関連リソース
+	Microsoft::WRL::ComPtr<ID3D12Resource> indexResource;
+	D3D12_INDEX_BUFFER_VIEW indexBufferView{};
 
 	// マテリアルバッファ関連リソース
 	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource;
