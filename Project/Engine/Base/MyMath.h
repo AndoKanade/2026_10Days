@@ -1,9 +1,7 @@
 #pragma once
 #include <cmath>
 
-// -------------------------------------------------
-// Vector2
-// -------------------------------------------------
+// 2次元ベクトル
 struct Vector2{
 	float x,y;
 
@@ -15,8 +13,7 @@ struct Vector2{
 };
 
 inline bool operator<(const Vector2& a,const Vector2& b){
-	if(a.x != b.x)
-		return a.x < b.x;
+	if(a.x != b.x) return a.x < b.x;
 	return a.y < b.y;
 }
 
@@ -24,39 +21,32 @@ inline bool operator!=(const Vector2& a,const Vector2& b){
 	return a.x != b.x || a.y != b.y;
 }
 
-// -------------------------------------------------
-// Vector3
-// -------------------------------------------------
+// 3次元ベクトル
 struct Vector3{
 	float x,y,z;
 };
 
-// Vector3 - Vector3
+// 減算
 inline Vector3 operator-(const Vector3& v1,const Vector3& v2){
 	return {v1.x - v2.x, v1.y - v2.y, v1.z - v2.z};
 }
 
+// 正規化
 inline Vector3 Normalize(const Vector3& v){
 	Vector3 result = {0, 0, 0};
+	float length = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 
-	// ベクトルの長さを計算
-	float length = std::sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
-
-	// 0除算を防ぐ
 	if(length != 0.0f){
 		result.x = v.x / length;
 		result.y = v.y / length;
 		result.z = v.z / length;
 	}
-
 	return result;
 }
 
 inline bool operator<(const Vector3& a,const Vector3& b){
-	if(a.x != b.x)
-		return a.x < b.x;
-	if(a.y != b.y)
-		return a.y < b.y;
+	if(a.x != b.x) return a.x < b.x;
+	if(a.y != b.y) return a.y < b.y;
 	return a.z < b.z;
 }
 
@@ -64,7 +54,7 @@ inline bool operator!=(const Vector3& a,const Vector3& b){
 	return a.x != b.x || a.y != b.y || a.z != b.z;
 }
 
-// Vector3 += Vector3
+// 加算代入
 inline Vector3& operator+=(Vector3& lhv,const Vector3& rhv){
 	lhv.x += rhv.x;
 	lhv.y += rhv.y;
@@ -72,35 +62,29 @@ inline Vector3& operator+=(Vector3& lhv,const Vector3& rhv){
 	return lhv;
 }
 
-// Vector3 + Vector3
+// 加算
 inline Vector3 operator+(const Vector3& v1,const Vector3& v2){
 	return {v1.x + v2.x, v1.y + v2.y, v1.z + v2.z};
 }
 
-// Vector3 * float
+// スカラー乗算
 inline Vector3 operator*(const Vector3& v,float s){
 	return {v.x * s, v.y * s, v.z * s};
 }
 
-// float * Vector3
 inline Vector3 operator*(float s,const Vector3& v){
 	return {v.x * s, v.y * s, v.z * s};
 }
 
-// -------------------------------------------------
-// Vector4
-// -------------------------------------------------
+// 4次元ベクトル
 struct Vector4{
 	float x,y,z,w;
 };
 
 inline bool operator<(const Vector4& a,const Vector4& b){
-	if(a.x != b.x)
-		return a.x < b.x;
-	if(a.y != b.y)
-		return a.y < b.y;
-	if(a.z != b.z)
-		return a.z < b.z;
+	if(a.x != b.x) return a.x < b.x;
+	if(a.y != b.y) return a.y < b.y;
+	if(a.z != b.z) return a.z < b.z;
 	return a.w < b.w;
 }
 
@@ -108,9 +92,7 @@ inline bool operator!=(const Vector4& a,const Vector4& b){
 	return a.x != b.x || a.y != b.y || a.z != b.z || a.w != b.w;
 }
 
-// -------------------------------------------------
-// Matrix & Transform
-// -------------------------------------------------
+// 行列とトランスフォームの構造体
 struct Matrix4x4{
 	float m[4][4];
 };
@@ -130,10 +112,29 @@ struct TransformationMatrix{
 	Matrix4x4 World;
 };
 
-// -------------------------------------------------
-// Matrix Functions
-// -------------------------------------------------
+// クォータニオンの構造体
+struct Quaternion{
+	float x,y,z,w;
 
+	// 各成分の反転
+	Quaternion operator-() const{
+		return {-x, -y, -z, -w};
+	}
+
+	// 加算
+	Quaternion operator+(const Quaternion& other) const{
+		return {x + other.x, y + other.y, z + other.z, w + other.w};
+	}
+
+	// スカラー乗算
+	Quaternion operator*(float scalar) const{
+		return {x * scalar, y * scalar, z * scalar, w * scalar};
+	}
+};
+
+// 行列の計算関数
+
+// 単位行列の作成
 inline Matrix4x4 MakeIdentity4x4(){
 	Matrix4x4 result;
 	for(int i = 0; i < 4; i++){
@@ -148,6 +149,7 @@ inline Matrix4x4 MakeIdentity4x4(){
 	return result;
 }
 
+// 拡大縮小行列の作成
 inline Matrix4x4 MakeScaleMatrix(const Vector3& scale){
 	Matrix4x4 matrix = {};
 	matrix.m[0][0] = scale.x;
@@ -157,6 +159,7 @@ inline Matrix4x4 MakeScaleMatrix(const Vector3& scale){
 	return matrix;
 }
 
+// 平行移動行列の作成
 inline Matrix4x4 MakeTranslateMatrix(const Vector3& translate){
 	Matrix4x4 matrix = {};
 	matrix.m[0][0] = 1.0f;
@@ -169,10 +172,11 @@ inline Matrix4x4 MakeTranslateMatrix(const Vector3& translate){
 	return matrix;
 }
 
+// X軸回転行列の作成
 inline Matrix4x4 MakeRotateXMatrix(float radian){
 	Matrix4x4 result{};
-	result.m[0][0] = 1;
-	result.m[3][3] = 1;
+	result.m[0][0] = 1.0f;
+	result.m[3][3] = 1.0f;
 	result.m[1][1] = std::cos(radian);
 	result.m[1][2] = std::sin(radian);
 	result.m[2][1] = -std::sin(radian);
@@ -180,6 +184,7 @@ inline Matrix4x4 MakeRotateXMatrix(float radian){
 	return result;
 }
 
+// Y軸回転行列の作成
 inline Matrix4x4 MakeRotateYMatrix(float radian){
 	Matrix4x4 result{};
 	result.m[1][1] = 1.0f;
@@ -191,10 +196,11 @@ inline Matrix4x4 MakeRotateYMatrix(float radian){
 	return result;
 }
 
+// Z軸回転行列の作成
 inline Matrix4x4 MakeRotateZMatrix(float radian){
 	Matrix4x4 result{};
-	result.m[2][2] = 1;
-	result.m[3][3] = 1;
+	result.m[2][2] = 1.0f;
+	result.m[3][3] = 1.0f;
 	result.m[0][0] = std::cos(radian);
 	result.m[0][1] = std::sin(radian);
 	result.m[1][0] = -std::sin(radian);
@@ -202,6 +208,7 @@ inline Matrix4x4 MakeRotateZMatrix(float radian){
 	return result;
 }
 
+// 行列の乗算
 inline Matrix4x4 Multiply(const Matrix4x4& m1,const Matrix4x4& m2){
 	Matrix4x4 result{};
 	for(int row = 0; row < 4; ++row){
@@ -215,24 +222,22 @@ inline Matrix4x4 Multiply(const Matrix4x4& m1,const Matrix4x4& m2){
 	return result;
 }
 
+// アフィン変換行列の作成
 inline Matrix4x4 MakeAffineMatrix(const Vector3& scale,const Vector3& rotate,const Vector3& translate){
 	Matrix4x4 scaleMatrix = MakeScaleMatrix(scale);
 	Matrix4x4 rotateX = MakeRotateXMatrix(rotate.x);
 	Matrix4x4 rotateY = MakeRotateYMatrix(rotate.y);
 	Matrix4x4 rotateZ = MakeRotateZMatrix(rotate.z);
 
-	// 回転順: Z -> X -> Y
 	Matrix4x4 rotateMatrix = Multiply(Multiply(rotateX,rotateY),rotateZ);
 	Matrix4x4 translateMatrix = MakeTranslateMatrix(translate);
 
-	// Scale -> Rotate -> Translate
-	Matrix4x4 affineMatrix = Multiply(Multiply(scaleMatrix,rotateMatrix),translateMatrix);
-
-	return affineMatrix;
+	return Multiply(Multiply(scaleMatrix,rotateMatrix),translateMatrix);
 }
 
+// 透視投影行列の作成
 inline Matrix4x4 MakePerspectiveFovMatrix(float fovY,float aspectRatio,float nearClip,float farClip){
-	float f = 1.0f / tanf(fovY * 0.5f);
+	float f = 1.0f / std::tan(fovY * 0.5f);
 	float range = farClip / (farClip - nearClip);
 
 	Matrix4x4 result = {};
@@ -246,6 +251,7 @@ inline Matrix4x4 MakePerspectiveFovMatrix(float fovY,float aspectRatio,float nea
 	return result;
 }
 
+// 逆行列の計算
 inline Matrix4x4 Inverse(const Matrix4x4& m){
 	Matrix4x4 result{};
 
@@ -292,6 +298,7 @@ inline Matrix4x4 Inverse(const Matrix4x4& m){
 	return result;
 }
 
+// 正投影行列の作成
 inline Matrix4x4 MakeOrthographicMatrix(float left,float top,float right,float bottom,float nearClip,float farClip){
 	Matrix4x4 result = {};
 
@@ -306,6 +313,7 @@ inline Matrix4x4 MakeOrthographicMatrix(float left,float top,float right,float b
 	return result;
 }
 
+// 転置行列の作成
 inline Matrix4x4 Transpose(const Matrix4x4& m){
 	Matrix4x4 result;
 	for(int i = 0; i < 4; ++i){
@@ -315,34 +323,15 @@ inline Matrix4x4 Transpose(const Matrix4x4& m){
 	}
 	return result;
 }
-// -------------------------------------------------
-// Quaternion & Interpolation Functions
-// -------------------------------------------------
-// 既存の struct Quaternion の中に追加してください
-struct Quaternion{
-	float x,y,z,w;
 
-	// 追加部分: 単項マイナス（各成分の反転）
-	Quaternion operator-() const{
-		return {-x, -y, -z, -w};
-	}
+// クォータニオンと補間の関数
 
-	// 追加部分: クォータニオン同士の足し算
-	Quaternion operator+(const Quaternion& other) const{
-		return {x + other.x, y + other.y, z + other.z, w + other.w};
-	}
-
-	// 追加部分: クォータニオン×実数の掛け算
-	Quaternion operator*(float scalar) const{
-		return {x * scalar, y * scalar, z * scalar, w * scalar};
-	}
-};
-
+// 内積
 inline float Dot(const Quaternion& q1,const Quaternion& q2){
 	return q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
 }
 
-// 追加部分: 実数×クォータニオンの掛け算（struct Quaternion の外に記述してください）
+// スカラー乗算（実数×クォータニオン）
 inline Quaternion operator*(float scalar,const Quaternion& quat){
 	return {quat.x * scalar, quat.y * scalar, quat.z * scalar, quat.w * scalar};
 }
@@ -355,11 +344,8 @@ inline Vector3 Lerp(const Vector3& v1,const Vector3& v2,float t){
 // Quaternionの球面線形補間 (Slerp)
 inline Quaternion Slerp(const Quaternion& q1,const Quaternion& q2,float t){
 	Quaternion result;
-
-	// 2つのクォータニオンの内積を計算
 	float dot = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
 
-	// 内積が負の場合、逆回りのルートを避けるために片方を反転する
 	Quaternion targetQ2 = q2;
 	if(dot < 0.0f){
 		targetQ2.x = -q2.x;
@@ -369,28 +355,28 @@ inline Quaternion Slerp(const Quaternion& q1,const Quaternion& q2,float t){
 		dot = -dot;
 	}
 
-	// 角度が非常に小さい場合は、誤差を防ぐために通常の線形補間(Lerp)に切り替える
 	if(dot > 0.9995f){
 		result.x = q1.x + t * (targetQ2.x - q1.x);
 		result.y = q1.y + t * (targetQ2.y - q1.y);
 		result.z = q1.z + t * (targetQ2.z - q1.z);
 		result.w = q1.w + t * (targetQ2.w - q1.w);
 
-		// 正規化
-		float len = std::sqrtf(result.x * result.x + result.y * result.y + result.z * result.z + result.w * result.w);
+		float len = std::sqrt(result.x * result.x + result.y * result.y + result.z * result.z + result.w * result.w);
 		if(len != 0.0f){
-			result.x /= len; result.y /= len; result.z /= len; result.w /= len;
+			result.x /= len;
+			result.y /= len;
+			result.z /= len;
+			result.w /= len;
 		}
 		return result;
 	}
 
-	// なす角を計算
-	float theta_0 = std::acosf(dot);
+	float theta_0 = std::acos(dot);
 	float theta = theta_0 * t;
-	float sin_theta = std::sinf(theta);
-	float sin_theta_0 = std::sinf(theta_0);
+	float sin_theta = std::sin(theta);
+	float sin_theta_0 = std::sin(theta_0);
 
-	float s0 = std::cosf(theta) - dot * sin_theta / sin_theta_0;
+	float s0 = std::cos(theta) - dot * sin_theta / sin_theta_0;
 	float s1 = sin_theta / sin_theta_0;
 
 	result.x = s0 * q1.x + s1 * targetQ2.x;
@@ -401,10 +387,10 @@ inline Quaternion Slerp(const Quaternion& q1,const Quaternion& q2,float t){
 	return result;
 }
 
+// クォータニオンから回転行列を作成
 inline Matrix4x4 MakeRotateMatrix(const Quaternion& q){
-	Matrix4x4 result = MakeIdentity4x4(); // 最初に単位行列で初期化
+	Matrix4x4 result = MakeIdentity4x4();
 
-	// 以前に調整した180度反転時の符号判定バグを考慮した、クォータニオン行列変換の正規化式
 	result.m[0][0] = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
 	result.m[0][1] = 2.0f * (q.x * q.y + q.w * q.z);
 	result.m[0][2] = 2.0f * (q.x * q.z - q.w * q.y);
@@ -419,3 +405,17 @@ inline Matrix4x4 MakeRotateMatrix(const Quaternion& q){
 
 	return result;
 }
+
+// オイラー角用トランスフォーム
+struct EulerTransform{
+	Vector3 scale;
+	Vector3 rotate;
+	Vector3 translate;
+};
+
+// クォータニオン用トランスフォーム
+struct QuaternionTransform{
+	Vector3 scale;
+	Quaternion rotate;
+	Vector3 translate;
+};

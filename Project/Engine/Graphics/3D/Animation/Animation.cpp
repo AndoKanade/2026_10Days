@@ -6,14 +6,16 @@
 #include <assimp/postprocess.h>
 #include <cassert>
 
-// アニメーション制御クラスの初期化
+// ====================================================================
+// アニメーション制御 (AnimationController)
+// ====================================================================
+
 void AnimationController::Initialize(){
 	isPlaying_ = false;
 	currentTime_ = 0.0f;
 	duration_ = 0.0f;
 }
 
-// glTFなどのアニメーションデータを元に時間を進め、SRTを計算する
 void AnimationController::UpdateKeyframes(const Animation& animation,float deltaTime){
 	if(!isPlaying_){
 		return;
@@ -47,7 +49,78 @@ void AnimationController::UpdateKeyframes(const Animation& animation,float delta
 	}
 }
 
-// ノードごとのアニメーションデータの補間計算
+// ====================================================================
+// 補間計算関数群
+// ====================================================================
+
+Vector3 AnimationController::CalculateInterpolatedTranslate(float time,const std::vector<KeyframeVector3>& keyframes){
+	if(keyframes.empty()) return {0.0f, 0.0f, 0.0f};
+	if(keyframes.size() == 1 || time <= keyframes.front().time) return keyframes.front().value;
+	if(time >= keyframes.back().time) return keyframes.back().value;
+
+	for(size_t i = 0; i < keyframes.size() - 1; ++i){
+		const auto& key0 = keyframes[i];
+		const auto& key1 = keyframes[i + 1];
+
+		if(time >= key0.time && time <= key1.time){
+			float t = (time - key0.time) / (key1.time - key0.time);
+			return Lerp(key0.value,key1.value,t);
+		}
+	}
+	return {0.0f, 0.0f, 0.0f};
+}
+
+Vector3 AnimationController::CalculateInterpolatedScale(float time,const std::vector<KeyframeVector3>& keyframes){
+	if(keyframes.empty()) return {1.0f, 1.0f, 1.0f};
+	if(keyframes.size() == 1 || time <= keyframes.front().time) return keyframes.front().value;
+	if(time >= keyframes.back().time) return keyframes.back().value;
+
+	for(size_t i = 0; i < keyframes.size() - 1; ++i){
+		const auto& key0 = keyframes[i];
+		const auto& key1 = keyframes[i + 1];
+
+		if(time >= key0.time && time <= key1.time){
+			float t = (time - key0.time) / (key1.time - key0.time);
+			return Lerp(key0.value,key1.value,t);
+		}
+	}
+	return {1.0f, 1.0f, 1.0f};
+}
+
+Quaternion AnimationController::CalculateInterpolatedRotate(float time,const std::vector<KeyframeQuaternion>& keyframes){
+	if(keyframes.empty()) return {0.0f, 0.0f, 0.0f, 1.0f};
+	if(keyframes.size() == 1 || time <= keyframes.front().time) return keyframes.front().value;
+	if(time >= keyframes.back().time) return keyframes.back().value;
+
+	for(size_t i = 0; i < keyframes.size() - 1; ++i){
+		const auto& key0 = keyframes[i];
+		const auto& key1 = keyframes[i + 1];
+
+		if(time >= key0.time && time <= key1.time){
+			float t = (time - key0.time) / (key1.time - key0.time);
+			float dot = Dot(key0.value,key1.value);
+			Quaternion targetQuat = key1.value;
+
+			if(dot < 0.0f){
+				targetQuat = -key1.value;
+				dot = -dot;
+			}
+
+			if(dot >= 1.0f - 0.0005f){
+				return (1.0f - t) * key0.value + t * targetQuat;
+			}
+
+			float theta = std::acos(dot);
+			float sinTheta = std::sin(theta);
+			float scale0 = std::sin((1.0f - t) * theta) / sinTheta;
+			float scale1 = std::sin(t * theta) / sinTheta;
+
+			return scale0 * key0.value + scale1 * targetQuat;
+		}
+	}
+	return {0.0f, 0.0f, 0.0f, 1.0f};
+}
+
 NodeAnimation AnimationController::CalculateInterpolatedNode(const NodeAnimation& nodeAnim,float time){
 	NodeAnimation result;
 
@@ -126,7 +199,10 @@ NodeAnimation AnimationController::CalculateInterpolatedNode(const NodeAnimation
 	return result;
 }
 
-// Assimpを使ったアニメーションファイルの読み込み
+// ====================================================================
+// ファイル読み込み処理 (Assimp)
+// ====================================================================
+
 Animation LoadAnimationFile(const std::string& directoryPath,const std::string& filename){
 	Animation animation;
 	Assimp::Importer importer;
