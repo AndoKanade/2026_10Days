@@ -12,6 +12,7 @@
 // ====================================================================
 // 初期化・リソース生成
 // ====================================================================
+
 void Model::Initialize(ModelCommon* modelCommon,const std::string& directorypath,const std::string& filename){
 	this->modelCommon_ = modelCommon;
 
@@ -21,6 +22,7 @@ void Model::Initialize(ModelCommon* modelCommon,const std::string& directorypath
 	modelData.material.textureIndex = TextureManager::GetInstance()->GetSrvIndex(modelData.material.textureFilePath);
 
 	CreateVertexData();
+	CreateIndexData();
 	CreateMaterialData();
 }
 
@@ -34,6 +36,21 @@ void Model::CreateVertexData(){
 	vertexResource->Map(0,nullptr,reinterpret_cast<void**>(&ptr));
 	std::memcpy(ptr,modelData.vertices.data(),sizeof(VertexData) * modelData.vertices.size());
 	vertexResource->Unmap(0,nullptr);
+}
+
+void Model::CreateIndexData(){
+	size_t sizeInBytes = sizeof(uint32_t) * modelData.indices.size();
+
+	indexResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeInBytes);
+
+	indexBufferView.BufferLocation = indexResource->GetGPUVirtualAddress();
+	indexBufferView.SizeInBytes = UINT(sizeInBytes);
+	indexBufferView.Format = DXGI_FORMAT_R32_UINT;
+
+	uint32_t* ptr = nullptr;
+	indexResource->Map(0,nullptr,reinterpret_cast<void**>(&ptr));
+	std::memcpy(ptr,modelData.indices.data(),sizeInBytes);
+	indexResource->Unmap(0,nullptr);
 }
 
 void Model::CreateMaterialData(){
@@ -51,6 +68,7 @@ void Model::CreateMaterialData(){
 // ====================================================================
 // ファイル読み込み処理 (Assimp)
 // ====================================================================
+
 Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std::string& filename){
 	ModelData modelData;
 	Assimp::Importer importer;
@@ -67,19 +85,26 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std
 		aiMesh* mesh = scene->mMeshes[meshIndex];
 		assert(mesh->HasNormals() && mesh->HasTextureCoords(0));
 
+		uint32_t vertexOffset = static_cast<uint32_t>(modelData.vertices.size());
+
+		// 頂点データの抽出
+		for(uint32_t vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex){
+			aiVector3D& pos = mesh->mVertices[vertexIndex];
+			aiVector3D& norm = mesh->mNormals[vertexIndex];
+			aiVector3D& tex = mesh->mTextureCoords[0][vertexIndex];
+
+			VertexData vertex;
+			vertex.position = {-pos.x, pos.y, pos.z, 1.0f}; // 右手→左手変換
+			vertex.normal = {-norm.x, norm.y, norm.z};      // 右手→左手変換
+			vertex.texcoord = {tex.x, tex.y};
+			modelData.vertices.push_back(vertex);
+		}
+
+		// インデックスデータの抽出
 		for(uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex){
 			aiFace& face = mesh->mFaces[faceIndex];
 			for(uint32_t element = 0; element < face.mNumIndices; ++element){
-				uint32_t vertexIndex = face.mIndices[element];
-				aiVector3D& pos = mesh->mVertices[vertexIndex];
-				aiVector3D& norm = mesh->mNormals[vertexIndex];
-				aiVector3D& tex = mesh->mTextureCoords[0][vertexIndex];
-
-				VertexData vertex;
-				vertex.position = {-pos.x, pos.y, pos.z, 1.0f}; // 右手→左手変換
-				vertex.normal = {-norm.x, norm.y, norm.z};      // 右手→左手変換
-				vertex.texcoord = {tex.x, tex.y};
-				modelData.vertices.push_back(vertex);
+				modelData.indices.push_back(face.mIndices[element] + vertexOffset);
 			}
 		}
 	}
@@ -92,6 +117,7 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std
 			modelData.material.textureFilePath = directoryPath + "/" + path.C_Str();
 		}
 	}
+
 	return modelData;
 }
 
@@ -124,10 +150,12 @@ Node Model::ReadNode(aiNode* node){
 // ====================================================================
 // 描画・更新処理
 // ====================================================================
+
 void Model::Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress){
 	auto* commandList = modelCommon_->GetDxCommon()->commandList.Get();
 
 	commandList->IASetVertexBuffers(0,1,&vertexBufferView);
+	commandList->IASetIndexBuffer(&indexBufferView);
 
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle = SrvManager::GetInstance()->GetGPUDescriptorHandle(modelData.material.textureIndex);
 	commandList->SetGraphicsRootDescriptorTable(2,textureSrvHandle);
@@ -137,7 +165,7 @@ void Model::Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAdd
 
 	commandList->SetGraphicsRootConstantBufferView(5,cameraAddress);
 
-	commandList->DrawInstanced(UINT(modelData.vertices.size()),1,0,0);
+	commandList->DrawIndexedInstanced(UINT(modelData.indices.size()),1,0,0,0);
 }
 
 void Model::SetTexture(const std::string& texturefilePath){
