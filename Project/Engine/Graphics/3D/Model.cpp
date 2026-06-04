@@ -154,9 +154,13 @@ Node Model::ReadNode(aiNode* node){
 void Model::Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress){
 	auto* commandList = modelCommon_->GetDxCommon()->commandList.Get();
 
+	// 頂点バッファをセット
 	commandList->IASetVertexBuffers(0,1,&vertexBufferView);
+
+	// 指摘箇所：ここでインデックスバッファをセットする
 	commandList->IASetIndexBuffer(&indexBufferView);
 
+	// マテリアルやカメラのセット
 	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle = SrvManager::GetInstance()->GetGPUDescriptorHandle(modelData.material.textureIndex);
 	commandList->SetGraphicsRootDescriptorTable(2,textureSrvHandle);
 
@@ -165,6 +169,7 @@ void Model::Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAdd
 
 	commandList->SetGraphicsRootConstantBufferView(5,cameraAddress);
 
+	// インデックス描画コマンド
 	commandList->DrawIndexedInstanced(UINT(modelData.indices.size()),1,0,0,0);
 }
 
