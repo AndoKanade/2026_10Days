@@ -40,6 +40,7 @@ GameScene::GameScene() = default;
 GameScene::~GameScene() = default;
 
 void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon* spriteCommon){
+	//__debugbreak();
 	object3dCommon_ = object3dCommon;
 	input_ = input;
 	spriteCommon_ = spriteCommon;
@@ -108,25 +109,25 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	animationController_->Play();
 
 	// --- キャラクターとスケルトンの生成と初期化 ---
+// --- キャラクターとスケルトンの生成と初期化 ---
 	humanObj_ = std::make_shared<Obj3D>();
 	humanObj_->Initialize(object3dCommon_);
 	humanObj_->SetModel(kModelHuman);
 
-	humanAnimation_ = std::make_unique<Animation>();
-	*humanAnimation_ = LoadAnimationFile("resource/human/","walk.gltf");
-
-	const Node& humanRootNode = ModelManager::GetInstance()->FindModel(kModelHuman)->GetRootNode();
-	humanSkeleton_ = std::make_unique<Skeleton>();
-	humanSkeleton_->Create(humanRootNode);
-
-	skeletonDebugSpheres_.clear();
-	for(size_t i = 0; i < humanSkeleton_->joints.size(); ++i){
-		auto sphere = std::make_unique<Obj3D>();
-		sphere->Initialize(object3dCommon_);
-		sphere->SetModel(kModelSphere);
-		sphere->SetScale({0.2f, 0.2f, 0.2f});
-		skeletonDebugSpheres_.push_back(std::move(sphere));
+	// ★ ここで読み込み結果を必ずチェック
+	auto* model = ModelManager::GetInstance()->FindModel(kModelHuman);
+	if(!model){
+		OutputDebugStringA("FATAL ERROR: Model not found!\n");
+		return; // ここで止める
 	}
+
+	// ★ ここでスケルトンの基になるノードがあるかチェック
+	if(model->GetRootNode().name.empty()){
+		OutputDebugStringA("FATAL ERROR: RootNode is empty!\n");
+		return; // ここで止める
+	}
+
+	humanObj_->LoadAnimation("resource/human/","walk.gltf");
 
 	// --- パーティクルの設定 ---
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticleRing,kTexturegradationLine,true,false);
@@ -181,23 +182,9 @@ void GameScene::Update(){
 
 	// --- キャラクターアニメーションと骨格の更新 ---
 	if(humanObj_){
-		if(humanAnimation_->duration > 0.0f){
-			humanAnimationTime_ += 1.0f / 60.0f;
-			humanAnimationTime_ = std::fmod(humanAnimationTime_,humanAnimation_->duration);
-		}
-
-		humanSkeleton_->ApplyAnimation(*humanAnimation_,humanAnimationTime_);
-		humanSkeleton_->Update();
+		humanObj_->SetTranslate({0, 0, 5}); // カメラの正面 5m
+		humanObj_->SetScale({1, 1, 1});    // スケールを1倍にする
 		humanObj_->Update();
-
-		for(size_t i = 0; i < humanSkeleton_->joints.size(); ++i){
-			const Joint& joint = humanSkeleton_->joints[i];
-			Matrix4x4 jointWorldMatrix = Multiply(joint.skeletonSpaceMatrix,humanObj_->GetWorldMatrix());
-			Vector3 pos = {jointWorldMatrix.m[3][0], jointWorldMatrix.m[3][1], jointWorldMatrix.m[3][2]};
-
-			skeletonDebugSpheres_[i]->SetTranslate(pos);
-			skeletonDebugSpheres_[i]->Update();
-		}
 	}
 
 	// --- アニメーションキューブの更新 ---
@@ -297,8 +284,4 @@ void GameScene::Update(){
 void GameScene::Draw(){
 	object3dCommon_->Draw();
 	humanObj_->Draw();
-
-	for(auto& sphere : skeletonDebugSpheres_){
-		sphere->Draw();
-	}
 }

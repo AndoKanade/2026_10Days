@@ -1,6 +1,9 @@
 #pragma once
 #include "MyMath.h"
 #include "Model.h"
+#include "Skeleton.h"
+#include "SkinCluster.h"
+#include "Animation.h"
 #include <string>
 #include <vector>
 #include <d3d12.h>
@@ -39,6 +42,8 @@ public:
 	void SetTranslate(const Vector3& translate){ transform.translate = translate; }
 	void SetQuaternion(const Quaternion& quat){ quaternion_ = quat; isUseQuaternion_ = true; }
 
+	void LoadAnimation(const std::string& directoryPath,const std::string& filename);
+
 	// Getter
 	const Vector3& GetScale() const{ return transform.scale; }
 	const Vector3& GetRotate() const{ return transform.rotate; }
@@ -65,4 +70,10 @@ private:
 	Transform transform;
 	Quaternion quaternion_ = {0.0f, 0.0f, 0.0f, 1.0f};
 	bool isUseQuaternion_ = false;
+
+	Skeleton skeleton_;
+	SkinCluster skinCluster_;
+	Animation animation_;
+	float animationTime_ = 0.0f;
+	bool isSkinning_ = false;
 };

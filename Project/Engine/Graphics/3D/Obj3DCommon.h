@@ -46,6 +46,7 @@ public: // 外部から呼び出すもの
 	ID3D12PipelineState* GetGraphicsPipelineState() const{ return graphicsPipelineState.Get(); }
 	DXCommon* GetDxCommon() const{ return dxCommon_; }
 	Camera* GetDefaultCamera() const{ return defaultCamera_; }
+	ID3D12PipelineState* GetSkinningGraphicsPipelineState() const{ return skinningGraphicsPipelineState.Get(); }
 
 	// ライトデータ取得
 	DirectionalLight* GetDirectionalLightData(){ return directionalLightData_; }
@@ -63,6 +64,8 @@ private: // メンバ変数
 
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState;
+
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> skinningGraphicsPipelineState;
 
 	// カメラリソース
 	Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;

@@ -204,6 +204,14 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
+    <FxCompile Include="Engine\Graphics\Shaders\Obj3D\SkinningObject3d.VS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
     <FxCompile Include="Engine\Graphics\Shaders\Particle\Particle.PS.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
@@ -316,6 +324,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClInclude Include="Engine\Graphics\3D\ModelManager.h" />
     <ClInclude Include="Engine\Graphics\3D\Obj3D.h" />
     <ClInclude Include="Engine\Graphics\3D\Obj3DCommon.h" />
+    <ClInclude Include="Engine\Graphics\3D\SkinCluster.h" />
     <ClInclude Include="Engine\Graphics\3D\Skybox.h" />
     <ClInclude Include="Engine\Graphics\3D\SkyboxCommon.h" />
     <ClInclude Include="Engine\Graphics\Effect\ParticleEmitter.h" />
@@ -354,6 +363,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClCompile Include="Engine\Graphics\3D\ModelManager.cpp" />
     <ClCompile Include="Engine\Graphics\3D\Obj3D.cpp" />
     <ClCompile Include="Engine\Graphics\3D\Obj3DCommon.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\SkinCluster.cpp" />
     <ClCompile Include="Engine\Graphics\3D\Skybox.cpp" />
     <ClCompile Include="Engine\Graphics\3D\SkyboxCommon.cpp" />
     <ClCompile Include="Engine\Graphics\Effect\ParticleEmitter.cpp" />

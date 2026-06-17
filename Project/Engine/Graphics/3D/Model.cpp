@@ -1,6 +1,7 @@
 #include "Model.h"
 #include "TextureManager.h"
 #include "SrvManager.h"
+#include "SkinCluster.h"
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -151,13 +152,25 @@ Node Model::ReadNode(aiNode* node){
 // 描画・更新処理
 // ====================================================================
 
-void Model::Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress){
-	auto* commandList = modelCommon_->GetDxCommon()->commandList.Get();
+void Model::Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress,SkinCluster* skinCluster){
+	auto* commandList = modelCommon_->GetDxCommon()->GetCommandList();
 
-	// 頂点バッファをセット
-	commandList->IASetVertexBuffers(0,1,&vertexBufferView);
+	// ★ スキニングがある場合はスロット0と1に2つのバッファをセット
+	if(skinCluster){
+		D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {
+			vertexBufferView,
+			skinCluster->GetInfluenceBufferView() // WEIGHT と INDEX
+		};
+		commandList->IASetVertexBuffers(0,2,vbvs);
 
-	// 指摘箇所：ここでインデックスバッファをセットする
+		// t2レジスタ(8番目のパラメータ)にパレットをセット
+		commandList->SetGraphicsRootShaderResourceView(8,skinCluster->GetPaletteAddress());
+	}
+	// ★ スキニングがない場合は通常通り1つだけセット
+	else{
+		commandList->IASetVertexBuffers(0,1,&vertexBufferView);
+	}
+
 	commandList->IASetIndexBuffer(&indexBufferView);
 
 	// マテリアルやカメラのセット

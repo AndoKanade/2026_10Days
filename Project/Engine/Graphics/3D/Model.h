@@ -1,10 +1,13 @@
 #pragma once
 
+class SkinCluster;
+
 #include "ModelCommon.h"
 #include <string>
 #include <vector>
 #include <d3d12.h>
 #include <wrl.h>
+#include <map>
 #include "MyMath.h"
 #include "Skeleton.h"
 #include <assimp/scene.h>
@@ -26,12 +29,22 @@ public:
 		uint32_t textureIndex = 0;
 	};
 
+	struct VertexWeightData{
+		float weight;
+		uint32_t vertexIndex;
+	};
+	struct JointWeightData{
+		Matrix4x4 inverseBindPoseMatrix;
+		std::vector<VertexWeightData> vertexWeights;
+	};
+
 	// モデルデータ全体
 	struct ModelData{
 		std::vector<VertexData> vertices;
 		std::vector<uint32_t> indices;
 		MaterialData material;
 		Node rootNode;
+		std::map<std::string,JointWeightData> skinClusterData;
 	};
 
 	// マテリアル定数バッファ
@@ -49,8 +62,7 @@ public:
 	void Initialize(ModelCommon* modelCommon,const std::string& directorypath,const std::string& filename);
 
 	// 描画
-	void Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress);
-
+	void Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress,SkinCluster* skinCluster = nullptr);
 	// テクスチャのセット
 	void SetTexture(const std::string& texturefilePath);
 
@@ -62,6 +74,8 @@ public:
 
 	// .objファイルの読み込み
 	static ModelData LoadModelFile(const std::string& directoryPath,const std::string& filename);
+
+	const ModelData& GetModelData() const{ return modelData; }
 
 private:
 	// 頂点バッファの作成

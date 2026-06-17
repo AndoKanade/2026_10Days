@@ -72,34 +72,43 @@ void Obj3D::Update(){
     transformationMatrixData->World = worldMatrix;
     // 逆転置行列の計算と転送
     transformationMatrixData->WorldInverseTranspose = Transpose(Inverse(worldMatrix));
+
+    // 追加: アニメーションとスキニングの更新
+    if(isSkinning_){
+        animationTime_ += 1.0f / 60.0f;
+        animationTime_ = std::fmod(animationTime_,animation_.duration);
+
+        skeleton_.ApplyAnimation(animation_,animationTime_);
+        skeleton_.Update();
+
+        skinCluster_.Update(skeleton_);
+    }
 }
 
 void Obj3D::Draw(){
     auto* commandList = object3dCommon->GetDxCommon()->GetCommandList();
 
-    commandList->SetGraphicsRootConstantBufferView(
-        0,materialResource->GetGPUVirtualAddress());
+    // 1. マテリアル・トランスフォームのセット（これは共通）
+    commandList->SetGraphicsRootConstantBufferView(0,materialResource->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(1,transformationMatrixResource->GetGPUVirtualAddress());
 
-    // 座標変換行列CBufferの設定 (b1)
-    commandList->SetGraphicsRootConstantBufferView(
-        1,transformationMatrixResource->GetGPUVirtualAddress());
-
-    // モデルの描画
     if(model){
-        // 1. アクティブなカメラを取得
         Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
-
-        if(activeCamera == nullptr){
-            // カメラがないなら描画をスキップするか、デフォルトのアドレスを渡す
-            return;
-        }
-
-        uint32_t skyboxIndex = 0;
+        if(activeCamera == nullptr) return;
 
         uint32_t skyboxSRVIndex = TextureManager::GetInstance()->GetSrvIndex("resource/Skybox/rostock_laage_airport_4k.dds");
 
-        // 3. 引数を渡してDrawを呼ぶ
-        model->Draw(skyboxSRVIndex,activeCamera->GetGPUVirtualAddress());
+        if(isSkinning_){
+            // 1. スキニング用パイプラインのセット
+            commandList->SetPipelineState(object3dCommon->GetSkinningGraphicsPipelineState());
+            commandList->SetGraphicsRootShaderResourceView(8,skinCluster_.GetPaletteResource()->GetGPUVirtualAddress());
+
+            model->Draw(skyboxSRVIndex,activeCamera->GetGPUVirtualAddress(),&skinCluster_);
+        } else{
+            // ★通常モデル用パイプラインのセット
+            commandList->SetPipelineState(object3dCommon->GetGraphicsPipelineState());
+            model->Draw(skyboxSRVIndex,activeCamera->GetGPUVirtualAddress());
+        }
     }
 }
 
@@ -127,4 +136,18 @@ void Obj3D::CreateTransformationMatrixData(){
 void Obj3D::CreateMaterialData(){
     materialResource = object3dCommon->GetDxCommon()->CreateBufferResource(sizeof(Model::Material));
     materialResource->Map(0,nullptr,reinterpret_cast<void**>(&materialData));
+}
+
+void Obj3D::LoadAnimation(const std::string& directoryPath,const std::string& filename){
+    if(!model){
+        return;
+    }
+
+    animation_ = LoadAnimationFile(directoryPath,filename);
+    animationTime_ = 0.0f;
+
+    skeleton_.Create(model->GetRootNode());
+    skinCluster_.Initialize(object3dCommon->GetDxCommon(),model->GetModelData(),skeleton_);
+
+    isSkinning_ = true;
 }
