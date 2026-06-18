@@ -9,10 +9,14 @@
 
 class SkinCluster{
 public:
-    // --- スキニング用の頂点バッファ構造体 (Slot 1用) ---
     struct VertexInfluence{
         float weight[4];
         int32_t index[4];
+    };
+
+    struct MatrixPalette{
+        Matrix4x4 skeletonSpaceMatrix;
+        Matrix4x4 skeletonSpaceInverseTransposeMatrix;
     };
 
     // 初期化：ModelData と Skeleton から必要なリソースを作る

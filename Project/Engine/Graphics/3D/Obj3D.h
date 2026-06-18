@@ -31,6 +31,7 @@ public:
 	void SetModel(Model* model){ this->model = model; }
 	void SetModel(const std::string& filePath);
 	void SetCamera(Camera* camera){ this->camera = camera; }
+	void SetIsSkinning(bool isSkinning){ isSkinning_ = isSkinning; }
 	void SetTexture(const std::string& filePath){
 		if(model){
 			model->SetTexture(filePath);

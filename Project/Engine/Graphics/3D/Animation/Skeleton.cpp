@@ -1,4 +1,5 @@
 #include "Skeleton.h"
+#include "Logger.h"
 
 // ====================================================================
 // 初期化・構築処理
@@ -43,19 +44,26 @@ int32_t Skeleton::CreateJoint(const Node& node,const std::optional<int32_t>& par
 // 更新処理
 // ====================================================================
 void Skeleton::Update(){
-	// ルートから順にジョイントの姿勢行列を更新
 	for(Joint& joint : joints){
-		Matrix4x4 matScale = MakeScaleMatrix(joint.transform.scale);
-		Matrix4x4 matRotate = MakeRotateMatrix(joint.transform.rotate);
-		Matrix4x4 matTranslate = MakeTranslateMatrix(joint.transform.translate);
 
-		joint.localMatrix = Multiply(Multiply(matScale,matRotate),matTranslate);
+		char buf[128];
+		sprintf_s(buf,"Joint Scale: %f, %f, %f\n",
+			joint.transform.scale.x,
+			joint.transform.scale.y,
+			joint.transform.scale.z);
+		OutputDebugStringA(buf);
 
-		if(joint.parent){
-			// 親がいれば「自身のローカル × 親のスケルトン空間行列」
-			joint.skeletonSpaceMatrix = Multiply(joint.localMatrix,joints[*joint.parent].skeletonSpaceMatrix);
+		// 1. ローカル行列の生成
+
+		Matrix4x4 matRotate = MakeRotateQuaternionMatrix(joint.transform.rotate);
+		joint.localMatrix = MakeAffineMatrix(joint.transform.scale,matRotate,joint.transform.translate);
+
+		// 2. スケルトン空間行列の計算
+		if(joint.parent.has_value()){
+			int32_t parentIdx = joint.parent.value();
+			// 親 × 自分
+			joint.skeletonSpaceMatrix = Multiply(joints[parentIdx].skeletonSpaceMatrix,joint.localMatrix);
 		} else{
-			// 親がいなければローカルがそのままスケルトン空間行列になる
 			joint.skeletonSpaceMatrix = joint.localMatrix;
 		}
 	}

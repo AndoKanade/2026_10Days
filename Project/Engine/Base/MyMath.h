@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <assimp/matrix4x4.h>
 
 // 2次元ベクトル
 struct Vector2{
@@ -419,3 +420,69 @@ struct QuaternionTransform{
 	Quaternion rotate;
 	Vector3 translate;
 };
+
+// クォータニオンから回転行列を作成する関数
+inline Matrix4x4 MakeRotateQuaternionMatrix(const Quaternion& q){
+	Matrix4x4 result;
+
+	// クォータニオンの各成分
+	float x = q.x;
+	float y = q.y;
+	float z = q.z;
+	float w = q.w;
+
+	// 行列の計算
+	result.m[0][0] = 1.0f - 2.0f * (y * y + z * z);
+	result.m[0][1] = 2.0f * (x * y + z * w);
+	result.m[0][2] = 2.0f * (x * z - y * w);
+	result.m[0][3] = 0.0f;
+
+	result.m[1][0] = 2.0f * (x * y - z * w);
+	result.m[1][1] = 1.0f - 2.0f * (x * x + z * z);
+	result.m[1][2] = 2.0f * (y * z + x * w);
+	result.m[1][3] = 0.0f;
+
+	result.m[2][0] = 2.0f * (x * z + y * w);
+	result.m[2][1] = 2.0f * (y * z - x * w);
+	result.m[2][2] = 1.0f - 2.0f * (x * x + y * y);
+	result.m[2][3] = 0.0f;
+
+	result.m[3][0] = 0.0f;
+	result.m[3][1] = 0.0f;
+	result.m[3][2] = 0.0f;
+	result.m[3][3] = 1.0f;
+
+	return result;
+}
+
+inline Matrix4x4 AssimpToMatrix(const aiMatrix4x4& aiMat){
+	Matrix4x4 mat;
+	for(int r = 0; r < 4; ++r){
+		for(int c = 0; c < 4; ++c){
+			mat.m[r][c] = aiMat[r][c];
+		}
+	}
+	// 左手系への変換（x軸反転）
+	mat.m[0][1] *= -1.0f; mat.m[0][2] *= -1.0f;
+	mat.m[1][0] *= -1.0f; mat.m[2][0] *= -1.0f;
+	mat.m[3][0] *= -1.0f;
+	return mat;
+}
+
+inline Matrix4x4 MakeAffineMatrix(const Vector3& scale,const Quaternion& rotate,const Vector3& translate){
+	Matrix4x4 scaleMatrix = MakeScaleMatrix(scale);
+	Matrix4x4 rotateMatrix = MakeRotateQuaternionMatrix(rotate); // クォータニオン行列化
+	Matrix4x4 translateMatrix = MakeTranslateMatrix(translate);
+
+	// S * R * T
+	return Multiply(Multiply(scaleMatrix,rotateMatrix),translateMatrix);
+}
+
+// MyMath.h に追加
+inline Matrix4x4 MakeAffineMatrix(const Vector3& scale,const Matrix4x4& rotate,const Vector3& translate){
+	Matrix4x4 scaleMatrix = MakeScaleMatrix(scale);
+	Matrix4x4 translateMatrix = MakeTranslateMatrix(translate);
+
+	// S * R * T の順序で合成
+	return Multiply(Multiply(scaleMatrix,rotate),translateMatrix);
+}

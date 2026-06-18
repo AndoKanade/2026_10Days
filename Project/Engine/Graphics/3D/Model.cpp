@@ -15,55 +15,69 @@
 // ====================================================================
 
 void Model::Initialize(ModelCommon* modelCommon,const std::string& directorypath,const std::string& filename){
-	this->modelCommon_ = modelCommon;
+    // 共通モデル管理クラスの保持
+    this->modelCommon_ = modelCommon;
 
-	modelData = LoadModelFile(directorypath,filename);
+    // ファイルからモデルデータの読み込み
+    modelData = LoadModelFile(directorypath,filename);
 
-	TextureManager::GetInstance()->LoadTexture(modelData.material.textureFilePath);
-	modelData.material.textureIndex = TextureManager::GetInstance()->GetSrvIndex(modelData.material.textureFilePath);
+    // テクスチャのロードとインデックス取得
+    TextureManager::GetInstance()->LoadTexture(modelData.material.textureFilePath);
+    modelData.material.textureIndex = TextureManager::GetInstance()->GetSrvIndex(modelData.material.textureFilePath);
 
-	CreateVertexData();
-	CreateIndexData();
-	CreateMaterialData();
+    // 各種バッファデータの生成
+    CreateVertexData();
+    CreateIndexData();
+    CreateMaterialData();
 }
 
 void Model::CreateVertexData(){
-	vertexResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeof(VertexData) * modelData.vertices.size());
-	vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
-	vertexBufferView.SizeInBytes = UINT(sizeof(VertexData) * modelData.vertices.size());
-	vertexBufferView.StrideInBytes = sizeof(VertexData);
+    // 頂点バッファリソースの生成
+    vertexResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeof(VertexData) * modelData.vertices.size());
 
-	VertexData* ptr = nullptr;
-	vertexResource->Map(0,nullptr,reinterpret_cast<void**>(&ptr));
-	std::memcpy(ptr,modelData.vertices.data(),sizeof(VertexData) * modelData.vertices.size());
-	vertexResource->Unmap(0,nullptr);
+    // 頂点バッファビューの設定
+    vertexBufferView.BufferLocation = vertexResource->GetGPUVirtualAddress();
+    vertexBufferView.SizeInBytes = UINT(sizeof(VertexData) * modelData.vertices.size());
+    vertexBufferView.StrideInBytes = sizeof(VertexData);
+
+    // データのコピー
+    VertexData* ptr = nullptr;
+    vertexResource->Map(0,nullptr,reinterpret_cast<void**>(&ptr));
+    std::memcpy(ptr,modelData.vertices.data(),sizeof(VertexData) * modelData.vertices.size());
+    vertexResource->Unmap(0,nullptr);
 }
 
 void Model::CreateIndexData(){
-	size_t sizeInBytes = sizeof(uint32_t) * modelData.indices.size();
+    // インデックスデータサイズ計算
+    size_t sizeInBytes = sizeof(uint32_t) * modelData.indices.size();
 
-	indexResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeInBytes);
+    // インデックスバッファリソースの生成
+    indexResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeInBytes);
 
-	indexBufferView.BufferLocation = indexResource->GetGPUVirtualAddress();
-	indexBufferView.SizeInBytes = UINT(sizeInBytes);
-	indexBufferView.Format = DXGI_FORMAT_R32_UINT;
+    // インデックスバッファビューの設定
+    indexBufferView.BufferLocation = indexResource->GetGPUVirtualAddress();
+    indexBufferView.SizeInBytes = UINT(sizeInBytes);
+    indexBufferView.Format = DXGI_FORMAT_R32_UINT;
 
-	uint32_t* ptr = nullptr;
-	indexResource->Map(0,nullptr,reinterpret_cast<void**>(&ptr));
-	std::memcpy(ptr,modelData.indices.data(),sizeInBytes);
-	indexResource->Unmap(0,nullptr);
+    // データのコピー
+    uint32_t* ptr = nullptr;
+    indexResource->Map(0,nullptr,reinterpret_cast<void**>(&ptr));
+    std::memcpy(ptr,modelData.indices.data(),sizeInBytes);
+    indexResource->Unmap(0,nullptr);
 }
 
 void Model::CreateMaterialData(){
-	size_t sizeInBytes = (sizeof(Material) + 0xff) & ~0xff;
-	materialResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeInBytes);
-	materialResource->Map(0,nullptr,reinterpret_cast<void**>(&materialData));
+    // 256バイトアライメントを考慮したマテリアルバッファ生成
+    size_t sizeInBytes = (sizeof(Material) + 0xff) & ~0xff;
+    materialResource = modelCommon_->GetDxCommon()->CreateBufferResource(sizeInBytes);
+    materialResource->Map(0,nullptr,reinterpret_cast<void**>(&materialData));
 
-	materialData->color = {1.0f, 1.0f, 1.0f, 1.0f};
-	materialData->enableLighting = 1;
-	materialData->uvTransform = MakeIdentity4x4();
-	materialData->shininess = 50.0f;
-	materialData->environmentCoefficient = 0.0f;
+    // マテリアルの初期設定
+    materialData->color = {1.0f, 1.0f, 1.0f, 1.0f};
+    materialData->enableLighting = 1;
+    materialData->uvTransform = MakeIdentity4x4();
+    materialData->shininess = 50.0f;
+    materialData->environmentCoefficient = 0.0f;
 }
 
 // ====================================================================
@@ -71,124 +85,141 @@ void Model::CreateMaterialData(){
 // ====================================================================
 
 Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std::string& filename){
-	ModelData modelData;
-	Assimp::Importer importer;
-	std::string filePath = directoryPath + "/" + filename;
+    ModelData modelData;
+    Assimp::Importer importer;
+    std::string filePath = directoryPath + "/" + filename;
 
-	const aiScene* scene = importer.ReadFile(filePath.c_str(),aiProcess_FlipWindingOrder | aiProcess_FlipUVs | aiProcess_Triangulate);
-	assert(scene && scene->HasMeshes());
+    // Assimpによる読み込みと三角面化
+    const aiScene* scene = importer.ReadFile(filePath.c_str(),aiProcess_FlipWindingOrder | aiProcess_FlipUVs | aiProcess_Triangulate);
+    assert(scene && scene->HasMeshes());
 
-	if(scene->mRootNode){
-		modelData.rootNode = ReadNode(scene->mRootNode);
-	}
+    // ノードの読み込み
+    if(scene->mRootNode){
+        modelData.rootNode = ReadNode(scene->mRootNode);
+    }
 
-	for(uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex){
-		aiMesh* mesh = scene->mMeshes[meshIndex];
-		assert(mesh->HasNormals() && mesh->HasTextureCoords(0));
+    // メッシュデータの解析
+    for(uint32_t meshIndex = 0; meshIndex < scene->mNumMeshes; ++meshIndex){
+        aiMesh* mesh = scene->mMeshes[meshIndex];
+        assert(mesh->HasNormals() && mesh->HasTextureCoords(0));
 
-		uint32_t vertexOffset = static_cast<uint32_t>(modelData.vertices.size());
+        uint32_t vertexOffset = static_cast<uint32_t>(modelData.vertices.size());
 
-		// 頂点データの抽出
-		for(uint32_t vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex){
-			aiVector3D& pos = mesh->mVertices[vertexIndex];
-			aiVector3D& norm = mesh->mNormals[vertexIndex];
-			aiVector3D& tex = mesh->mTextureCoords[0][vertexIndex];
+        // 頂点データの抽出
+        for(uint32_t vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex){
+            aiVector3D& pos = mesh->mVertices[vertexIndex];
+            aiVector3D& norm = mesh->mNormals[vertexIndex];
+            aiVector3D& tex = mesh->mTextureCoords[0][vertexIndex];
 
-			VertexData vertex;
-			vertex.position = {-pos.x, pos.y, pos.z, 1.0f}; // 右手→左手変換
-			vertex.normal = {-norm.x, norm.y, norm.z};      // 右手→左手変換
-			vertex.texcoord = {tex.x, tex.y};
-			modelData.vertices.push_back(vertex);
-		}
+            VertexData vertex;
+            // 右手系から左手系への変換
+            vertex.position = {-pos.x, pos.y, pos.z, 1.0f};
+            vertex.normal = {-norm.x, norm.y, norm.z};
+            vertex.texcoord = {tex.x, tex.y};
+            modelData.vertices.push_back(vertex);
+        }
 
-		// インデックスデータの抽出
-		for(uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex){
-			aiFace& face = mesh->mFaces[faceIndex];
-			for(uint32_t element = 0; element < face.mNumIndices; ++element){
-				modelData.indices.push_back(face.mIndices[element] + vertexOffset);
-			}
-		}
-	}
+        // インデックスデータの抽出
+        for(uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex){
+            aiFace& face = mesh->mFaces[faceIndex];
+            for(uint32_t element = 0; element < face.mNumIndices; ++element){
+                modelData.indices.push_back(face.mIndices[element] + vertexOffset);
+            }
+        }
 
-	for(uint32_t i = 0; i < scene->mNumMaterials; ++i){
-		aiMaterial* mat = scene->mMaterials[i];
-		if(mat->GetTextureCount(aiTextureType_DIFFUSE) > 0){
-			aiString path;
-			mat->GetTexture(aiTextureType_DIFFUSE,0,&path);
-			modelData.material.textureFilePath = directoryPath + "/" + path.C_Str();
-		}
-	}
+        // ボーンデータの抽出
+        for(uint32_t boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex){
+            aiBone* bone = mesh->mBones[boneIndex];
+            std::string jointName = bone->mName.C_Str();
+            Model::JointWeightData& jointWeightData = modelData.skinClusterData[jointName];
 
-	return modelData;
+            // 行列のコピー
+            Matrix4x4 offsetMatrix;
+            for(uint32_t r = 0; r < 4; ++r){
+                for(uint32_t c = 0; c < 4; ++c){
+                    offsetMatrix.m[r][c] = bone->mOffsetMatrix[r][c];
+                }
+            }
+
+            jointWeightData.inverseBindPoseMatrix = offsetMatrix;
+
+            // ウェイト情報の抽出
+            for(uint32_t weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex){
+                jointWeightData.vertexWeights.push_back({
+                    bone->mWeights[weightIndex].mWeight,
+                    bone->mWeights[weightIndex].mVertexId + vertexOffset
+                    });
+            }
+        }
+    }
+
+    // マテリアル情報の抽出
+    for(uint32_t i = 0; i < scene->mNumMaterials; ++i){
+        aiMaterial* mat = scene->mMaterials[i];
+        if(mat->GetTextureCount(aiTextureType_DIFFUSE) > 0){
+            aiString path;
+            mat->GetTexture(aiTextureType_DIFFUSE,0,&path);
+            modelData.material.textureFilePath = directoryPath + "/" + path.C_Str();
+        }
+    }
+
+    return modelData;
 }
 
 Node Model::ReadNode(aiNode* node){
-	Node result;
-	result.name = node->mName.C_Str();
+    Node result;
+    result.name = node->mName.C_Str();
 
-	aiVector3D scale,translate;
-	aiQuaternion rotate;
-	node->mTransformation.Decompose(scale,rotate,translate);
+    // ノードの変換行列から分解
+    aiVector3D scale,translate;
+    aiQuaternion rotate;
+    node->mTransformation.Decompose(scale,rotate,translate);
 
-	result.transform.scale = {scale.x, scale.y, scale.z};
-	result.transform.rotate = {rotate.x, -rotate.y, -rotate.z, rotate.w};
-	result.transform.translate = {-translate.x, translate.y, translate.z};
+    // 左手系への変換
+    result.transform.scale = {scale.x, scale.y, scale.z};
+    result.transform.rotate = {rotate.x, -rotate.y, -rotate.z, rotate.w};
+    result.transform.translate = {-translate.x, translate.y, translate.z};
 
-	Matrix4x4 matScale = MakeScaleMatrix(result.transform.scale);
-	Matrix4x4 matRotate = MakeRotateMatrix(result.transform.rotate);
-	Matrix4x4 matTranslate = MakeTranslateMatrix(result.transform.translate);
+    // ローカル行列の生成
+    Matrix4x4 matScale = MakeScaleMatrix(result.transform.scale);
+    Matrix4x4 matRotate = MakeRotateMatrix(result.transform.rotate);
+    Matrix4x4 matTranslate = MakeTranslateMatrix(result.transform.translate);
 
-	result.localMatrix = Multiply(Multiply(matScale,matRotate),matTranslate);
+    result.localMatrix = Multiply(Multiply(matScale,matRotate),matTranslate);
 
-	result.children.resize(node->mNumChildren);
-	for(uint32_t i = 0; i < node->mNumChildren; ++i){
-		result.children[i] = ReadNode(node->mChildren[i]);
-	}
+    // 子ノードの再帰的読み込み
+    result.children.resize(node->mNumChildren);
+    for(uint32_t i = 0; i < node->mNumChildren; ++i){
+        result.children[i] = ReadNode(node->mChildren[i]);
+    }
 
-	return result;
+    return result;
 }
 
 // ====================================================================
 // 描画・更新処理
 // ====================================================================
 
-void Model::Draw(uint32_t skyboxTextureIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress,SkinCluster* skinCluster){
-	auto* commandList = modelCommon_->GetDxCommon()->GetCommandList();
+void Model::Draw(uint32_t skyboxSRVIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress,SkinCluster* skinCluster){
+    auto* commandList = modelCommon_->GetDxCommon()->GetCommandList();
 
-	// ★ スキニングがある場合はスロット0と1に2つのバッファをセット
-	if(skinCluster){
-		D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {
-			vertexBufferView,
-			skinCluster->GetInfluenceBufferView() // WEIGHT と INDEX
-		};
-		commandList->IASetVertexBuffers(0,2,vbvs);
+    // 頂点バッファの設定
+    if(skinCluster){
+        D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {vertexBufferView, skinCluster->GetInfluenceBufferView()};
+        commandList->IASetVertexBuffers(0,2,vbvs);
+    } else{
+        commandList->IASetVertexBuffers(0,1,&vertexBufferView);
+    }
+    // インデックスバッファの設定
+    commandList->IASetIndexBuffer(&indexBufferView);
 
-		// t2レジスタ(8番目のパラメータ)にパレットをセット
-		commandList->SetGraphicsRootShaderResourceView(8,skinCluster->GetPaletteAddress());
-	}
-	// ★ スキニングがない場合は通常通り1つだけセット
-	else{
-		commandList->IASetVertexBuffers(0,1,&vertexBufferView);
-	}
-
-	commandList->IASetIndexBuffer(&indexBufferView);
-
-	// マテリアルやカメラのセット
-	D3D12_GPU_DESCRIPTOR_HANDLE textureSrvHandle = SrvManager::GetInstance()->GetGPUDescriptorHandle(modelData.material.textureIndex);
-	commandList->SetGraphicsRootDescriptorTable(2,textureSrvHandle);
-
-	D3D12_GPU_DESCRIPTOR_HANDLE skyboxSrvHandle = SrvManager::GetInstance()->GetGPUDescriptorHandle(skyboxTextureIndex);
-	commandList->SetGraphicsRootDescriptorTable(3,skyboxSrvHandle);
-
-	commandList->SetGraphicsRootConstantBufferView(5,cameraAddress);
-
-	// インデックス描画コマンド
-	commandList->DrawIndexedInstanced(UINT(modelData.indices.size()),1,0,0,0);
+    // 描画実行
+    commandList->DrawIndexedInstanced(UINT(modelData.indices.size()),1,0,0,0);
 }
 
 void Model::SetTexture(const std::string& texturefilePath){
-	TextureManager::GetInstance()->LoadTexture(texturefilePath);
+    TextureManager::GetInstance()->LoadTexture(texturefilePath);
 
-	modelData.material.textureIndex = TextureManager::GetInstance()->GetSrvIndex(texturefilePath);
-	modelData.material.textureFilePath = texturefilePath;
+    modelData.material.textureIndex = TextureManager::GetInstance()->GetSrvIndex(texturefilePath);
+    modelData.material.textureFilePath = texturefilePath;
 }

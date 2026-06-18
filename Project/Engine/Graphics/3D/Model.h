@@ -21,6 +21,8 @@ public:
 		Vector4 position;
 		Vector2 texcoord;
 		Vector3 normal;
+		Vector4 weight;   // 追加
+		int32_t index[4];
 	};
 
 	// マテリアル読み込みデータ
