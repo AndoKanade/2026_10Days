@@ -47,7 +47,7 @@ void ParticleManager::Initialize(DXCommon* dxCommon,SrvManager* srvManager){
 }
 
 // パーティクルグループ管理
-void ParticleManager::CreateParticleGroup(const std::string& name,const std::string& textureFilePath,bool isRing,bool isCylinder){
+void ParticleManager::CreateParticleGroup(const std::string& name,const std::string& textureFilePath,bool isRing,bool isCylinder,bool isShockwave,bool isSpark,bool isSmoke,bool isCharge,bool isAura,bool isWarp){
 	if(particleGroups_.contains(name)){
 		return;
 	}
@@ -57,6 +57,12 @@ void ParticleManager::CreateParticleGroup(const std::string& name,const std::str
 	// フラグをセット
 	group->isRing = isRing;
 	group->isCylinder = isCylinder;
+	group->isShockwave = isShockwave;
+	group->isSpark = isSpark;
+	group->isSmoke = isSmoke;
+	group->isCharge = isCharge;
+	group->isAura = isAura;
+	group->isWarp = isWarp;
 
 	// テクスチャ設定
 	group->textureFilePath = textureFilePath;
@@ -125,15 +131,47 @@ void ParticleManager::Update(Camera* camera){
 			// アルファ値計算
 			float alpha = 1.0f - (it->currentTime / it->lifeTime);
 
+			// 現在のスケールを取得
+			Vector3 currentScale = it->transform.scale;
+
+			// 追加 ショックウェーブの場合は時間経過でスケールを大きくする
+			if(group->isShockwave){
+				float scaleProgress = it->currentTime * 30.0f;
+				currentScale.x += scaleProgress;
+				currentScale.y += scaleProgress;
+				currentScale.z += scaleProgress;
+			}
+
+			if(group->isSmoke){
+				float scaleProgress = it->currentTime * 1.5f;
+				currentScale.x += scaleProgress;
+				currentScale.y += scaleProgress;
+				currentScale.z += scaleProgress;
+			}
+			// 追加 チャージの場合は時間経過で小さくする
+			if(group->isCharge){
+				float shrink = 1.0f - (it->currentTime / it->lifeTime);
+				currentScale.x *= shrink;
+				currentScale.y *= shrink;
+				currentScale.z *= shrink;
+			}
+			// 追加 オーラの場合はゆらゆら揺らしながら上に昇らせる
+			if(group->isAura){
+				it->transform.translate.x += std::sin(it->currentTime * 5.0f) * 0.02f;
+				it->transform.translate.z += std::cos(it->currentTime * 5.0f) * 0.02f;
+			}
+
 			// UVスクロールの計算
 			// 横方向(U)にスクロールさせる。速度は 2.0f などお好みで調整
 			Vector2 uvOffset = {0.0f, 0.0f};
-			if(group->isCylinder || group->isRing){
+			// 変更 isShockwaveの場合もスクロールさせる
+			if(group->isCylinder || group->isRing || group->isShockwave){
 				uvOffset.x = it->currentTime * 2.0f;
 			}
 
 			// 各種行列計算
-			Matrix4x4 scaleMatrix = MakeScaleMatrix(it->transform.scale);
+			// 変更 計算したcurrentScaleを使用するように変更
+			Matrix4x4 scaleMatrix = MakeScaleMatrix(currentScale);
 			Matrix4x4 rotateMatrix = MakeRotateZMatrix(it->transform.rotate.z);
 			Matrix4x4 translateMatrix = MakeTranslateMatrix(it->transform.translate);
 
@@ -154,7 +192,7 @@ void ParticleManager::Update(Camera* camera){
 				group->instancingData[numInstance].World = worldMatrix;
 				group->instancingData[numInstance].color = it->color;
 				group->instancingData[numInstance].color.w = alpha;
-				group->instancingData[numInstance].uvOffset = uvOffset; // ★ 追加
+				group->instancingData[numInstance].uvOffset = uvOffset;
 
 				++numInstance;
 			}
@@ -253,7 +291,54 @@ void ParticleManager::Emit(const std::string& name,const Transform& emitterTrans
 			}
 
 			newParticle.color = color;
-			newParticle.velocity = velocity;
+
+			if(group->isSpark){
+				std::uniform_real_distribution<float> distVelocity(-2.0f,2.0f);
+				newParticle.velocity = {
+					velocity.x + distVelocity(randomEngine_),
+					velocity.y + distVelocity(randomEngine_),
+					velocity.z + distVelocity(randomEngine_)
+				};
+			} else if(group->isCharge){
+				// チャージの場合は中心から離れた球面上から発生し、中心に向かって飛ぶ
+				std::uniform_real_distribution<float> distPos(-1.0f,1.0f);
+				Vector3 offset = {distPos(randomEngine_), distPos(randomEngine_), distPos(randomEngine_)};
+				float length = std::sqrt(offset.x * offset.x + offset.y * offset.y + offset.z * offset.z);
+				if(length > 0.0f){
+					offset.x /= length; offset.y /= length; offset.z /= length;
+				}
+				offset.x *= 3.0f; offset.y *= 3.0f; offset.z *= 3.0f; // 半径3mから発生
+
+				newParticle.transform.translate.x += offset.x;
+				newParticle.transform.translate.y += offset.y;
+				newParticle.transform.translate.z += offset.z;
+
+				// 中心に向かう速度
+				newParticle.velocity = {-offset.x * 1.5f, -offset.y * 1.5f, -offset.z * 1.5f};
+			} else if(group->isAura){
+				// オーラの場合は足元の少しランダムな位置から発生
+				std::uniform_real_distribution<float> distPos(-0.5f,0.5f);
+				newParticle.transform.translate.x += distPos(randomEngine_);
+				newParticle.transform.translate.z += distPos(randomEngine_);
+				newParticle.velocity = velocity;
+			} else if(group->isWarp){
+				// 追加 画面奥の広い範囲にランダム配置
+				std::uniform_real_distribution<float> distXY(-40.0f,40.0f);
+				std::uniform_real_distribution<float> distZ(40.0f,80.0f);
+				newParticle.transform.translate = {
+					emitterTransform.translate.x + distXY(randomEngine_),
+					emitterTransform.translate.y + distXY(randomEngine_),
+					emitterTransform.translate.z + distZ(randomEngine_)
+				};
+				// 手前（-Z方向）に向かって超高速で飛んでくる
+				newParticle.velocity = {0.0f, 0.0f, -80.0f};
+				// CylinderをZ方向に向ける (X軸で90度回転)
+				newParticle.transform.rotate = {1.570796f, 0.0f, 0.0f};
+				newParticle.transform.scale = {0.2f, 10.0f, 0.2f}; // 非常に細長くする
+			} else{
+				newParticle.velocity = velocity;
+			}
+
 			newParticle.lifeTime = lifeTime;
 
 			group->particles.push_back(newParticle);
