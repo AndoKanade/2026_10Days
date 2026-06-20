@@ -69,6 +69,13 @@ struct ParticleGroup{
 
 	bool isRing = false;
 	bool isCylinder = false;
+	bool isShockwave = false;
+	bool isSpark = false;
+	bool isSmoke = false;
+	bool isCharge = false;
+	bool isAura = false;
+	bool isWarp = false;
+
 };
 
 /// <summary>
@@ -132,7 +139,7 @@ public:
 	/// </summary>
 	/// <param name="name">グループ名 (Emit時に使用)</param>
 	/// <param name="textureFilePath">使用するテクスチャパス</param>
-	void CreateParticleGroup(const std::string& name,const std::string& textureFilePath,bool isRing = false,bool isCylinder = false);
+	void CreateParticleGroup(const std::string& name,const std::string& textureFilePath,bool isRing = false,bool isCylinder = false,bool isShockwave = false,bool isSpark = false,bool isSmoke = false,bool isCharge = false,bool isAura = false,bool isWarp = false);
 	/// <summary>
 	/// パーティクルの発生 (エミット)
 	/// 指定したグループにパーティクルを追加します。

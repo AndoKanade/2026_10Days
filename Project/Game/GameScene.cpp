@@ -154,6 +154,13 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	cylinderEmitter_->SetLifeTime(2.0f);
 	cylinderEmitter_->SetVelocity({0.0f, 0.0f, 0.0f});
 
+	ParticleManager::GetInstance()->CreateParticleGroup("Shockwave",kTexturegradationLine,true,false,true);
+	ParticleManager::GetInstance()->CreateParticleGroup("Spark",kTextureCircle2,false,false,false,true);
+	ParticleManager::GetInstance()->CreateParticleGroup("Smoke",kTextureCircle2,false,false,false,false,true);
+	ParticleManager::GetInstance()->CreateParticleGroup("Charge",kTexturegradationLine,false,false,false,false,false,true);
+	ParticleManager::GetInstance()->CreateParticleGroup("Aura",kTextureCircle2,false,false,false,false,false,false,true);
+	ParticleManager::GetInstance()->CreateParticleGroup("Warp",kTexturegradationLine,false,true,false,false,false,false,false,true);
+
 	// --- カメラの設定 ---
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
 	auto* defaultCamera = CameraManager::GetInstance()->GetCamera("default");
@@ -174,10 +181,31 @@ void GameScene::Update(){
 	if(skybox_) skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
 	if(planeObj_) planeObj_->Update();
 
+	if(input_->TriggerKey(DIK_1)){
+		EmitShockwave({0.0f, 0.0f, 0.0f});
+	}
+	if(input_->TriggerKey(DIK_2)){
+		EmitSpark({0.0f, 0.0f, 0.0f});
+	}
+	if(input_->TriggerKey(DIK_3)){
+		EmitSmoke({0.0f, 0.0f, 0.0f});
+	}
+	if(input_->TriggerKey(DIK_4)){
+		EmitCharge({0.0f, 0.0f, 0.0f});
+	}
+	if(input_->TriggerKey(DIK_5)){
+		EmitAura({0.0f, 0.0f, 0.0f});
+	}
+	if(input_->TriggerKey(DIK_6)){
+		EmitWarp();
+	}
+
+
 	// --- パーティクルの更新 ---
-	if(ringEmitter_) ringEmitter_->Update();
-	if(circleEmitter_) circleEmitter_->Update();
-	if(cylinderEmitter_) cylinderEmitter_->Update();
+	//if(ringEmitter_) ringEmitter_->Update();
+	//if(circleEmitter_) circleEmitter_->Update();
+	//if(cylinderEmitter_) cylinderEmitter_->Update();
+	//if(shockwaveEmitter_) shockwaveEmitter_->Update();
 
 	// --- キャラクターアニメーションと骨格の更新 ---
 	if(humanObj_){
@@ -287,6 +315,51 @@ void GameScene::Update(){
 		}
 
 		ModelManager::GetInstance()->UpdateLightGui();
+
+		// 変更 メインのデバッグウィンドウをここで閉じる
+		ImGui::End();
+
+		// 変更 ここからパーティクル用の別ウィンドウを作成
+		ImGui::Begin("Particle Control");
+
+		if(ImGui::Button("Emit Shockwave")){
+			EmitShockwave({0.0f, 0.0f, 0.0f});
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Emit Spark")){
+			EmitSpark({0.0f, 0.0f, 0.0f});
+		}
+
+		// 既存のパーティクルを手動で発生させるボタン
+		if(ImGui::Button("Emit Ring")){
+			if(ringEmitter_) ringEmitter_->Emit();
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Emit Circle")){
+			if(circleEmitter_) circleEmitter_->Emit();
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Emit Cylinder")){
+			if(cylinderEmitter_) cylinderEmitter_->Emit();
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Emit Smoke")){
+			EmitSmoke({0.0f, 0.0f, 0.0f});
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Emit Charge")){
+			EmitCharge({0.0f, 0.0f, 0.0f});
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Emit Aura")){
+			EmitAura({0.0f, 0.0f, 0.0f});
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Emit Warp")){
+			EmitWarp();
+		}
+
+		// 変更 パーティクル用のウィンドウを閉じる
 		ImGui::End();
 
 		Application::GetInstance()->ShowPostProcessUI();
@@ -296,9 +369,110 @@ void GameScene::Update(){
 
 void GameScene::Draw(){
 	object3dCommon_->Draw();
-	humanObj_->Draw();
 
-	for(auto& sphere : skeletonDebugSpheres_){
-		sphere->Draw();
+	//if(terrainObj_){
+	//	terrainObj_->Draw();
+	//}
+
+	// パーティクルの描画
+	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
+	if(activeCamera){
+		Matrix4x4 viewProj = Multiply(activeCamera->GetViewMatrix(),activeCamera->GetProjectionMatrix());
+		ParticleManager::GetInstance()->Draw(viewProj);
 	}
 }
+
+void GameScene::EmitShockwave(const Vector3& position){
+	Transform transform;
+	transform.translate = position;
+	transform.scale = {0.1f, 0.1f, 0.1f};
+	transform.rotate = {0.0f, 0.0f, 0.0f};
+
+	ParticleManager::GetInstance()->Emit(
+		"Shockwave",
+		transform,
+		1,
+		{1.0f, 1.0f, 1.0f, 1.0f},
+		{0.0f, 0.0f, 0.0f},
+		0.3f
+	);
+}
+void GameScene::EmitSpark(const Vector3& position){
+	Transform transform;
+	transform.translate = position;
+	transform.scale = {0.05f, 0.05f, 0.05f};
+	transform.rotate = {0.0f, 0.0f, 0.0f};
+
+	ParticleManager::GetInstance()->Emit(
+		"Spark",
+		transform,
+		20,
+		{1.0f, 0.5f, 0.0f, 1.0f},
+		{0.0f, 0.0f, 0.0f},
+		0.5f
+	);
+}
+
+void GameScene::EmitSmoke(const Vector3& position){
+	Transform transform;
+	transform.translate = position;
+	transform.scale = {0.2f, 0.2f, 0.2f};
+	transform.rotate = {0.0f, 0.0f, 0.0f};
+
+	ParticleManager::GetInstance()->Emit(
+		"Smoke",
+		transform,
+		5, // 少なめに出す
+		{0.5f, 0.5f, 0.5f, 0.8f}, // 灰色
+		{0.0f, 1.0f, 0.0f}, // 上に昇る
+		1.5f // 長めに残る
+	);
+}
+
+void GameScene::EmitCharge(const Vector3& position){
+	Transform transform;
+	transform.translate = position;
+	transform.scale = {0.1f, 0.5f, 0.1f}; // 細長くする
+	transform.rotate = {0.0f, 0.0f, 0.0f};
+
+	ParticleManager::GetInstance()->Emit(
+		"Charge",
+		transform,
+		30, // 一気にたくさん出す
+		{0.2f, 0.8f, 1.0f, 1.0f}, // 水色
+		{0.0f, 0.0f, 0.0f}, // 速度はEmit内で計算されるので0
+		0.6f // 収束して消えるまでの時間
+	);
+}
+
+void GameScene::EmitAura(const Vector3& position){
+	Transform transform;
+	transform.translate = position;
+	transform.scale = {0.3f, 0.3f, 0.3f};
+	transform.rotate = {0.0f, 0.0f, 0.0f};
+
+	ParticleManager::GetInstance()->Emit(
+		"Aura",
+		transform,
+		1, // 毎フレーム少しずつ出す想定なので1回につき1個
+		{0.8f, 1.0f, 0.2f, 0.6f}, // 黄緑色
+		{0.0f, 2.0f, 0.0f}, // 上に昇る
+		1.0f
+	);
+}
+void GameScene::EmitWarp(){
+	Transform transform;
+	transform.translate = {0.0f, 0.0f, 0.0f};
+	transform.scale = {1.0f, 1.0f, 1.0f};
+	transform.rotate = {0.0f, 0.0f, 0.0f};
+
+	ParticleManager::GetInstance()->Emit(
+		"Warp",
+		transform,
+		100, // 画面全体を覆うように大量に出す
+		{0.5f, 0.8f, 1.0f, 0.8f}, // スピード感のある水色
+		{0.0f, 0.0f, 0.0f}, // 速度や座標はEmit内で上書きされるためここでは0
+		1.0f
+	);
+}
+
