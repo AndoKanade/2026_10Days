@@ -218,7 +218,9 @@
     <ClInclude Include="Engine\Graphics\3D\Animation\Skeleton.h">
       <Filter>ヘッダー ファイル\Engine\Graphics\3D\Animation</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Graphics\3D\SkinCluster.h" />
+    <ClInclude Include="Engine\Graphics\3D\SkinCluster.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine\Base\DXCommon.cpp">
@@ -320,7 +322,9 @@
     <ClCompile Include="Engine\Graphics\3D\Animation\Skeleton.cpp">
       <Filter>ソース ファイル\Engine\Graphics\3D\Animation</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Graphics\3D\SkinCluster.cpp" />
+    <ClCompile Include="Engine\Graphics\3D\SkinCluster.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resource\MyGameEngine.rc">
@@ -382,7 +386,9 @@
     <FxCompile Include="Engine\Graphics\Shaders\PostProcess\Vignette.PS.hlsl">
       <Filter>Resources\shader\PostEffect</Filter>
     </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Obj3D\SkinningObject3d.VS.hlsl" />
+    <FxCompile Include="Engine\Graphics\Shaders\Obj3D\SkinningObject3d.VS.hlsl">
+      <Filter>Resources\shader\Obj3D</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Engine\Graphics\Shaders\Sprite\Sprite.hlsli">

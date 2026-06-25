@@ -44,29 +44,7 @@ int32_t Skeleton::CreateJoint(const Node& node,const std::optional<int32_t>& par
 // 更新処理
 // ====================================================================
 void Skeleton::Update(){
-	for(Joint& joint : joints){
-
-		char buf[128];
-		sprintf_s(buf,"Joint Scale: %f, %f, %f\n",
-			joint.transform.scale.x,
-			joint.transform.scale.y,
-			joint.transform.scale.z);
-		OutputDebugStringA(buf);
-
-		// 1. ローカル行列の生成
-
-		Matrix4x4 matRotate = MakeRotateQuaternionMatrix(joint.transform.rotate);
-		joint.localMatrix = MakeAffineMatrix(joint.transform.scale,matRotate,joint.transform.translate);
-
-		// 2. スケルトン空間行列の計算
-		if(joint.parent.has_value()){
-			int32_t parentIdx = joint.parent.value();
-			// 親 × 自分
-			joint.skeletonSpaceMatrix = Multiply(joints[parentIdx].skeletonSpaceMatrix,joint.localMatrix);
-		} else{
-			joint.skeletonSpaceMatrix = joint.localMatrix;
-		}
-	}
+	UpdateJointRecursive(root,MakeIdentity4x4());
 }
 
 void Skeleton::ApplyAnimation(const Animation& animation,float animationTime){
@@ -86,6 +64,23 @@ void Skeleton::ApplyAnimation(const Animation& animation,float animationTime){
 		}
 	}
 }
+
+void Skeleton::UpdateJointRecursive(int32_t jointIdx,const Matrix4x4& parentMatrix){
+	Joint& joint = joints[jointIdx];
+
+	// ローカル行列を再計算
+	Matrix4x4 matRotate = MakeRotateQuaternionMatrix(joint.transform.rotate);
+	joint.localMatrix = MakeAffineMatrix(joint.transform.scale,matRotate,joint.transform.translate);
+
+	// 親行列 × ローカル行列 ＝ スケルトン空間行列
+	joint.skeletonSpaceMatrix = Multiply(parentMatrix,joint.localMatrix);
+
+	// 子を再帰的に処理
+	for(int32_t childIdx:joint.children){
+		UpdateJointRecursive(childIdx,joint.skeletonSpaceMatrix);
+	}
+}
+
 
 // ====================================================================
 // 描画処理

@@ -105,21 +105,20 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std
 
         uint32_t vertexOffset = static_cast<uint32_t>(modelData.vertices.size());
 
-        // 頂点データの抽出
+        // 1. 頂点データの抽出
         for(uint32_t vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex){
             aiVector3D& pos = mesh->mVertices[vertexIndex];
             aiVector3D& norm = mesh->mNormals[vertexIndex];
-            aiVector3D& tex = mesh->mTextureCoords[0][vertexIndex];
 
             VertexData vertex;
-            // 右手系から左手系への変換
+            // 左手系へ変換: Xを反転
             vertex.position = {-pos.x, pos.y, pos.z, 1.0f};
             vertex.normal = {-norm.x, norm.y, norm.z};
-            vertex.texcoord = {tex.x, tex.y};
+            vertex.texcoord = {mesh->mTextureCoords[0][vertexIndex].x, mesh->mTextureCoords[0][vertexIndex].y};
             modelData.vertices.push_back(vertex);
         }
 
-        // インデックスデータの抽出
+        // 2. インデックスデータの抽出
         for(uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex){
             aiFace& face = mesh->mFaces[faceIndex];
             for(uint32_t element = 0; element < face.mNumIndices; ++element){
@@ -127,23 +126,35 @@ Model::ModelData Model::LoadModelFile(const std::string& directoryPath,const std
             }
         }
 
-        // ボーンデータの抽出
+        // 3. ボーンデータの抽出（ここを修正）
         for(uint32_t boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex){
             aiBone* bone = mesh->mBones[boneIndex];
             std::string jointName = bone->mName.C_Str();
             Model::JointWeightData& jointWeightData = modelData.skinClusterData[jointName];
 
-            // 行列のコピー
+            // AIの行列を一旦Matrix4x4にコピー
+            aiMatrix4x4 aiMat = bone->mOffsetMatrix;
+
+            // 左手系への変換行列を作成：X成分を反転させる
+            // aiMatrix4x4 は [行][列] の順
+            aiMatrix4x4 leftHandMat;
+            leftHandMat.a1 = -aiMat.a1; leftHandMat.a2 = aiMat.a2; leftHandMat.a3 = aiMat.a3; leftHandMat.a4 = -aiMat.a4;
+            leftHandMat.b1 = -aiMat.b1; leftHandMat.b2 = aiMat.b2; leftHandMat.b3 = aiMat.b3; leftHandMat.b4 = aiMat.b4;
+            leftHandMat.c1 = -aiMat.c1; leftHandMat.c2 = aiMat.c2; leftHandMat.c3 = aiMat.c3; leftHandMat.c4 = aiMat.c4;
+            leftHandMat.d1 = -aiMat.d1; leftHandMat.d2 = aiMat.d2; leftHandMat.d3 = aiMat.d3; leftHandMat.d4 = aiMat.d4;
+
+            // 最終的に自作Matrix4x4へ
             Matrix4x4 offsetMatrix;
             for(uint32_t r = 0; r < 4; ++r){
                 for(uint32_t c = 0; c < 4; ++c){
-                    offsetMatrix.m[r][c] = bone->mOffsetMatrix[r][c];
+                    float val = bone->mOffsetMatrix[r][c];
+                    if(c == 0) val *= -1.0f; // X軸成分の反転
+                    offsetMatrix.m[r][c] = val;
                 }
             }
 
             jointWeightData.inverseBindPoseMatrix = offsetMatrix;
 
-            // ウェイト情報の抽出
             for(uint32_t weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex){
                 jointWeightData.vertexWeights.push_back({
                     bone->mWeights[weightIndex].mWeight,

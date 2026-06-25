@@ -36,6 +36,8 @@ public:
 	// スケルトンの姿勢を更新する
 	void Update();
 
+	void UpdateJointRecursive(int32_t jointIdx,const Matrix4x4& parentMatrix);
+
 	// スケルトンのデバッグ描画を行う
 	void DrawDebug(const Matrix4x4& worldMatrix);
 

@@ -35,20 +35,20 @@ void SkinCluster::Initialize(DXCommon* dxCommon,const Model::ModelData& modelDat
             uint32_t vertexIndex = vertexWeight.vertexIndex;
             VertexInfluence& influence = vertexInfluences[vertexIndex];
 
-            // 影響度の低い枠を探して置き換える（4つまで）
-            int bestIndex = -1;
-            float minWeight = vertexWeight.weight;
-
+            // 既に4つ埋まっているか？
+            // ここで、新しい weight を重い順に挿入する処理に変える
             for(int j = 0; j < 4; ++j){
-                if(influence.weight[j] < minWeight){
-                    minWeight = influence.weight[j];
-                    bestIndex = j;
+                if(vertexWeight.weight > influence.weight[j]){
+                    // 今の値を一つ後ろへずらす
+                    for(int k = 3; k > j; --k){
+                        influence.weight[k] = influence.weight[k - 1];
+                        influence.index[k] = influence.index[k - 1];
+                    }
+                    // 新しい値を挿入
+                    influence.weight[j] = vertexWeight.weight;
+                    influence.index[j] = static_cast<int32_t>(jointIndex);
+                    break;
                 }
-            }
-
-            if(bestIndex != -1){
-                influence.weight[bestIndex] = vertexWeight.weight;
-                influence.index[bestIndex] = static_cast<int32_t>(jointIndex);
             }
         }
     }
@@ -57,8 +57,19 @@ void SkinCluster::Initialize(DXCommon* dxCommon,const Model::ModelData& modelDat
     for(auto& influence : vertexInfluences){
         float totalWeight = 0.0f;
         for(int j = 0; j < 4; ++j) totalWeight += influence.weight[j];
+
         if(totalWeight > 0.0f){
+            // 合計が0より大きい場合は正規化
             for(int j = 0; j < 4; ++j) influence.weight[j] /= totalWeight;
+        } else{
+            influence.weight[0] = 1.0f;
+            influence.weight[1] = 0.0f;
+            influence.weight[2] = 0.0f;
+            influence.weight[3] = 0.0f;
+            influence.index[0] = 0;
+            influence.index[1] = 0;
+            influence.index[2] = 0;
+            influence.index[3] = 0;
         }
     }
 
@@ -80,20 +91,20 @@ void SkinCluster::Initialize(DXCommon* dxCommon,const Model::ModelData& modelDat
 void SkinCluster::Update(const Skeleton& skeleton){
     if(!paletteResource) return;
 
-    // パレットリソースの書き込み
     MatrixPalette* ptr = nullptr;
     paletteResource->Map(0,nullptr,reinterpret_cast<void**>(&ptr));
 
     for(uint32_t i = 0; i < paletteSize_; ++i){
-        // 現在の骨の姿勢行列と初期姿勢の逆行列を乗算
+        // 1. スキニング行列（頂点移動用）
         Matrix4x4 mat = Multiply(skeleton.joints[i].skeletonSpaceMatrix,inverseBindPoseMatrices_[i]);
-
-        // HLSL向けに行列を転置して渡す
         ptr[i].skeletonSpaceMatrix = Transpose(mat);
 
-        // 法線用の逆転置行列を計算して転置
-        Matrix4x4 invMat = Inverse(mat);
-        ptr[i].skeletonSpaceInverseTransposeMatrix = Transpose(invMat);
+        // 2. 法線用行列（回転のみを抽出）
+        Matrix4x4 rotateMat = skeleton.joints[i].skeletonSpaceMatrix;
+        rotateMat.m[3][0] = 0.0f; rotateMat.m[3][1] = 0.0f; rotateMat.m[3][2] = 0.0f;
+
+        Matrix4x4 invTranspose = Transpose(Inverse(rotateMat));
+        ptr[i].skeletonSpaceInverseTransposeMatrix = Transpose(invTranspose);
     }
     paletteResource->Unmap(0,nullptr);
 }
