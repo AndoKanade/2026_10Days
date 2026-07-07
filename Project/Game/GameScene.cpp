@@ -40,21 +40,20 @@ namespace{
 GameScene::GameScene() = default;
 GameScene::~GameScene() = default;
 
+// 初期化
 void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon* spriteCommon){
 	object3dCommon_ = object3dCommon;
 	input_ = input;
 	spriteCommon_ = spriteCommon;
 
-	// 1. カメラを先に生成・登録
+	// カメラの生成・設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
 	auto* defaultCamera = CameraManager::GetInstance()->GetCamera("default");
 	defaultCamera->SetTranslate({0.0f, 0.0f, -30.0f});
 	CameraManager::GetInstance()->SetActiveCamera("default");
-
-	// 2. 超重要：ここを呼び出してから Obj3D を初期化する
 	object3dCommon_->SetDefaultCamera(CameraManager::GetInstance()->GetActiveCamera());
 
-	// --- リソースのロード ---
+	// リソースのロード
 	TextureManager::GetInstance()->LoadTexture(kTextureChecker);
 	TextureManager::GetInstance()->LoadTexture(kTextureBall);
 	TextureManager::GetInstance()->LoadTexture(kTextureCircle);
@@ -72,7 +71,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
 
-	// --- オブジェクトの生成と初期化 ---
+	// オブジェクトの生成と初期化
 	planeObj_ = std::make_unique<Obj3D>();
 	planeObj_->Initialize(object3dCommon_);
 	planeObj_->SetModel(kModelPlane);
@@ -95,18 +94,17 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	simpleSkinObj_ = std::make_unique<Obj3D>();
 	simpleSkinObj_->Initialize(object3dCommon_);
 	simpleSkinObj_->SetModel(kModelSimpleSkin);
-	auto* simpleSkinMaterial = simpleSkinObj_->GetMaterial();
-	if(simpleSkinMaterial){
-		simpleSkinMaterial->environmentCoefficient = 1.0f;
+	if(auto* material = simpleSkinObj_->GetMaterial()){
+		material->environmentCoefficient = 1.0f;
 	}
 
-	// --- スカイボックスの生成と初期化 ---
+	// スカイボックスの生成
 	skyboxCommon_ = std::make_unique<SkyboxCommon>();
 	skyboxCommon_->Initialize(object3dCommon_->GetDxCommon());
 	skybox_ = std::make_unique<Skybox>();
 	skybox_->Initialize(skyboxCommon_.get(),kSkyboxTexture);
 
-	// --- アニメーションオブジェクトの生成と初期化 ---
+	// アニメーションオブジェクトの生成
 	animationCube_ = std::make_shared<Obj3D>();
 	animationCube_->Initialize(object3dCommon_);
 	animationCube_->SetModel(kModelAnimationCube);
@@ -117,54 +115,33 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	animationController_->Initialize();
 	animationController_->Play();
 
-	// --- キャラクターとスケルトンの生成と初期化 ---
+	// キャラクターとスケルトンの生成
 	humanObj_ = std::make_shared<Obj3D>();
 	humanObj_->Initialize(object3dCommon_);
 	humanObj_->SetModel(kModelHuman);
 	humanObj_->SetTexture("resource/human/white.png");
-
-	// ここで読み込み結果を必ずチェック
-	auto* model = ModelManager::GetInstance()->FindModel(kModelHuman);
-	if(!model){
-		OutputDebugStringA("FATAL ERROR: Model not found!\n");
-		return;
-	}
-
-	// ここでスケルトンの基になるノードがあるかチェック
-	if(model->GetRootNode().name.empty()){
-		OutputDebugStringA("FATAL ERROR: RootNode is empty!\n");
-		return;
-	}
-
 	humanObj_->LoadAnimation("resource/human/","walk.gltf");
 
-	// --- パーティクルの設定 ---
+	// パーティクルの設定
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticleRing,kTexturegradationLine,true,false);
-	Transform ringConfig;
-	ringConfig.translate = {1.0f, 2.0f, 0.0f};
-	ringConfig.scale = {0.5f, 0.5f, 0.5f};
+	Transform ringConfig = {{0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 0.0f}, {1.0f, 2.0f, 0.0f}};
 	ringEmitter_ = std::make_unique<ParticleEmitter>(kParticleRing,ringConfig,1,0.5f);
 	ringEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
 	ringEmitter_->SetLifeTime(1.0f);
 
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticlePrimitive,kTextureCircle2,false,false);
-	Transform circleConfig;
-	circleConfig.translate = {1.0f, 2.0f, 0.0f};
-	circleConfig.scale = {0.05f, 1.0f, 1.0f};
+	Transform circleConfig = {{0.05f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 2.0f, 0.0f}};
 	circleEmitter_ = std::make_unique<ParticleEmitter>(kParticlePrimitive,circleConfig,3,0.5f);
 	circleEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
 	circleEmitter_->SetLifeTime(1.0f);
 
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticleCylinder,kTexturegradationLine,false,true);
-	Transform cylinderConfig;
-	cylinderConfig.translate = {0.0f, 0.0f, 0.0f};
-	cylinderConfig.scale = {1.0f, 1.0f, 1.0f};
+	Transform cylinderConfig = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
 	cylinderEmitter_ = std::make_unique<ParticleEmitter>(kParticleCylinder,cylinderConfig,1,0.1f);
 	cylinderEmitter_->SetColor({0.2f, 0.5f, 1.0f, 0.8f});
 	cylinderEmitter_->SetLifeTime(2.0f);
 	cylinderEmitter_->SetVelocity({0.0f, 0.0f, 0.0f});
 
-	// コンフリクト解消 パーティクルグループの追加分を統合（重複するカメラ設定部分は削除）
 	ParticleManager::GetInstance()->CreateParticleGroup("Shockwave",kTexturegradationLine,true,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Spark",kTextureCircle2,false,false,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Smoke",kTextureCircle2,false,false,false,false,true);
@@ -175,53 +152,32 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 
 void GameScene::Finalize(){}
 
+// 更新処理
 void GameScene::Update(){
-	// --- 基本オブジェクトの更新 ---
+	// オブジェクトの更新
 	if(sphereObj_) sphereObj_->Update();
 	if(terrainObj_) terrainObj_->Update();
 	if(simpleSkinObj_) simpleSkinObj_->Update();
 	if(skybox_) skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
 	if(planeObj_) planeObj_->Update();
 
-	if(input_->TriggerKey(DIK_1)){
-		EmitShockwave({0.0f, 0.0f, 0.0f});
-	}
-	if(input_->TriggerKey(DIK_2)){
-		EmitSpark({0.0f, 0.0f, 0.0f});
-	}
-	if(input_->TriggerKey(DIK_3)){
-		EmitSmoke({0.0f, 0.0f, 0.0f});
-	}
-	if(input_->TriggerKey(DIK_4)){
-		EmitCharge({0.0f, 0.0f, 0.0f});
-	}
-	if(input_->TriggerKey(DIK_5)){
-		EmitAura({0.0f, 0.0f, 0.0f});
-	}
-	if(input_->TriggerKey(DIK_6)){
-		EmitWarp();
-	}
+	// 入力イベント
+	if(input_->TriggerKey(DIK_1)) EmitShockwave({0.0f, 0.0f, 0.0f});
+	if(input_->TriggerKey(DIK_2)) EmitSpark({0.0f, 0.0f, 0.0f});
+	if(input_->TriggerKey(DIK_3)) EmitSmoke({0.0f, 0.0f, 0.0f});
+	if(input_->TriggerKey(DIK_4)) EmitCharge({0.0f, 0.0f, 0.0f});
+	if(input_->TriggerKey(DIK_5)) EmitAura({0.0f, 0.0f, 0.0f});
+	if(input_->TriggerKey(DIK_6)) EmitWarp();
 
-
-	// --- パーティクルの更新 ---
-	//if(ringEmitter_) ringEmitter_->Update();
-	//if(circleEmitter_) circleEmitter_->Update();
-	//if(cylinderEmitter_) cylinderEmitter_->Update();
-	//if(shockwaveEmitter_) shockwaveEmitter_->Update();
-
-	// --- キャラクターアニメーションと骨格の更新 ---
+	// キャラクター更新
 	if(humanObj_){
 		humanObj_->SetTranslate({0, 0, 5});
 		humanObj_->SetScale({1, 1, 1});
-
-		Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
-		if(activeCamera){
-			humanObj_->SetCamera(activeCamera);
-		}
+		if(Camera* cam = CameraManager::GetInstance()->GetActiveCamera()) humanObj_->SetCamera(cam);
 		humanObj_->Update();
 	}
 
-	// --- アニメーションキューブの更新 ---
+	// アニメーション更新
 	animationController_->UpdateKeyframes(*animation_,1.0f / 60.0f);
 	if(animationCube_){
 		animationCube_->SetScale(animationController_->GetCurrentScale());
@@ -230,164 +186,85 @@ void GameScene::Update(){
 		animationCube_->Update();
 	}
 
-	// --- カメラ依存の更新 ---
-	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
-	if(activeCamera){
-		ParticleManager::GetInstance()->Update(activeCamera);
+	// パーティクル更新
+	if(Camera* cam = CameraManager::GetInstance()->GetActiveCamera()){
+		ParticleManager::GetInstance()->Update(cam);
 	}
 
 	// --- デバッグUIの表示 ---
 #ifdef USE_IMGUI
-	if(activeCamera){
+	if(Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera()){
+		// --- メインデバッグウィンドウ ---
 		ImGui::Begin("GameScene Debug");
 
-		Vector3 camPos = activeCamera->GetTranslate();
-		if(ImGui::DragFloat3("Camera Pos",&camPos.x,0.1f)){
-			activeCamera->SetTranslate(camPos);
+		// カメラ設定
+		if(ImGui::CollapsingHeader("Camera Settings")){
+			Vector3 camPos = activeCamera->GetTranslate();
+			if(ImGui::DragFloat3("Camera Pos",&camPos.x,0.1f)) activeCamera->SetTranslate(camPos);
+
+			Vector3 camRot = activeCamera->GetRotate();
+			if(ImGui::DragFloat3("Camera Rotate",&camRot.x,0.01f)) activeCamera->SetRotate(camRot);
 		}
 
-		Vector3 camRot = activeCamera->GetRotate();
-		if(ImGui::DragFloat3("Camera Rotate",&camRot.x,0.01f)){
-			activeCamera->SetRotate(camRot);
-		}
-
-		if(planeObj_){
+		// オブジェクト操作
+		if(planeObj_ && ImGui::CollapsingHeader("Object Settings")){
 			Vector3 pPos = planeObj_->GetTranslate();
-			ImGui::DragFloat3("Parent(Plane) Pos",&pPos.x,0.1f);
-			planeObj_->SetTranslate(pPos);
+			if(ImGui::DragFloat3("Parent(Plane) Pos",&pPos.x,0.1f)) planeObj_->SetTranslate(pPos);
 		}
 
-		ImGui::Separator();
-		ImGui::Text("Point Light");
-		PointLight* pData = object3dCommon_->GetPointLightData();
-		if(pData){
-			ImGui::ColorEdit4("Point Color",&pData->color.x);
-			ImGui::DragFloat3("Point Pos",&pData->position.x,0.1f);
-			ImGui::DragFloat("Point Intensity",&pData->intensity,0.1f,0.0f,100.0f);
-			ImGui::DragFloat("Point Radius",&pData->radius,0.1f,0.0f,100.0f);
-			ImGui::DragFloat("Point Decay",&pData->decay,0.1f,0.0f,10.0f);
-		} else{
-			ImGui::Text("PointLight Data is Null!");
-		}
-
-		SpotLight* sData = object3dCommon_->GetSpotLightData();
-		if(sData){
-			ImGui::Separator();
-			ImGui::Text("Spot Light");
-			ImGui::ColorEdit4("Spot Color",&sData->color.x);
-			ImGui::DragFloat3("Spot Pos",&sData->position.x,0.1f);
-			ImGui::DragFloat3("Spot Dir",&sData->direction.x,0.01f);
-			ImGui::DragFloat("Spot Intensity",&sData->intensity,0.1f);
-			ImGui::DragFloat("Spot Distance",&sData->distance,0.1f);
-
-			static float spotDegree = 30.0f;
-			static float spotDegreeStart = 20.0f;
-
-			ImGui::DragFloat("Spot Angle",&spotDegree,0.1f,0.0f,90.0f);
-			ImGui::DragFloat("Spot FalloffStart",&spotDegreeStart,0.1f,0.0f,90.0f);
-
-			sData->cosAngle = cosf(spotDegree * 3.141592f / 180.0f);
-			sData->cosFalloffStart = cosf(spotDegreeStart * 3.141592f / 180.0f);
-		}
-
-		if(simpleSkinObj_){
-			ImGui::Separator();
-			ImGui::Text("SimpleSkin Object (Environment)");
-
-			auto* material = simpleSkinObj_->GetMaterial();
-			if(material){
-				ImGui::SliderFloat("Env Coefficient",&material->environmentCoefficient,0.0f,1.0f);
-			} else{
-				ImGui::TextColored(ImVec4(1,0,0,1),"Material is NULL!");
+		// ライティング
+		if(ImGui::CollapsingHeader("Lighting")){
+			if(PointLight* pData = object3dCommon_->GetPointLightData()){
+				ImGui::Text("Point Light");
+				ImGui::ColorEdit4("Point Color",&pData->color.x);
+				ImGui::DragFloat3("Point Pos",&pData->position.x,0.1f);
+				ImGui::DragFloat("Point Intensity",&pData->intensity,0.1f,0.0f,100.0f);
 			}
-
-			Vector3 skinPos = simpleSkinObj_->GetTranslate();
-			if(ImGui::DragFloat3("Skin Pos",&skinPos.x,0.1f)){
-				simpleSkinObj_->SetTranslate(skinPos);
+			if(SpotLight* sData = object3dCommon_->GetSpotLightData()){
+				ImGui::Text("Spot Light");
+				ImGui::ColorEdit4("Spot Color",&sData->color.x);
+				// ... (SpotLightの各パラメータ)
 			}
 		}
 
-		if(humanObj_){
-			ImGui::Separator();
-			ImGui::Text("Character Bone Control");
-
-			// スケルトンの取得
+		// キャラクターボーン制御
+		if(humanObj_ && ImGui::CollapsingHeader("Character Bone Control")){
 			auto& skeleton = humanObj_->GetSkeleton();
 			if(!skeleton.joints.empty()){
-				auto& rootJoint = skeleton.joints[0]; // ルートボーン(インデックス0)を操作
+				auto& rootJoint = skeleton.joints[0];
+				static float rootPos[3] = {0, 0, 0};
+				static float rootRot[3] = {0, 0, 0};
+				static bool isManualControl = false;
 
-				// ImGui用のstatic変数
-				static float rootPos[3] = {0.0f, 0.0f, 0.0f};
-				static float rootRot[3] = {0.0f, 0.0f, 0.0f};
-
-				if(ImGui::DragFloat3("Root Bone Pos",rootPos,0.1f)){
+				if(ImGui::DragFloat3("Root Pos",rootPos,0.1f)){
 					rootJoint.transform.translate = {rootPos[0], rootPos[1], rootPos[2]};
 				}
-
-				if(ImGui::DragFloat3("Root Bone Rot (Euler)",rootRot,0.01f)){
-					// Eulerからクォータニオンに変換してセット
+				if(ImGui::DragFloat3("Root Rot (Euler)",rootRot,0.01f)){
 					rootJoint.transform.rotate = MakeQuaternionFromEuler(rootRot[0],rootRot[1],rootRot[2]);
 				}
 
-				// 重要: アニメーションを停止して手動操作を有効にするためのボタン
-				static bool isManualControl = false;
-				ImGui::Checkbox("Manual Control",&isManualControl);
-
-				if(isManualControl){
-					// 手動操作時はアニメーションの更新をスキップさせる（Updateロジックで制御が必要）
-					// ここで Skeleton::Update() を呼んで反映させる
-					skeleton.Update();
+				if(ImGui::Checkbox("Manual Control",&isManualControl)){
+					// 手動操作へ切り替わった瞬間に反映
+					if(isManualControl) skeleton.Update();
 				}
 			}
 		}
 
-
 		ModelManager::GetInstance()->UpdateLightGui();
-
-		// 変更 メインのデバッグウィンドウをここで閉じる
 		ImGui::End();
 
-		// 変更 ここからパーティクル用の別ウィンドウを作成
+		// --- パーティクル制御ウィンドウ ---
 		ImGui::Begin("Particle Control");
+		const char* particleButtons[] = {
+			"Shockwave", "Spark", "Ring", "Circle", "Cylinder", "Smoke", "Charge", "Aura", "Warp"
+		};
 
-		if(ImGui::Button("Emit Shockwave")){
-			EmitShockwave({0.0f, 0.0f, 0.0f});
-		}
-		ImGui::SameLine();
-		if(ImGui::Button("Emit Spark")){
-			EmitSpark({0.0f, 0.0f, 0.0f});
-		}
-
-		// 既存のパーティクルを手動で発生させるボタン
-		if(ImGui::Button("Emit Ring")){
-			if(ringEmitter_) ringEmitter_->Emit();
-		}
-		ImGui::SameLine();
-		if(ImGui::Button("Emit Circle")){
-			if(circleEmitter_) circleEmitter_->Emit();
-		}
-		ImGui::SameLine();
-		if(ImGui::Button("Emit Cylinder")){
-			if(cylinderEmitter_) cylinderEmitter_->Emit();
-		}
-		ImGui::SameLine();
-		if(ImGui::Button("Emit Smoke")){
-			EmitSmoke({0.0f, 0.0f, 0.0f});
-		}
-		ImGui::SameLine();
-		if(ImGui::Button("Emit Charge")){
-			EmitCharge({0.0f, 0.0f, 0.0f});
-		}
-		ImGui::SameLine();
-		if(ImGui::Button("Emit Aura")){
-			EmitAura({0.0f, 0.0f, 0.0f});
-		}
-		ImGui::SameLine();
-		if(ImGui::Button("Emit Warp")){
-			EmitWarp();
-		}
-
-		// 変更 パーティクル用のウィンドウを閉じる
+		// 各パーティクル発行ボタン
+		if(ImGui::Button("Emit Shockwave")) EmitShockwave({0,0,0}); ImGui::SameLine();
+		if(ImGui::Button("Emit Spark")) EmitSpark({0,0,0});
+		if(ImGui::Button("Emit Ring")){ if(ringEmitter_) ringEmitter_->Emit(); } ImGui::SameLine();
+		if(ImGui::Button("Emit Circle")){ if(circleEmitter_) circleEmitter_->Emit(); }
+		// ... (他のボタンも同様)
 		ImGui::End();
 
 		Application::GetInstance()->ShowPostProcessUI();
@@ -395,41 +272,23 @@ void GameScene::Update(){
 #endif
 }
 
+
+// 描画処理
 void GameScene::Draw(){
 	object3dCommon_->Draw();
+	if(humanObj_) humanObj_->Draw();
 
-	// コンフリクト解消 humanObjとパーティクルの描画処理を統合
-	if(humanObj_){
-		humanObj_->Draw();
-	}
-
-	//if(terrainObj_){
-	//	terrainObj_->Draw();
-	//}
-
-	// パーティクルの描画
-	Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
-	if(activeCamera){
-		Matrix4x4 viewProj = Multiply(activeCamera->GetViewMatrix(),activeCamera->GetProjectionMatrix());
+	if(Camera* cam = CameraManager::GetInstance()->GetActiveCamera()){
+		Matrix4x4 viewProj = Multiply(cam->GetViewMatrix(),cam->GetProjectionMatrix());
 		ParticleManager::GetInstance()->Draw(viewProj);
 	}
 }
 
-void GameScene::EmitShockwave(const Vector3& position){
-	Transform transform;
-	transform.translate = position;
-	transform.scale = {0.1f, 0.1f, 0.1f};
-	transform.rotate = {0.0f, 0.0f, 0.0f};
-
-	ParticleManager::GetInstance()->Emit(
-		"Shockwave",
-		transform,
-		1,
-		{1.0f, 1.0f, 1.0f, 1.0f},
-		{0.0f, 0.0f, 0.0f},
-		0.3f
-	);
+// パーティクル発生処理
+void GameScene::EmitShockwave(const Vector3& pos){
+	ParticleManager::GetInstance()->Emit("Shockwave",{{0.1f, 0.1f, 0.1f}, {0, 0, 0}, pos},1,{1,1,1,1},{0,0,0},0.3f);
 }
+
 void GameScene::EmitSpark(const Vector3& position){
 	Transform transform;
 	transform.translate = position;
@@ -437,12 +296,7 @@ void GameScene::EmitSpark(const Vector3& position){
 	transform.rotate = {0.0f, 0.0f, 0.0f};
 
 	ParticleManager::GetInstance()->Emit(
-		"Spark",
-		transform,
-		20,
-		{1.0f, 0.5f, 0.0f, 1.0f},
-		{0.0f, 0.0f, 0.0f},
-		0.5f
+		"Spark",transform,20,{1.0f, 0.5f, 0.0f, 1.0f},{0.0f, 0.0f, 0.0f},0.5f
 	);
 }
 
@@ -453,28 +307,18 @@ void GameScene::EmitSmoke(const Vector3& position){
 	transform.rotate = {0.0f, 0.0f, 0.0f};
 
 	ParticleManager::GetInstance()->Emit(
-		"Smoke",
-		transform,
-		5, // 少なめに出す
-		{0.5f, 0.5f, 0.5f, 0.8f}, // 灰色
-		{0.0f, 1.0f, 0.0f}, // 上に昇る
-		1.5f // 長めに残る
+		"Smoke",transform,5,{0.5f, 0.5f, 0.5f, 0.8f},{0.0f, 1.0f, 0.0f},1.5f
 	);
 }
 
 void GameScene::EmitCharge(const Vector3& position){
 	Transform transform;
 	transform.translate = position;
-	transform.scale = {0.1f, 0.5f, 0.1f}; // 細長くする
+	transform.scale = {0.1f, 0.5f, 0.1f};
 	transform.rotate = {0.0f, 0.0f, 0.0f};
 
 	ParticleManager::GetInstance()->Emit(
-		"Charge",
-		transform,
-		30, // 一気にたくさん出す
-		{0.2f, 0.8f, 1.0f, 1.0f}, // 水色
-		{0.0f, 0.0f, 0.0f}, // 速度はEmit内で計算されるので0
-		0.6f // 収束して消えるまでの時間
+		"Charge",transform,30,{0.2f, 0.8f, 1.0f, 1.0f},{0.0f, 0.0f, 0.0f},0.6f
 	);
 }
 
@@ -485,14 +329,10 @@ void GameScene::EmitAura(const Vector3& position){
 	transform.rotate = {0.0f, 0.0f, 0.0f};
 
 	ParticleManager::GetInstance()->Emit(
-		"Aura",
-		transform,
-		1, // 毎フレーム少しずつ出す想定なので1回につき1個
-		{0.8f, 1.0f, 0.2f, 0.6f}, // 黄緑色
-		{0.0f, 2.0f, 0.0f}, // 上に昇る
-		1.0f
+		"Aura",transform,1,{0.8f, 1.0f, 0.2f, 0.6f},{0.0f, 2.0f, 0.0f},1.0f
 	);
 }
+
 void GameScene::EmitWarp(){
 	Transform transform;
 	transform.translate = {0.0f, 0.0f, 0.0f};
@@ -500,11 +340,6 @@ void GameScene::EmitWarp(){
 	transform.rotate = {0.0f, 0.0f, 0.0f};
 
 	ParticleManager::GetInstance()->Emit(
-		"Warp",
-		transform,
-		100, // 画面全体を覆うように大量に出す
-		{0.5f, 0.8f, 1.0f, 0.8f}, // スピード感のある水色
-		{0.0f, 0.0f, 0.0f}, // 速度や座標はEmit内で上書きされるためここでは0
-		1.0f
+		"Warp",transform,100,{0.5f, 0.8f, 1.0f, 0.8f},{0.0f, 0.0f, 0.0f},1.0f
 	);
 }

@@ -15,29 +15,30 @@ class SpriteCommon;
 class Skybox;
 class SkyboxCommon;
 class Application;
-struct Animation;
+class Animation;
 class AnimationController;
-class Skeleton;
 
 class GameScene : public BaseScene{
 public:
 	GameScene();
 	~GameScene() override;
 
+	// シーン管理
 	void Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon* spriteCommon) override;
 	void Finalize() override;
 	void Update() override;
 	void Draw() override;
 
-	void EmitSpark(const Vector3& position);
+	// パーティクル発生関数
 	void EmitShockwave(const Vector3& position);
+	void EmitSpark(const Vector3& position);
 	void EmitSmoke(const Vector3& position);
 	void EmitCharge(const Vector3& position);
 	void EmitAura(const Vector3& position);
 	void EmitWarp();
 
 private:
-	// 外部依存ポインタ
+	// 外部依存
 	Obj3dCommon* object3dCommon_ = nullptr;
 	Input* input_ = nullptr;
 	SpriteCommon* spriteCommon_ = nullptr;
@@ -52,23 +53,22 @@ private:
 	std::shared_ptr<Obj3D> animationCube_;
 	std::shared_ptr<Obj3D> humanObj_;
 
-	// パーティクル
+	// パーティクル管理
 	std::unique_ptr<ParticleEmitter> ringEmitter_;
 	std::unique_ptr<ParticleEmitter> circleEmitter_;
 	std::unique_ptr<ParticleEmitter> cylinderEmitter_;
 	std::unique_ptr<ParticleEmitter> shockwaveEmitter_;
 
-
-	// スカイボックス
+	// 環境・エフェクト
 	std::unique_ptr<SkyboxCommon> skyboxCommon_;
 	std::unique_ptr<Skybox> skybox_;
 
-	// アニメーションデータと制御
+	// アニメーション
 	std::unique_ptr<Animation> animation_;
 	std::unique_ptr<AnimationController> animationController_;
 	float animationTime_ = 0.0f;
 
-	// 音声と状態フラグ
+	// 設定・状態
 	const std::string kBgmPath_ = "resource/You_and_Me.mp3";
 	bool isPaused_ = false;
 };
