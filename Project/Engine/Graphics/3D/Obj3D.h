@@ -1,6 +1,9 @@
 #pragma once
 #include "MyMath.h"
 #include "Model.h"
+#include "Skeleton.h"
+#include "SkinCluster.h"
+#include "Animation.h"
 #include <string>
 #include <vector>
 #include <d3d12.h>
@@ -28,6 +31,7 @@ public:
 	void SetModel(Model* model){ this->model = model; }
 	void SetModel(const std::string& filePath);
 	void SetCamera(Camera* camera){ this->camera = camera; }
+	void SetIsSkinning(bool isSkinning){ isSkinning_ = isSkinning; }
 	void SetTexture(const std::string& filePath){
 		if(model){
 			model->SetTexture(filePath);
@@ -39,12 +43,15 @@ public:
 	void SetTranslate(const Vector3& translate){ transform.translate = translate; }
 	void SetQuaternion(const Quaternion& quat){ quaternion_ = quat; isUseQuaternion_ = true; }
 
+	void LoadAnimation(const std::string& directoryPath,const std::string& filename);
+
 	// Getter
 	const Vector3& GetScale() const{ return transform.scale; }
 	const Vector3& GetRotate() const{ return transform.rotate; }
 	const Vector3& GetTranslate() const{ return transform.translate; }
 	const Matrix4x4& GetWorldMatrix() const{ return transformationMatrixData->World; }
 	Model::Material* GetMaterial() const{ return materialData; }
+	Skeleton& GetSkeleton(){ return skeleton_; }
 
 private:
 	void CreateTransformationMatrixData();
@@ -65,4 +72,10 @@ private:
 	Transform transform;
 	Quaternion quaternion_ = {0.0f, 0.0f, 0.0f, 1.0f};
 	bool isUseQuaternion_ = false;
+
+	Skeleton skeleton_;
+	SkinCluster skinCluster_;
+	Animation animation_;
+	float animationTime_ = 0.0f;
+	bool isSkinning_ = false;
 };

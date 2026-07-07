@@ -14,6 +14,7 @@
 #include "SpriteCommon.h"
 #include "Animation.h"
 #include "Application.h"
+#include "Logger.h"
 
 namespace{
 	const std::string kTextureChecker = "resource/uvChecker.png";
@@ -43,6 +44,15 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	object3dCommon_ = object3dCommon;
 	input_ = input;
 	spriteCommon_ = spriteCommon;
+
+	// 1. カメラを先に生成・登録
+	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
+	auto* defaultCamera = CameraManager::GetInstance()->GetCamera("default");
+	defaultCamera->SetTranslate({0.0f, 0.0f, -30.0f});
+	CameraManager::GetInstance()->SetActiveCamera("default");
+
+	// 2. 超重要：ここを呼び出してから Obj3D を初期化する
+	object3dCommon_->SetDefaultCamera(CameraManager::GetInstance()->GetActiveCamera());
 
 	// --- リソースのロード ---
 	TextureManager::GetInstance()->LoadTexture(kTextureChecker);
@@ -111,22 +121,22 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	humanObj_ = std::make_shared<Obj3D>();
 	humanObj_->Initialize(object3dCommon_);
 	humanObj_->SetModel(kModelHuman);
+	humanObj_->SetTexture("resource/human/white.png");
 
-	humanAnimation_ = std::make_unique<Animation>();
-	*humanAnimation_ = LoadAnimationFile("resource/human/","walk.gltf");
-
-	const Node& humanRootNode = ModelManager::GetInstance()->FindModel(kModelHuman)->GetRootNode();
-	humanSkeleton_ = std::make_unique<Skeleton>();
-	humanSkeleton_->Create(humanRootNode);
-
-	skeletonDebugSpheres_.clear();
-	for(size_t i = 0; i < humanSkeleton_->joints.size(); ++i){
-		auto sphere = std::make_unique<Obj3D>();
-		sphere->Initialize(object3dCommon_);
-		sphere->SetModel(kModelSphere);
-		sphere->SetScale({0.2f, 0.2f, 0.2f});
-		skeletonDebugSpheres_.push_back(std::move(sphere));
+	// ここで読み込み結果を必ずチェック
+	auto* model = ModelManager::GetInstance()->FindModel(kModelHuman);
+	if(!model){
+		OutputDebugStringA("FATAL ERROR: Model not found!\n");
+		return;
 	}
+
+	// ここでスケルトンの基になるノードがあるかチェック
+	if(model->GetRootNode().name.empty()){
+		OutputDebugStringA("FATAL ERROR: RootNode is empty!\n");
+		return;
+	}
+
+	humanObj_->LoadAnimation("resource/human/","walk.gltf");
 
 	// --- パーティクルの設定 ---
 	ParticleManager::GetInstance()->CreateParticleGroup(kParticleRing,kTexturegradationLine,true,false);
@@ -154,21 +164,13 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	cylinderEmitter_->SetLifeTime(2.0f);
 	cylinderEmitter_->SetVelocity({0.0f, 0.0f, 0.0f});
 
+	// コンフリクト解消 パーティクルグループの追加分を統合（重複するカメラ設定部分は削除）
 	ParticleManager::GetInstance()->CreateParticleGroup("Shockwave",kTexturegradationLine,true,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Spark",kTextureCircle2,false,false,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Smoke",kTextureCircle2,false,false,false,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Charge",kTexturegradationLine,false,false,false,false,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Aura",kTextureCircle2,false,false,false,false,false,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Warp",kTexturegradationLine,false,true,false,false,false,false,false,true);
-
-	// --- カメラの設定 ---
-	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
-	auto* defaultCamera = CameraManager::GetInstance()->GetCamera("default");
-	if(defaultCamera){
-		defaultCamera->SetTranslate({0.0f, 0.0f, -30.0f});
-		CameraManager::GetInstance()->SetActiveCamera("default");
-	}
-	object3dCommon_->SetDefaultCamera(CameraManager::GetInstance()->GetActiveCamera());
 }
 
 void GameScene::Finalize(){}
@@ -209,23 +211,14 @@ void GameScene::Update(){
 
 	// --- キャラクターアニメーションと骨格の更新 ---
 	if(humanObj_){
-		if(humanAnimation_->duration > 0.0f){
-			humanAnimationTime_ += 1.0f / 60.0f;
-			humanAnimationTime_ = std::fmod(humanAnimationTime_,humanAnimation_->duration);
-		}
+		humanObj_->SetTranslate({0, 0, 5});
+		humanObj_->SetScale({1, 1, 1});
 
-		humanSkeleton_->ApplyAnimation(*humanAnimation_,humanAnimationTime_);
-		humanSkeleton_->Update();
+		Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();
+		if(activeCamera){
+			humanObj_->SetCamera(activeCamera);
+		}
 		humanObj_->Update();
-
-		for(size_t i = 0; i < humanSkeleton_->joints.size(); ++i){
-			const Joint& joint = humanSkeleton_->joints[i];
-			Matrix4x4 jointWorldMatrix = Multiply(joint.skeletonSpaceMatrix,humanObj_->GetWorldMatrix());
-			Vector3 pos = {jointWorldMatrix.m[3][0], jointWorldMatrix.m[3][1], jointWorldMatrix.m[3][2]};
-
-			skeletonDebugSpheres_[i]->SetTranslate(pos);
-			skeletonDebugSpheres_[i]->Update();
-		}
 	}
 
 	// --- アニメーションキューブの更新 ---
@@ -314,6 +307,41 @@ void GameScene::Update(){
 			}
 		}
 
+		if(humanObj_){
+			ImGui::Separator();
+			ImGui::Text("Character Bone Control");
+
+			// スケルトンの取得
+			auto& skeleton = humanObj_->GetSkeleton();
+			if(!skeleton.joints.empty()){
+				auto& rootJoint = skeleton.joints[0]; // ルートボーン(インデックス0)を操作
+
+				// ImGui用のstatic変数
+				static float rootPos[3] = {0.0f, 0.0f, 0.0f};
+				static float rootRot[3] = {0.0f, 0.0f, 0.0f};
+
+				if(ImGui::DragFloat3("Root Bone Pos",rootPos,0.1f)){
+					rootJoint.transform.translate = {rootPos[0], rootPos[1], rootPos[2]};
+				}
+
+				if(ImGui::DragFloat3("Root Bone Rot (Euler)",rootRot,0.01f)){
+					// Eulerからクォータニオンに変換してセット
+					rootJoint.transform.rotate = MakeQuaternionFromEuler(rootRot[0],rootRot[1],rootRot[2]);
+				}
+
+				// 重要: アニメーションを停止して手動操作を有効にするためのボタン
+				static bool isManualControl = false;
+				ImGui::Checkbox("Manual Control",&isManualControl);
+
+				if(isManualControl){
+					// 手動操作時はアニメーションの更新をスキップさせる（Updateロジックで制御が必要）
+					// ここで Skeleton::Update() を呼んで反映させる
+					skeleton.Update();
+				}
+			}
+		}
+
+
 		ModelManager::GetInstance()->UpdateLightGui();
 
 		// 変更 メインのデバッグウィンドウをここで閉じる
@@ -369,6 +397,11 @@ void GameScene::Update(){
 
 void GameScene::Draw(){
 	object3dCommon_->Draw();
+
+	// コンフリクト解消 humanObjとパーティクルの描画処理を統合
+	if(humanObj_){
+		humanObj_->Draw();
+	}
 
 	//if(terrainObj_){
 	//	terrainObj_->Draw();
@@ -475,4 +508,3 @@ void GameScene::EmitWarp(){
 		1.0f
 	);
 }
-

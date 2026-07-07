@@ -15,7 +15,7 @@ class SpriteCommon;
 class Skybox;
 class SkyboxCommon;
 class Application;
-class Animation;
+struct Animation;
 class AnimationController;
 class Skeleton;
 
@@ -67,11 +67,6 @@ private:
 	std::unique_ptr<Animation> animation_;
 	std::unique_ptr<AnimationController> animationController_;
 	float animationTime_ = 0.0f;
-
-	std::unique_ptr<Animation> humanAnimation_;
-	std::unique_ptr<Skeleton> humanSkeleton_;
-	std::vector<std::unique_ptr<Obj3D>> skeletonDebugSpheres_;
-	float humanAnimationTime_ = 0.0f;
 
 	// 音声と状態フラグ
 	const std::string kBgmPath_ = "resource/You_and_Me.mp3";

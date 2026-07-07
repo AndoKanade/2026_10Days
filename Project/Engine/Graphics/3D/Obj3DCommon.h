@@ -46,6 +46,11 @@ public: // 外部から呼び出すもの
 	ID3D12PipelineState* GetGraphicsPipelineState() const{ return graphicsPipelineState.Get(); }
 	DXCommon* GetDxCommon() const{ return dxCommon_; }
 	Camera* GetDefaultCamera() const{ return defaultCamera_; }
+	ID3D12PipelineState* GetSkinningGraphicsPipelineState() const{ return skinningGraphicsPipelineState.Get(); }
+	ID3D12RootSignature* GetSkinningRootSignature() const{ return skinningRootSignature.Get(); }
+	// 追加
+	D3D12_GPU_VIRTUAL_ADDRESS GetPointLightDataGPU() const{ return pointLightResource_->GetGPUVirtualAddress(); }
+	D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightDataGPU() const{ return spotLightResource_->GetGPUVirtualAddress(); }
 
 	// ライトデータ取得
 	DirectionalLight* GetDirectionalLightData(){ return directionalLightData_; }
@@ -54,6 +59,7 @@ public: // 外部から呼び出すもの
 
 private: // 内部関数
 	void CreateRootSignature();
+	void CreateSkinningRootSignature();
 	void CreateGraphicsPipelineState();
 
 private: // メンバ変数
@@ -61,8 +67,11 @@ private: // メンバ変数
 	DXCommon* dxCommon_ = nullptr;
 	Camera* defaultCamera_ = nullptr;
 
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;         // 通常用
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> skinningRootSignature; // スキニング用
+
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> skinningGraphicsPipelineState;
 
 	// カメラリソース
 	Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;

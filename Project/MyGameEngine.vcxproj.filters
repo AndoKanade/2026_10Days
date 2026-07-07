@@ -88,6 +88,18 @@
     <Filter Include="ヘッダー ファイル\Engine\Graphics\3D\Animation">
       <UniqueIdentifier>{8c410127-093b-48f9-ac64-13e8ffa7be24}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ヘッダー ファイル\Game\Scenes">
+      <UniqueIdentifier>{7836c295-4a1d-41c0-b465-a83ad210223f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\Game\System">
+      <UniqueIdentifier>{b1a19401-e6c4-4b53-a1b9-d42788fc8bc4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\Game\System">
+      <UniqueIdentifier>{c132f0ea-9f7e-4382-98de-ab9d1a835808}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ソース ファイル\Game\Scenes">
+      <UniqueIdentifier>{7d659984-5ef6-425c-a145-21d01df4ce7a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="Engine\Graphics\Shaders\Obj3D\Object3d.hlsli">
@@ -146,24 +158,6 @@
     <ClInclude Include="Engine\Manager\TextureManager.h">
       <Filter>ヘッダー ファイル\Engine\Manager</Filter>
     </ClInclude>
-    <ClInclude Include="Game\AbstractSceneFactory.h">
-      <Filter>ヘッダー ファイル\Game</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\BaseScene.h">
-      <Filter>ヘッダー ファイル\Game</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\GameScene.h">
-      <Filter>ヘッダー ファイル\Game</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\SceneFactory.h">
-      <Filter>ヘッダー ファイル\Game</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\SceneManager.h">
-      <Filter>ヘッダー ファイル\Game</Filter>
-    </ClInclude>
-    <ClInclude Include="Game\TitleScene.h">
-      <Filter>ヘッダー ファイル\Game</Filter>
-    </ClInclude>
     <ClInclude Include="resource\resource.h">
       <Filter>Resources</Filter>
     </ClInclude>
@@ -218,6 +212,27 @@
     <ClInclude Include="Engine\Graphics\3D\Animation\Skeleton.h">
       <Filter>ヘッダー ファイル\Engine\Graphics\3D\Animation</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Graphics\3D\SkinCluster.h">
+      <Filter>ヘッダー ファイル\Engine\Graphics\3D\Animation</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\AbstractSceneFactory.h">
+      <Filter>ヘッダー ファイル\Game\System</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\BaseScene.h">
+      <Filter>ヘッダー ファイル\Game\System</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\SceneFactory.h">
+      <Filter>ヘッダー ファイル\Game\System</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\SceneManager.h">
+      <Filter>ヘッダー ファイル\Game\System</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\GameScene.h">
+      <Filter>ヘッダー ファイル\Game\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\TitleScene.h">
+      <Filter>ヘッダー ファイル\Game\Scenes</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Engine\Base\DXCommon.cpp">
@@ -255,18 +270,6 @@
     </ClCompile>
     <ClCompile Include="Engine\Manager\TextureManager.cpp">
       <Filter>ソース ファイル\Engine\Manager</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\GameScene.cpp">
-      <Filter>ソース ファイル\Game</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\SceneFactory.cpp">
-      <Filter>ソース ファイル\Game</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\SceneManager.cpp">
-      <Filter>ソース ファイル\Game</Filter>
-    </ClCompile>
-    <ClCompile Include="Game\TitleScene.cpp">
-      <Filter>ソース ファイル\Game</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\2D\Sprite.cpp">
       <Filter>ソース ファイル\Engine\Graphics\2D</Filter>
@@ -318,6 +321,21 @@
     </ClCompile>
     <ClCompile Include="Engine\Graphics\3D\Animation\Skeleton.cpp">
       <Filter>ソース ファイル\Engine\Graphics\3D\Animation</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\3D\SkinCluster.cpp">
+      <Filter>ソース ファイル\Engine\Graphics\3D\Animation</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\SceneFactory.cpp">
+      <Filter>ソース ファイル\Game\System</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\SceneManager.cpp">
+      <Filter>ソース ファイル\Game\System</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\GameScene.cpp">
+      <Filter>ソース ファイル\Game\Scenes</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\TitleScene.cpp">
+      <Filter>ソース ファイル\Game\Scenes</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -379,6 +397,9 @@
     </FxCompile>
     <FxCompile Include="Engine\Graphics\Shaders\PostProcess\Vignette.PS.hlsl">
       <Filter>Resources\shader\PostEffect</Filter>
+    </FxCompile>
+    <FxCompile Include="Engine\Graphics\Shaders\Obj3D\SkinningObject3d.VS.hlsl">
+      <Filter>Resources\shader\Obj3D</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
