@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BaseScene.h"
+#include "MyMath.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -28,6 +29,13 @@ public:
 	void Update() override;
 	void Draw() override;
 
+	void EmitSpark(const Vector3& position);
+	void EmitShockwave(const Vector3& position);
+	void EmitSmoke(const Vector3& position);
+	void EmitCharge(const Vector3& position);
+	void EmitAura(const Vector3& position);
+	void EmitWarp();
+
 private:
 	// 外部依存ポインタ
 	Obj3dCommon* object3dCommon_ = nullptr;
@@ -48,6 +56,8 @@ private:
 	std::unique_ptr<ParticleEmitter> ringEmitter_;
 	std::unique_ptr<ParticleEmitter> circleEmitter_;
 	std::unique_ptr<ParticleEmitter> cylinderEmitter_;
+	std::unique_ptr<ParticleEmitter> shockwaveEmitter_;
+
 
 	// スカイボックス
 	std::unique_ptr<SkyboxCommon> skyboxCommon_;
