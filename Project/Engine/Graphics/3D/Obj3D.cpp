@@ -98,10 +98,19 @@ void Obj3D::Update(){
 		skeleton_.ApplyAnimation(animation_,animationTime_);
 		skeleton_.Update();
 
-		// ルートボーンの行列成分をデバッグ出力
-		Logger::Log("Joint[0] Matrix[0][0] = " + std::to_string(skeleton_.joints[0].skeletonSpaceMatrix.m[0][0]));
+		// 1. コマンドリストの取得 (これが必要です)
+		auto* commandList = object3dCommon->GetDxCommon()->GetCommandList();
+		assert(commandList != nullptr);
 
-		skinCluster_.Update(skeleton_);
+		// 2. スキニング計算の実行 (引数を合わせる)
+		// ※ SkinningInformationのGPUアドレスを渡す必要があるため、
+		// 必要に応じてバッファを作成・取得してください
+		skinCluster_.Update(skeleton_,commandList,object3dCommon,skinCluster_.GetSkinningInfoAddress());
+
+		D3D12_RESOURCE_BARRIER barrier = {};
+		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+		barrier.UAV.pResource = skinCluster_.GetSkinnedVertexBuffer();
+		commandList->ResourceBarrier(1,&barrier);
 	}
 }
 
@@ -145,6 +154,7 @@ void Obj3D::Draw(){
 	} else{
 		model->Draw(skyboxSRVIndex,activeCamera->GetGPUVirtualAddress());
 	}
+
 }
 
 // モデルのセット

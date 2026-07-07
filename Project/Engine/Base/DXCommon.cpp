@@ -389,8 +389,18 @@ Microsoft::WRL::ComPtr<IDxcBlob> DXCommon::CompileShader(const std::wstring& fil
 
 	Microsoft::WRL::ComPtr<IDxcResult> shaderResult = nullptr;
 	hr = dxcCompiler->Compile(&shaderSourceBuffer,arguments,_countof(arguments),includeHandler,IID_PPV_ARGS(&shaderResult));
-	assert(SUCCEEDED(hr));
 
+	// ★追加: コンパイル自体が失敗した場合のエラー取得
+	if(FAILED(hr)){
+		Microsoft::WRL::ComPtr<IDxcBlobUtf8> shaderError = nullptr;
+		shaderResult->GetOutput(DXC_OUT_ERRORS,IID_PPV_ARGS(&shaderError),nullptr);
+		if(shaderError != nullptr && shaderError->GetStringLength() != 0){
+			Logger::Log(shaderError->GetStringPointer());
+		}
+		assert(SUCCEEDED(hr));
+	}
+
+	// エラーログの確認 (コンパイル結果に含まれるエラー)
 	Microsoft::WRL::ComPtr<IDxcBlobUtf8> shaderError = nullptr;
 	shaderResult->GetOutput(DXC_OUT_ERRORS,IID_PPV_ARGS(&shaderError),nullptr);
 

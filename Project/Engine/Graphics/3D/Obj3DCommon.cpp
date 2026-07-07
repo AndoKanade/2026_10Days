@@ -13,6 +13,7 @@ void Obj3dCommon::Initialize(DXCommon* dxcommon){
 
 	// パイプラインステートの生成
 	CreateGraphicsPipelineState();
+	CreateComputePipelineState();
 
 	// カメラリソース作成 (256バイトアライメント)
 	size_t cameraSize = (sizeof(CameraForGPU) + 0xff) & ~0xff;
@@ -331,4 +332,78 @@ void Obj3dCommon::CreateGraphicsPipelineState(){
 
 	hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&skinningPipelineStateDesc,IID_PPV_ARGS(&skinningGraphicsPipelineState));
 	assert(SUCCEEDED(hr));
+}
+
+void Obj3dCommon::CreateComputePipelineState(){
+	HRESULT hr;
+
+	// 1. RootSignature用デスクリプタレンジの設定
+	D3D12_DESCRIPTOR_RANGE srvRange[1] = {};
+	srvRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	srvRange[0].NumDescriptors = 3;
+	srvRange[0].BaseShaderRegister = 0;
+	srvRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	D3D12_DESCRIPTOR_RANGE uavRange[1] = {};
+	uavRange[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+	uavRange[0].NumDescriptors = 1;
+	uavRange[0].BaseShaderRegister = 0;
+	uavRange[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	D3D12_ROOT_PARAMETER rootParameters[3] = {};
+	// CBV
+	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParameters[0].Descriptor.ShaderRegister = 0;
+	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+	// SRV Table
+	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[1].DescriptorTable.pDescriptorRanges = srvRange;
+	rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
+	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+	// UAV Table
+	rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameters[2].DescriptorTable.pDescriptorRanges = uavRange;
+	rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
+	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	// --- RootSignatureの生成を先に実行 ---
+	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+	rootSignatureDesc.pParameters = rootParameters;
+	rootSignatureDesc.NumParameters = _countof(rootParameters);
+	rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+	ComPtr<ID3DBlob> signatureBlob;
+	ComPtr<ID3DBlob> errorBlob;
+	hr = D3D12SerializeRootSignature(&rootSignatureDesc,D3D_ROOT_SIGNATURE_VERSION_1,&signatureBlob,&errorBlob);
+	assert(SUCCEEDED(hr));
+	hr = dxCommon_->GetDevice()->CreateRootSignature(0,signatureBlob->GetBufferPointer(),signatureBlob->GetBufferSize(),IID_PPV_ARGS(&computeRootSignature));
+	assert(SUCCEEDED(hr));
+
+	// --- 2. PSOの作成 ---
+	ComPtr<IDxcBlob> computeShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Skinning.CS.hlsl",L"cs_6_0");
+	assert(computeShaderBlob != nullptr);
+
+	D3D12_COMPUTE_PIPELINE_STATE_DESC computePipelineStateDesc{};
+	computePipelineStateDesc.CS = {
+		.pShaderBytecode = computeShaderBlob->GetBufferPointer(),
+		.BytecodeLength = computeShaderBlob->GetBufferSize()
+	};
+	computePipelineStateDesc.pRootSignature = computeRootSignature.Get();
+
+	hr = dxCommon_->GetDevice()->CreateComputePipelineState(&computePipelineStateDesc,IID_PPV_ARGS(&computePipelineState));
+	assert(SUCCEEDED(hr));
+}
+
+// UAV生成関数の実装例
+void Obj3dCommon::CreateUAV(ID3D12Device* device,ID3D12Resource* resource,UINT numElements,UINT stride,D3D12_CPU_DESCRIPTOR_HANDLE handle){
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+	uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+	uavDesc.Buffer.FirstElement = 0;
+	uavDesc.Buffer.NumElements = numElements;
+	uavDesc.Buffer.StructureByteStride = stride;
+	uavDesc.Buffer.CounterOffsetInBytes = 0;
+	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+	device->CreateUnorderedAccessView(resource,nullptr,&uavDesc,handle);
 }

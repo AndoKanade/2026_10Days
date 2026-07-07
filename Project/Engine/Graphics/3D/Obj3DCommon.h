@@ -52,6 +52,9 @@ public: // 外部から呼び出すもの
 	D3D12_GPU_VIRTUAL_ADDRESS GetPointLightDataGPU() const{ return pointLightResource_->GetGPUVirtualAddress(); }
 	D3D12_GPU_VIRTUAL_ADDRESS GetSpotLightDataGPU() const{ return spotLightResource_->GetGPUVirtualAddress(); }
 
+	ID3D12RootSignature* GetComputeRootSignature() const{ return computeRootSignature.Get(); }
+	ID3D12PipelineState* GetComputePipelineState() const{ return computePipelineState.Get(); }
+
 	// ライトデータ取得
 	DirectionalLight* GetDirectionalLightData(){ return directionalLightData_; }
 	PointLight* GetPointLightData(){ return pointLightData_; }
@@ -61,6 +64,9 @@ private: // 内部関数
 	void CreateRootSignature();
 	void CreateSkinningRootSignature();
 	void CreateGraphicsPipelineState();
+	void CreateComputePipelineState();
+
+	void CreateUAV(ID3D12Device* device,ID3D12Resource* resource,UINT numElements,UINT stride,D3D12_CPU_DESCRIPTOR_HANDLE handle);
 
 private: // メンバ変数
 
@@ -72,6 +78,9 @@ private: // メンバ変数
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> graphicsPipelineState;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> skinningGraphicsPipelineState;
+
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> computeRootSignature;
 
 	// カメラリソース
 	Microsoft::WRL::ComPtr<ID3D12Resource> cameraResource_;

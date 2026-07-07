@@ -205,13 +205,17 @@ Node Model::ReadNode(aiNode* node){
 void Model::Draw(uint32_t skyboxSRVIndex,D3D12_GPU_VIRTUAL_ADDRESS cameraAddress,SkinCluster* skinCluster){
 	auto* commandList = modelCommon_->GetDxCommon()->GetCommandList();
 
-	// スキニングの有無でセットする頂点バッファを切り替える
 	if(skinCluster){
-		// スキニングあり：通常の頂点データとウェイト/インデックスデータの2つをセット
-		D3D12_VERTEX_BUFFER_VIEW vbvs[2] = {vertexBufferView, skinCluster->GetInfluenceBufferView()};
-		commandList->IASetVertexBuffers(0,2,vbvs);
+		// Compute Shader で計算されたバッファを取得
+		D3D12_VERTEX_BUFFER_VIEW vbv = skinCluster->GetSkinnedVertexBufferView();
+
+		// ★修正: バッファがまだ準備できていない場合は、スキップ（描画しない）する
+		if(vbv.BufferLocation == 0){
+			return;
+		}
+
+		commandList->IASetVertexBuffers(0,1,&vbv);
 	} else{
-		// スキニングなし：通常の頂点データのみセット
 		commandList->IASetVertexBuffers(0,1,&vertexBufferView);
 	}
 
