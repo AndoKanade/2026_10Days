@@ -1,9 +1,8 @@
 #include "Skeleton.h"
 #include "Logger.h"
 
-// ====================================================================
 // 初期化・構築処理
-// ====================================================================
+
 void Skeleton::Create(const Node& rootNode){
 	joints.clear();
 	jointMap.clear();
@@ -28,6 +27,7 @@ int32_t Skeleton::CreateJoint(const Node& node,const std::optional<int32_t>& par
 	joint.transform = node.transform;
 	joint.parent = parent;
 	joint.index = static_cast<int32_t>(joints.size());
+	joint.bindPoseTransform = joint.transform;
 
 	joints.push_back(joint);
 
@@ -40,72 +40,48 @@ int32_t Skeleton::CreateJoint(const Node& node,const std::optional<int32_t>& par
 	return joint.index;
 }
 
-// ====================================================================
 // 更新処理
-// ====================================================================
+
 void Skeleton::Update(){
-	UpdateJointRecursive(root,MakeIdentity4x4());
+	// 全てのジョイントをループする
+	for(size_t i = 0; i < joints.size(); ++i){
+		Joint& joint = joints[i];
+
+		// ローカル行列の計算
+		Matrix4x4 matScale = MakeScaleMatrix(joint.transform.scale);
+		Matrix4x4 matRotate = MakeRotateQuaternionMatrix(joint.transform.rotate);
+		Matrix4x4 matTranslate = MakeTranslateMatrix(joint.transform.translate);
+
+		joint.localMatrix = Multiply(Multiply(matScale,matRotate),matTranslate);
+
+		// スケルトン空間行列（ワールド行列）の計算
+		if(joint.parent.has_value()){
+			// 親がいる場合: 自分のローカル × 親のスケルトン空間行列
+			joint.skeletonSpaceMatrix = Multiply(joint.localMatrix,joints[*joint.parent].skeletonSpaceMatrix);
+		} else{
+			// 親がいなければローカルがそのまま
+			joint.skeletonSpaceMatrix = joint.localMatrix;
+		}
+	}
 }
 
 void Skeleton::ApplyAnimation(const Animation& animation,float animationTime){
-	for(Joint& joint : joints){
-		if(auto it = animation.nodeAnimations.find(joint.name); it != animation.nodeAnimations.end()){
-			const NodeAnimation& rootNodeAnimation = (*it).second;
+	for(auto& joint : joints){
+		// そのジョイントの現在の時間における補間済みアニメーションデータを取得
+		NodeAnimation nodeAnim = AnimationController::GetInterpolatedNode(animation,joint.name,animationTime);
 
-			if(!rootNodeAnimation.translateKeyframes.empty()){
-				joint.transform.translate = AnimationController::CalculateInterpolatedTranslate(animationTime,rootNodeAnimation.translateKeyframes);
-			}
-			if(!rootNodeAnimation.rotateKeyframes.empty()){
-				joint.transform.rotate = AnimationController::CalculateInterpolatedRotate(animationTime,rootNodeAnimation.rotateKeyframes);
-			}
-			if(!rootNodeAnimation.scaleKeyframes.empty()){
-				joint.transform.scale = AnimationController::CalculateInterpolatedScale(animationTime,rootNodeAnimation.scaleKeyframes);
-			}
+		// 補間計算済みのデータを使う
+		if(!nodeAnim.rotateKeyframes.empty()){
+			joint.transform.rotate = nodeAnim.rotateKeyframes[0].value;
 		}
-	}
-}
-
-void Skeleton::UpdateJointRecursive(int32_t jointIdx,const Matrix4x4& parentMatrix){
-	Joint& joint = joints[jointIdx];
-
-	// ローカル行列を再計算
-	Matrix4x4 matRotate = MakeRotateQuaternionMatrix(joint.transform.rotate);
-	joint.localMatrix = MakeAffineMatrix(joint.transform.scale,matRotate,joint.transform.translate);
-
-	// 親行列 × ローカル行列 ＝ スケルトン空間行列
-	joint.skeletonSpaceMatrix = Multiply(parentMatrix,joint.localMatrix);
-
-	// 子を再帰的に処理
-	for(int32_t childIdx:joint.children){
-		UpdateJointRecursive(childIdx,joint.skeletonSpaceMatrix);
-	}
-}
-
-
-// ====================================================================
-// 描画処理
-// ====================================================================
-void Skeleton::DrawDebug(const Matrix4x4& worldMatrix){
-	for(const Joint& joint : joints){
-		// ジョイントの最終的なワールド行列を計算
-		Matrix4x4 jointWorldMatrix = Multiply(joint.skeletonSpaceMatrix,worldMatrix);
-
-		// 行列からワールド座標（平行移動成分）を抜き出す
-		Vector3 jointPos = {
-			jointWorldMatrix.m[3][0],
-			jointWorldMatrix.m[3][1],
-			jointWorldMatrix.m[3][2]
-		};
-
-		// 親がいる場合は、親の位置から自身の位置へ線を引くための座標計算
-		if(joint.parent){
-			Matrix4x4 parentWorldMatrix = Multiply(joints[*joint.parent].skeletonSpaceMatrix,worldMatrix);
-
-			Vector3 parentPos = {
-				parentWorldMatrix.m[3][0],
-				parentWorldMatrix.m[3][1],
-				parentWorldMatrix.m[3][2]
-			};
+		if(!nodeAnim.translateKeyframes.empty()){
+			joint.transform.translate = nodeAnim.translateKeyframes[0].value;
 		}
+		if(!nodeAnim.scaleKeyframes.empty()){
+			joint.transform.scale = nodeAnim.scaleKeyframes[0].value;
+		}
+
+		// ローカル行列の再計算
+		joint.localMatrix = MakeAffineMatrixQuaternion(joint.transform.scale,joint.transform.rotate,joint.transform.translate);
 	}
 }

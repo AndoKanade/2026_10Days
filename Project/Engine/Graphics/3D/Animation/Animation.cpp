@@ -1,14 +1,13 @@
 #include "Animation.h"
 #include "MyMath.h"
+#include <filesystem>
 #include <cmath>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <cassert>
 
-// ====================================================================
 // アニメーション制御 (AnimationController)
-// ====================================================================
 
 void AnimationController::Initialize(){
 	isPlaying_ = false;
@@ -49,9 +48,14 @@ void AnimationController::UpdateKeyframes(const Animation& animation,float delta
 	}
 }
 
-// ====================================================================
+NodeAnimation AnimationController::GetInterpolatedNode(const Animation& animation,const std::string& nodeName,float time){
+	if(animation.nodeAnimations.find(nodeName) != animation.nodeAnimations.end()){
+		return CalculateInterpolatedNode(animation.nodeAnimations.at(nodeName),time);
+	}
+	return {};
+}
+
 // 補間計算関数群
-// ====================================================================
 
 Vector3 AnimationController::CalculateInterpolatedTranslate(float time,const std::vector<KeyframeVector3>& keyframes){
 	if(keyframes.empty()) return {0.0f, 0.0f, 0.0f};
@@ -97,7 +101,13 @@ Quaternion AnimationController::CalculateInterpolatedRotate(float time,const std
 		const auto& key1 = keyframes[i + 1];
 
 		if(time >= key0.time && time <= key1.time){
-			float t = (time - key0.time) / (key1.time - key0.time);
+			// 同じ時間のキーフレームが存在した場合のゼロ除算を防ぐ
+			float timeDiff = key1.time - key0.time;
+			if(timeDiff <= 0.0f){
+				return key0.value;
+			}
+			float t = (time - key0.time) / timeDiff;
+
 			float dot = Dot(key0.value,key1.value);
 			Quaternion targetQuat = key1.value;
 
@@ -107,7 +117,8 @@ Quaternion AnimationController::CalculateInterpolatedRotate(float time,const std
 			}
 
 			if(dot >= 1.0f - 0.0005f){
-				return (1.0f - t) * key0.value + t * targetQuat;
+				Quaternion result = (1.0f - t) * key0.value + t * targetQuat;
+				return Normalize(result);
 			}
 
 			float theta = std::acos(dot);
@@ -115,7 +126,8 @@ Quaternion AnimationController::CalculateInterpolatedRotate(float time,const std
 			float scale0 = std::sin((1.0f - t) * theta) / sinTheta;
 			float scale1 = std::sin(t * theta) / sinTheta;
 
-			return scale0 * key0.value + scale1 * targetQuat;
+			Quaternion result = scale0 * key0.value + scale1 * targetQuat;
+			return Normalize(result);
 		}
 	}
 	return {0.0f, 0.0f, 0.0f, 1.0f};
@@ -126,122 +138,84 @@ NodeAnimation AnimationController::CalculateInterpolatedNode(const NodeAnimation
 
 	// Scale の補間
 	if(!nodeAnim.scaleKeyframes.empty()){
-		if(nodeAnim.scaleKeyframes.size() == 1 || time <= nodeAnim.scaleKeyframes.front().time){
-			result.scaleKeyframes.push_back(nodeAnim.scaleKeyframes.front());
-		} else if(time >= nodeAnim.scaleKeyframes.back().time){
-			result.scaleKeyframes.push_back(nodeAnim.scaleKeyframes.back());
-		} else{
-			for(size_t i = 0; i < nodeAnim.scaleKeyframes.size() - 1; ++i){
-				if(time >= nodeAnim.scaleKeyframes[i].time && time <= nodeAnim.scaleKeyframes[i + 1].time){
-					float t = (time - nodeAnim.scaleKeyframes[i].time) / (nodeAnim.scaleKeyframes[i + 1].time - nodeAnim.scaleKeyframes[i].time);
-					Vector3 s = Lerp(nodeAnim.scaleKeyframes[i].value,nodeAnim.scaleKeyframes[i + 1].value,t);
-					result.scaleKeyframes.push_back(KeyframeVector3{time, s});
-					break;
-				}
-			}
-		}
+		Vector3 s = CalculateInterpolatedScale(time,nodeAnim.scaleKeyframes);
+		result.scaleKeyframes.push_back(KeyframeVector3{time, s});
 	}
 
 	// Translate の補間
 	if(!nodeAnim.translateKeyframes.empty()){
-		if(nodeAnim.translateKeyframes.size() == 1 || time <= nodeAnim.translateKeyframes.front().time){
-			result.translateKeyframes.push_back(nodeAnim.translateKeyframes.front());
-		} else if(time >= nodeAnim.translateKeyframes.back().time){
-			result.translateKeyframes.push_back(nodeAnim.translateKeyframes.back());
-		} else{
-			for(size_t i = 0; i < nodeAnim.translateKeyframes.size() - 1; ++i){
-				if(time >= nodeAnim.translateKeyframes[i].time && time <= nodeAnim.translateKeyframes[i + 1].time){
-					float t = (time - nodeAnim.translateKeyframes[i].time) / (nodeAnim.translateKeyframes[i + 1].time - nodeAnim.translateKeyframes[i].time);
-					Vector3 tr = Lerp(nodeAnim.translateKeyframes[i].value,nodeAnim.translateKeyframes[i + 1].value,t);
-					result.translateKeyframes.push_back(KeyframeVector3{time, tr});
-					break;
-				}
-			}
-		}
+		Vector3 tr = CalculateInterpolatedTranslate(time,nodeAnim.translateKeyframes);
+		result.translateKeyframes.push_back(KeyframeVector3{time, tr});
 	}
 
 	// Rotate の補間
 	if(!nodeAnim.rotateKeyframes.empty()){
-		if(nodeAnim.rotateKeyframes.size() == 1 || time <= nodeAnim.rotateKeyframes.front().time){
-			result.rotateKeyframes.push_back(nodeAnim.rotateKeyframes.front());
-		} else if(time >= nodeAnim.rotateKeyframes.back().time){
-			result.rotateKeyframes.push_back(nodeAnim.rotateKeyframes.back());
-		} else{
-			for(size_t i = 0; i < nodeAnim.rotateKeyframes.size() - 1; ++i){
-				if(time >= nodeAnim.rotateKeyframes[i].time && time <= nodeAnim.rotateKeyframes[i + 1].time){
-					float t = (time - nodeAnim.rotateKeyframes[i].time) / (nodeAnim.rotateKeyframes[i + 1].time - nodeAnim.rotateKeyframes[i].time);
-					float dot = Dot(nodeAnim.rotateKeyframes[i].value,nodeAnim.rotateKeyframes[i + 1].value);
-					Quaternion targetQuat = nodeAnim.rotateKeyframes[i + 1].value;
-
-					if(dot < 0.0f){
-						targetQuat = -nodeAnim.rotateKeyframes[i + 1].value;
-						dot = -dot;
-					}
-
-					Quaternion r;
-					if(dot >= 1.0f - 0.0005f){
-						r = (1.0f - t) * nodeAnim.rotateKeyframes[i].value + t * targetQuat;
-					} else{
-						float theta = std::acos(dot);
-						float sinTheta = std::sin(theta);
-						float scale0 = std::sin((1.0f - t) * theta) / sinTheta;
-						float scale1 = std::sin(t * theta) / sinTheta;
-						r = scale0 * nodeAnim.rotateKeyframes[i].value + scale1 * targetQuat;
-					}
-
-					result.rotateKeyframes.push_back(KeyframeQuaternion{time, r});
-					break;
-				}
-			}
-		}
+		Quaternion r = CalculateInterpolatedRotate(time,nodeAnim.rotateKeyframes);
+		result.rotateKeyframes.push_back(KeyframeQuaternion{time, r});
 	}
 
 	return result;
 }
 
-// ====================================================================
 // ファイル読み込み処理 (Assimp)
-// ====================================================================
 
 Animation LoadAnimationFile(const std::string& directoryPath,const std::string& filename){
 	Animation animation;
 	Assimp::Importer importer;
-	std::string filePath = directoryPath + "/" + filename;
-	const aiScene* scene = importer.ReadFile(filePath.c_str(),0);
+	std::filesystem::path path(directoryPath);
+	path /= filename;
 
-	assert(scene->mNumAnimations != 0);
+	const aiScene* scene = importer.ReadFile(path.string().c_str(),0);
+	assert(scene != nullptr && scene->HasAnimations());
 
 	aiAnimation* animationAssimp = scene->mAnimations[0];
-	animation.duration = float(animationAssimp->mDuration / animationAssimp->mTicksPerSecond);
 
-	for(uint32_t channelIndex = 0; channelIndex < animationAssimp->mNumChannels; ++channelIndex){
-		aiNodeAnim* nodeAnimationAssimp = animationAssimp->mChannels[channelIndex];
-		NodeAnimation& nodeAnimation = animation.nodeAnimations[nodeAnimationAssimp->mNodeName.C_Str()];
+	// ticksPerSecond が 0 の場合のゼロ除算（NaN発生）を完全に防ぐ
+	double ticksPerSecond = animationAssimp->mTicksPerSecond != 0.0?animationAssimp->mTicksPerSecond:25.0;
+	animation.duration = static_cast<float>(animationAssimp->mDuration / ticksPerSecond);
 
-		for(uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumPositionKeys; ++keyIndex){
-			aiVectorKey& keyAssimp = nodeAnimationAssimp->mPositionKeys[keyIndex];
+	for(uint32_t i = 0; i < animationAssimp->mNumChannels; ++i){
+		aiNodeAnim* nodeAnimAssimp = animationAssimp->mChannels[i];
+		NodeAnimation& nodeAnimation = animation.nodeAnimations[nodeAnimAssimp->mNodeName.C_Str()];
+
+		// Translate
+		for(uint32_t j = 0; j < nodeAnimAssimp->mNumPositionKeys; ++j){
+			aiVectorKey& key = nodeAnimAssimp->mPositionKeys[j];
 			KeyframeVector3 keyframe;
-			keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
-			keyframe.value = {-keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+			keyframe.time = static_cast<float>(key.mTime / ticksPerSecond);
+
+			// MyMath の AssimpToMatrix (X軸反転) に合わせるため、Xをマイナスにする
+			Vector3 value = {-key.mValue.x, key.mValue.y, key.mValue.z};
+
+			keyframe.value = value;
 			nodeAnimation.translateKeyframes.push_back(keyframe);
 		}
 
-		for(uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumRotationKeys; ++keyIndex){
-			aiQuatKey& keyAssimp = nodeAnimationAssimp->mRotationKeys[keyIndex];
+		// Rotate
+		for(uint32_t j = 0; j < nodeAnimAssimp->mNumRotationKeys; ++j){
+			aiQuatKey& key = nodeAnimAssimp->mRotationKeys[j];
 			KeyframeQuaternion keyframe;
-			keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
-			keyframe.value = {keyAssimp.mValue.x, -keyAssimp.mValue.y, -keyAssimp.mValue.z, keyAssimp.mValue.w};
+			keyframe.time = static_cast<float>(key.mTime / ticksPerSecond);
+
+			// 回転(クォータニオン)もX軸反転に対応させる（YとZをマイナスにする）
+			Quaternion rotate = {key.mValue.x, -key.mValue.y, -key.mValue.z, key.mValue.w};
+
+			keyframe.value = rotate;
 			nodeAnimation.rotateKeyframes.push_back(keyframe);
 		}
 
-		for(uint32_t keyIndex = 0; keyIndex < nodeAnimationAssimp->mNumScalingKeys; ++keyIndex){
-			aiVectorKey& keyAssimp = nodeAnimationAssimp->mScalingKeys[keyIndex];
+		// Scale
+		for(uint32_t j = 0; j < nodeAnimAssimp->mNumScalingKeys; ++j){
+			aiVectorKey& key = nodeAnimAssimp->mScalingKeys[j];
 			KeyframeVector3 keyframe;
-			keyframe.time = float(keyAssimp.mTime / animationAssimp->mTicksPerSecond);
-			keyframe.value = {keyAssimp.mValue.x, keyAssimp.mValue.y, keyAssimp.mValue.z};
+			keyframe.time = static_cast<float>(key.mTime / ticksPerSecond);
+
+			// スケールは反転させなくてOK
+			Vector3 value = {key.mValue.x, key.mValue.y, key.mValue.z};
+
+			keyframe.value = value;
 			nodeAnimation.scaleKeyframes.push_back(keyframe);
 		}
 	}
-
 	return animation;
 }

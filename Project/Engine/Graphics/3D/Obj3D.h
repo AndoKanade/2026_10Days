@@ -51,6 +51,7 @@ public:
 	const Vector3& GetTranslate() const{ return transform.translate; }
 	const Matrix4x4& GetWorldMatrix() const{ return transformationMatrixData->World; }
 	Model::Material* GetMaterial() const{ return materialData; }
+	Skeleton& GetSkeleton(){ return skeleton_; }
 
 private:
 	void CreateTransformationMatrixData();

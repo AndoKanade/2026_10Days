@@ -7,7 +7,7 @@
 #include <optional>
 #include <map>
 
-// 階層構造を持つノード
+// ノード構造体
 struct Node{
 	QuaternionTransform transform;
 	Matrix4x4 localMatrix;
@@ -15,9 +15,10 @@ struct Node{
 	std::vector<Node> children;
 };
 
-// ジョイント
+// ジョイント構造体
 struct Joint{
 	QuaternionTransform transform;
+	QuaternionTransform bindPoseTransform;
 	Matrix4x4 localMatrix;
 	Matrix4x4 skeletonSpaceMatrix;
 	Matrix4x4 inverseBindPoseMatrix;
@@ -30,18 +31,13 @@ struct Joint{
 // スケルトンクラス
 class Skeleton{
 public:
-	// ノード階層からスケルトンを構築する
+	// 初期化・更新
 	void Create(const Node& rootNode);
-
-	// スケルトンの姿勢を更新する
 	void Update();
-
 	void UpdateJointRecursive(int32_t jointIdx,const Matrix4x4& parentMatrix);
 
-	// スケルトンのデバッグ描画を行う
+	// 描画・アニメーション適用
 	void DrawDebug(const Matrix4x4& worldMatrix);
-
-	// アニメーションを適用する
 	void ApplyAnimation(const Animation& animation,float animationTime);
 
 	// メンバ変数
@@ -50,6 +46,6 @@ public:
 	std::vector<Joint> joints;
 
 private:
-	// ジョイントを再帰的に作成する
+	// 内部処理
 	int32_t CreateJoint(const Node& node,const std::optional<int32_t>& parent,std::vector<Joint>& joints);
 };
