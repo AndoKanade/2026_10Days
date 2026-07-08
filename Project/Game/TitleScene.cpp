@@ -12,6 +12,7 @@
 #include "DXCommon.h"     
 #include "CameraManager.h" 
 #include "Model.h"
+#include "Application.h"
 
 // ImGui (マクロ定義がある場合のみ)
 #ifdef USE_IMGUI
@@ -88,6 +89,30 @@ void TitleScene::Update(){
 	ImGui::ColorEdit4("Color & Alpha",&spriteColor_.x); // 色と透明度の調整
 	ImGui::End();
 #endif
+
+	if(input_->TriggerKey(DIK_NUMPAD1) || input_->TriggerKey(DIK_1)){
+		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::PostProcess); // Default
+	} else if(input_->TriggerKey(DIK_NUMPAD2) || input_->TriggerKey(DIK_2)){
+		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::BoxFilter);
+	} else if(input_->TriggerKey(DIK_NUMPAD3) || input_->TriggerKey(DIK_3)){
+		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::Grayscale);
+	} else if(input_->TriggerKey(DIK_NUMPAD4) || input_->TriggerKey(DIK_4)){
+		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::Vignette);
+	} else if(input_->TriggerKey(DIK_NUMPAD5) || input_->TriggerKey(DIK_5)){
+		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::GaussianBlur);
+	} else if(input_->TriggerKey(DIK_NUMPAD6) || input_->TriggerKey(DIK_6)){
+		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::LuminanceOutline);
+	} else if(input_->TriggerKey(DIK_NUMPAD7) || input_->TriggerKey(DIK_7)){
+		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::DepthOutline);
+	} else if(input_->TriggerKey(DIK_NUMPAD8) || input_->TriggerKey(DIK_8)){
+		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::RadialBlur);
+	} else if(input_->TriggerKey(DIK_NUMPAD9) || input_->TriggerKey(DIK_9)){
+		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::Dissolve);
+		// アニメーションのトリガーを引く
+		Application::GetInstance()->StartDissolveAnimation();
+	} else if(input_->TriggerKey(DIK_NUMPAD0) || input_->TriggerKey(DIK_0)){
+		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::Random);
+	}
 
 	// 2. オブジェクトの更新
 	if(titleObject_){

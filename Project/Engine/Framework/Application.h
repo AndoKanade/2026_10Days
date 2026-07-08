@@ -58,6 +58,8 @@ public:
 	/// ポストプロセスのデバッグUIを表示します。
 	/// </summary>
 	void ShowPostProcessUI();
+	void SetCurrentPPType(PostProcess::Type type){ currentPPType_ = type; }
+	void StartDissolveAnimation(){ isDissolving_ = true; dissolveTimer_ = 0.0f; }
 
 private:
 	// --- 静的メンバ変数 ---
