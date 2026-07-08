@@ -21,7 +21,8 @@ public:
         DepthOutline,
 		RadialBlur,
 		Dissolve,
-        Random
+        Random,
+        Glitch
     };
 
     // 定数バッファ構造体
