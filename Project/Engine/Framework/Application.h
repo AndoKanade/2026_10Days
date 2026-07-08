@@ -58,6 +58,9 @@ public:
 	/// ポストプロセスのデバッグUIを表示します。
 	/// </summary>
 	void ShowPostProcessUI();
+	void SetCurrentPPType(PostProcess::Type type){ currentPPType_ = type; }
+	void StartDissolveAnimation(){ isDissolving_ = true; dissolveTimer_ = 0.0f; }
+	void TriggerGlitch();
 
 private:
 	// --- 静的メンバ変数 ---
@@ -73,4 +76,8 @@ private:
 	bool isDissolving_ = false;           // アニメーション中かどうかのフラグ
 	float dissolveTimer_ = 0.0f;          // アニメーションの経過時間
 	const float kDissolveDuration = 2.0f; // アニメーションの合計時間（秒）
+
+	bool isGlitchActive_ = false;         // グリッチ演出中かどうかのフラグ
+	float glitchTimer_ = 0.0f;            // グリッチの残り時間タイマー
+	const float kGlitchDuration = 0.15f;
 };
