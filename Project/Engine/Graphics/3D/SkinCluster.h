@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Model.h"
+#include "Obj3DCommon.h"
 #include "Skeleton.h"
 #include "DXCommon.h"
 #include <d3d12.h>
@@ -27,14 +28,28 @@ public:
 
 	// メンバ関数
 	void Initialize(DXCommon* dxCommon,const Model::ModelData& modelData,const Skeleton& skeleton);
-	void Update(const Skeleton& skeleton);
+	void Update(const Skeleton& skeleton,ID3D12GraphicsCommandList* commandList,
+		Obj3dCommon* obj3dCommon,D3D12_GPU_VIRTUAL_ADDRESS skinningInfoAddress);
 
 	// ゲッター
 	D3D12_GPU_VIRTUAL_ADDRESS GetPaletteAddress() const{ return paletteResource->GetGPUVirtualAddress(); }
 	ID3D12Resource* GetPaletteResource() const{ return paletteResource.Get(); }
 	const D3D12_VERTEX_BUFFER_VIEW& GetInfluenceBufferView() const{ return influenceBufferView; }
+	const D3D12_VERTEX_BUFFER_VIEW& GetSkinnedVertexBufferView() const{ return skinnedVertexBufferView; }
+	ID3D12Resource* GetSkinnedVertexBuffer() const{ return skinnedVertexBuffer.Get(); }
+	D3D12_GPU_VIRTUAL_ADDRESS GetSkinningInfoAddress() const{ return skinningInfoResource->GetGPUVirtualAddress(); }
 
 private:
+	Microsoft::WRL::ComPtr<ID3D12Resource> skinnedVertexBuffer;
+	D3D12_VERTEX_BUFFER_VIEW skinnedVertexBufferView{};
+
+	D3D12_GPU_DESCRIPTOR_HANDLE paletteSrvHandle{};
+	D3D12_GPU_DESCRIPTOR_HANDLE outputUavHandle{};
+	Microsoft::WRL::ComPtr<ID3D12Resource> skinningInfoResource;
+	Microsoft::WRL::ComPtr<ID3D12Resource> inputVerticesResource;
+
+	uint32_t numVertices_ = 0;
+
 	// バッファリソース
 	Microsoft::WRL::ComPtr<ID3D12Resource> paletteResource;
 	Microsoft::WRL::ComPtr<ID3D12Resource> influenceResource;

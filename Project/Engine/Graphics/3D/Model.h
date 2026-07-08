@@ -21,7 +21,7 @@ public:
 		Vector4 position;
 		Vector2 texcoord;
 		Vector3 normal;
-		Vector4 weight;   // 追加
+		Vector4 weight;
 		int32_t index[4];
 	};
 

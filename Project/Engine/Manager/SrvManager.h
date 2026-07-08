@@ -45,6 +45,9 @@ public: // --- デスクリプタ管理 ---
 	// 構造化バッファ用SRV生成 (StructuredBuffer)
 	void CreateSRVforStructuredBuffer(uint32_t srvIndex,ID3D12Resource* pResource,UINT numElements,UINT structureByteStride);
 
+	// 構造化バッファ用UAV生成
+	void CreateUAVForStructuredBuffer(uint32_t srvIndex,ID3D12Resource* pResource,UINT numElements,UINT structureByteStride);
+
 public: // --- ハンドル取得 ---
 
 	ID3D12DescriptorHeap* GetDescriptorHeap() const{ return descriptorHeap.Get(); }
