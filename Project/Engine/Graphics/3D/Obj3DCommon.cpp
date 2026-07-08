@@ -313,12 +313,12 @@ void Obj3dCommon::CreateGraphicsPipelineState(){
 	skinningInputElementDescs[3].SemanticName = "WEIGHT";
 	skinningInputElementDescs[3].SemanticIndex = 0;
 	skinningInputElementDescs[3].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-	skinningInputElementDescs[3].InputSlot = 1;
+	skinningInputElementDescs[3].InputSlot = 0;
 	skinningInputElementDescs[3].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
 	skinningInputElementDescs[4].SemanticName = "INDEX";
 	skinningInputElementDescs[4].SemanticIndex = 0;
 	skinningInputElementDescs[4].Format = DXGI_FORMAT_R32G32B32A32_SINT;
-	skinningInputElementDescs[4].InputSlot = 1;
+	skinningInputElementDescs[4].InputSlot = 0;
 	skinningInputElementDescs[4].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
 
 	D3D12_INPUT_LAYOUT_DESC skinningInputLayoutDesc{};
