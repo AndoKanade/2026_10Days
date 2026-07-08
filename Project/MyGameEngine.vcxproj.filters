@@ -401,6 +401,9 @@
     <FxCompile Include="Engine\Graphics\Shaders\Obj3D\SkinningObject3d.VS.hlsl">
       <Filter>Resources\shader\Obj3D</Filter>
     </FxCompile>
+    <FxCompile Include="Engine\Graphics\Shaders\PostProcess\Glitch.PS.hlsl">
+      <Filter>Resources\shader\PostEffect</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Engine\Graphics\Shaders\Sprite\Sprite.hlsli">

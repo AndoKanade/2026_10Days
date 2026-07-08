@@ -112,6 +112,14 @@ void Application::Update(){
 		postProcess_->SetDissolveThreshold(threshold);
 	}
 
+	if(isGlitchActive_){
+		glitchTimer_ -= 1.0f / 60.0f;
+		if(glitchTimer_ <= 0.0f){
+			isGlitchActive_ = false;
+			currentPPType_ = PostProcess::Type::PostProcess; // 演出時間が終わったら標準に戻す
+		}
+	}
+
 	// 3. Random用時間更新処理
 	static float time = 0.0f;
 	time += 1.0f / 60.0f;
@@ -192,8 +200,7 @@ void Application::ShowPostProcessUI(){
 #ifdef _DEBUG
 	ImGui::Begin("PostProcess Settings");
 
-	// フィルターの切り替え
-	const char* typeNames[] = {"Default", "BoxFilter", "Grayscale", "Vignette", "GaussianBlur", "LuminanceOutline", "DepthOutline", "RadialBlur", "Dissolve", "Random"};
+	const char* typeNames[] = {"Default", "BoxFilter", "Grayscale", "Vignette", "GaussianBlur", "LuminanceOutline", "DepthOutline", "RadialBlur", "Dissolve", "Random", "Glitch"};
 	int currentIdx = static_cast<int>(currentPPType_);
 
 	if(ImGui::Combo("Filter Type",&currentIdx,typeNames,IM_ARRAYSIZE(typeNames))){
@@ -202,7 +209,6 @@ void Application::ShowPostProcessUI(){
 
 	ImGui::Separator();
 
-	// フィルタごとのパラメータ調整
 	if(currentPPType_ == PostProcess::Type::Vignette){
 		ImGui::Text("Vignette Settings");
 		static float intensity = 0.5f;
@@ -236,10 +242,8 @@ void Application::ShowPostProcessUI(){
 		}
 	} else if(currentPPType_ == PostProcess::Type::Dissolve){
 		ImGui::Text("Dissolve Settings");
-
 		static float threshold = 0.0f;
 
-		// アニメーション中なら強制的に変数を同期
 		if(isDissolving_){
 			threshold = dissolveTimer_ / kDissolveDuration;
 		}
@@ -248,7 +252,6 @@ void Application::ShowPostProcessUI(){
 			postProcess_->SetDissolveThreshold(threshold);
 		}
 
-		// --- アニメーション制御ボタン ---
 		if(ImGui::Button("Start Animation")){
 			isDissolving_ = true;
 			dissolveTimer_ = 0.0f;
@@ -263,13 +266,11 @@ void Application::ShowPostProcessUI(){
 
 		ImGui::Separator();
 
-		// エッジの太さ
 		static float edgeWidth = 0.03f;
 		if(ImGui::SliderFloat("Edge Width",&edgeWidth,0.0f,0.2f)){
 			postProcess_->SetDissolveEdgeWidth(edgeWidth);
 		}
 
-		// エッジの色
 		static float edgeColor[3] = {1.0f, 0.4f, 0.3f};
 		if(ImGui::ColorEdit3("Edge Color",edgeColor)){
 			postProcess_->SetDissolveEdgeColor({edgeColor[0], edgeColor[1], edgeColor[2]});
@@ -286,7 +287,8 @@ void Application::ShowPostProcessUI(){
 		}
 	} else if(currentPPType_ == PostProcess::Type::Random){
 		ImGui::Text("Random Noise Settings");
-
+	} else if(currentPPType_ == PostProcess::Type::Glitch){
+		ImGui::Text("Glitch Settings");
 		static float intensity = 0.5f;
 		if(ImGui::DragFloat("Intensity",&intensity,0.01f,0.0f,1.0f)){
 			postProcess_->SetRandomIntensity(intensity);
@@ -294,4 +296,10 @@ void Application::ShowPostProcessUI(){
 	}
 	ImGui::End();
 #endif
+}
+
+void Application::TriggerGlitch(){
+	currentPPType_ = PostProcess::Type::Glitch; // フィルターをグリッチに変更
+	isGlitchActive_ = true;                     // カウントダウン開始
+	glitchTimer_ = kGlitchDuration;             // タイマーを 0.15秒 に設定
 }

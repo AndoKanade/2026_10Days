@@ -112,6 +112,9 @@ void TitleScene::Update(){
 		Application::GetInstance()->StartDissolveAnimation();
 	} else if(input_->TriggerKey(DIK_NUMPAD0) || input_->TriggerKey(DIK_0)){
 		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::Random);
+	}else if(input_->TriggerKey(DIK_RETURN)){
+		// 弱点を突いた瞬間をシミュレートしてグリッチを発動
+		Application::GetInstance()->TriggerGlitch();
 	}
 
 	// 2. オブジェクトの更新
