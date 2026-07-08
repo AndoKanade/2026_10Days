@@ -121,9 +121,12 @@ void SkinCluster::Update(const Skeleton& skeleton,ID3D12GraphicsCommandList* com
     uint32_t groupCountX = (numVertices_ + 1023) / 1024;
     commandList->Dispatch(groupCountX,1,1);
     // バリア
-// 4. UAVから頂点バッファへのバリア (書き込み完了待ち)
+    
     D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-    barrier.UAV.pResource = skinnedVertexBuffer.Get(); // ★ここが重要
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = skinnedVertexBuffer.Get();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     commandList->ResourceBarrier(1,&barrier);
 }
