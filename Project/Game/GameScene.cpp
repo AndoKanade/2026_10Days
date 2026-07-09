@@ -40,7 +40,7 @@ namespace{
 GameScene::GameScene() = default;
 GameScene::~GameScene() = default;
 
-// 初期化
+// --- 初期化 ---
 void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon* spriteCommon){
 	object3dCommon_ = object3dCommon;
 	input_ = input;
@@ -152,7 +152,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 
 void GameScene::Finalize(){}
 
-// 更新処理
+// --- 更新処理 ---
 void GameScene::Update(){
 	// オブジェクトの更新
 	if(sphereObj_) sphereObj_->Update();
@@ -160,14 +160,6 @@ void GameScene::Update(){
 	if(simpleSkinObj_) simpleSkinObj_->Update();
 	if(skybox_) skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
 	if(planeObj_) planeObj_->Update();
-
-	// 入力イベント
-	if(input_->TriggerKey(DIK_1)) EmitShockwave({0.0f, 0.0f, 0.0f});
-	if(input_->TriggerKey(DIK_2)) EmitSpark({0.0f, 0.0f, 0.0f});
-	if(input_->TriggerKey(DIK_3)) EmitSmoke({0.0f, 0.0f, 0.0f});
-	if(input_->TriggerKey(DIK_4)) EmitCharge({0.0f, 0.0f, 0.0f});
-	if(input_->TriggerKey(DIK_5)) EmitAura({0.0f, 0.0f, 0.0f});
-	if(input_->TriggerKey(DIK_6)) EmitWarp();
 
 	// キャラクター更新
 	if(humanObj_){
@@ -194,7 +186,7 @@ void GameScene::Update(){
 	// --- デバッグUIの表示 ---
 #ifdef USE_IMGUI
 	if(Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera()){
-		// --- メインデバッグウィンドウ ---
+		// メインデバッグウィンドウ
 		ImGui::Begin("GameScene Debug");
 
 		// カメラ設定
@@ -223,7 +215,6 @@ void GameScene::Update(){
 			if(SpotLight* sData = object3dCommon_->GetSpotLightData()){
 				ImGui::Text("Spot Light");
 				ImGui::ColorEdit4("Spot Color",&sData->color.x);
-				// ... (SpotLightの各パラメータ)
 			}
 		}
 
@@ -244,7 +235,6 @@ void GameScene::Update(){
 				}
 
 				if(ImGui::Checkbox("Manual Control",&isManualControl)){
-					// 手動操作へ切り替わった瞬間に反映
 					if(isManualControl) skeleton.Update();
 				}
 			}
@@ -253,18 +243,24 @@ void GameScene::Update(){
 		ModelManager::GetInstance()->UpdateLightGui();
 		ImGui::End();
 
-		// --- パーティクル制御ウィンドウ ---
+		// パーティクル制御ウィンドウ
 		ImGui::Begin("Particle Control");
-		const char* particleButtons[] = {
-			"Shockwave", "Spark", "Ring", "Circle", "Cylinder", "Smoke", "Charge", "Aura", "Warp"
-		};
 
-		// 各パーティクル発行ボタン
-		if(ImGui::Button("Emit Shockwave")) EmitShockwave({0,0,0}); ImGui::SameLine();
-		if(ImGui::Button("Emit Spark")) EmitSpark({0,0,0});
-		if(ImGui::Button("Emit Ring")){ if(ringEmitter_) ringEmitter_->Emit(); } ImGui::SameLine();
-		if(ImGui::Button("Emit Circle")){ if(circleEmitter_) circleEmitter_->Emit(); }
-		// ... (他のボタンも同様)
+		auto* particleManager = ParticleManager::GetInstance();
+
+		if(ImGui::Button("Emit Shockwave")) particleManager->EmitShockwave({0.0f, 0.0f, 0.0f});
+		ImGui::SameLine();
+		if(ImGui::Button("Emit Spark")) particleManager->EmitSpark({0.0f, 0.0f, 0.0f});
+
+		ImGui::SameLine();
+		if(ImGui::Button("Emit Smoke")) particleManager->EmitSmoke({0.0f, 0.0f, 0.0f});
+
+		if(ImGui::Button("Emit Charge")) particleManager->EmitCharge({0.0f, 0.0f, 0.0f});
+		ImGui::SameLine();
+		if(ImGui::Button("Emit Aura")) particleManager->EmitAura({0.0f, 0.0f, 0.0f});
+
+		if(ImGui::Button("Emit Warp")) particleManager->EmitWarp();
+
 		ImGui::End();
 
 		Application::GetInstance()->ShowPostProcessUI();
@@ -272,8 +268,7 @@ void GameScene::Update(){
 #endif
 }
 
-
-// 描画処理
+// --- 描画処理 ---
 void GameScene::Draw(){
 	object3dCommon_->Draw();
 	if(humanObj_) humanObj_->Draw();
@@ -282,64 +277,4 @@ void GameScene::Draw(){
 		Matrix4x4 viewProj = Multiply(cam->GetViewMatrix(),cam->GetProjectionMatrix());
 		ParticleManager::GetInstance()->Draw(viewProj);
 	}
-}
-
-// パーティクル発生処理
-void GameScene::EmitShockwave(const Vector3& pos){
-	ParticleManager::GetInstance()->Emit("Shockwave",{{0.1f, 0.1f, 0.1f}, {0, 0, 0}, pos},1,{1,1,1,1},{0,0,0},0.3f);
-}
-
-void GameScene::EmitSpark(const Vector3& position){
-	Transform transform;
-	transform.translate = position;
-	transform.scale = {0.05f, 0.05f, 0.05f};
-	transform.rotate = {0.0f, 0.0f, 0.0f};
-
-	ParticleManager::GetInstance()->Emit(
-		"Spark",transform,20,{1.0f, 0.5f, 0.0f, 1.0f},{0.0f, 0.0f, 0.0f},0.5f
-	);
-}
-
-void GameScene::EmitSmoke(const Vector3& position){
-	Transform transform;
-	transform.translate = position;
-	transform.scale = {0.2f, 0.2f, 0.2f};
-	transform.rotate = {0.0f, 0.0f, 0.0f};
-
-	ParticleManager::GetInstance()->Emit(
-		"Smoke",transform,5,{0.5f, 0.5f, 0.5f, 0.8f},{0.0f, 1.0f, 0.0f},1.5f
-	);
-}
-
-void GameScene::EmitCharge(const Vector3& position){
-	Transform transform;
-	transform.translate = position;
-	transform.scale = {0.1f, 0.5f, 0.1f};
-	transform.rotate = {0.0f, 0.0f, 0.0f};
-
-	ParticleManager::GetInstance()->Emit(
-		"Charge",transform,30,{0.2f, 0.8f, 1.0f, 1.0f},{0.0f, 0.0f, 0.0f},0.6f
-	);
-}
-
-void GameScene::EmitAura(const Vector3& position){
-	Transform transform;
-	transform.translate = position;
-	transform.scale = {0.3f, 0.3f, 0.3f};
-	transform.rotate = {0.0f, 0.0f, 0.0f};
-
-	ParticleManager::GetInstance()->Emit(
-		"Aura",transform,1,{0.8f, 1.0f, 0.2f, 0.6f},{0.0f, 2.0f, 0.0f},1.0f
-	);
-}
-
-void GameScene::EmitWarp(){
-	Transform transform;
-	transform.translate = {0.0f, 0.0f, 0.0f};
-	transform.scale = {1.0f, 1.0f, 1.0f};
-	transform.rotate = {0.0f, 0.0f, 0.0f};
-
-	ParticleManager::GetInstance()->Emit(
-		"Warp",transform,100,{0.5f, 0.8f, 1.0f, 0.8f},{0.0f, 0.0f, 0.0f},1.0f
-	);
 }

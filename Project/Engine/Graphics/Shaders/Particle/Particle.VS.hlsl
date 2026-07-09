@@ -1,31 +1,30 @@
 #include "Particle.hlsli"
 
+// --- データ構造体 ---
+
 struct Particle
 {
     float3 translate;
-    float padding1; // 合計16バイト
-    
+    float padding1;
+
     float3 scale;
-    float lifeTime; // 合計16バイト
-    
+    float lifeTime;
+
     float3 velocity;
-    float currentTime; // 合計16バイト
-    
-    float4 color; // 合計16バイト
-    
+    float currentTime;
+
+    float4 color;
+
     float2 uvOffset;
-    float2 padding2; // 合計16バイト 
+    uint particleType;
+    float padding2;
 };
-// カメラ情報など（ビュー変換用）
+
 struct PerView
 {
     float32_t4x4 viewProjection;
     float32_t4x4 billboardMatrix;
 };
-
-// 修正：StructuredBufferの中身をスライドの設計に合わせる
-StructuredBuffer<Particle> gParticles : register(t0);
-ConstantBuffer<PerView> gPerView : register(b0);
 
 struct VertexShaderInput
 {
@@ -34,30 +33,34 @@ struct VertexShaderInput
     float32_t3 normal : NORMAL0;
 };
 
+// --- リソースバインド ---
+
+StructuredBuffer<Particle> gParticles : register(t0);
+ConstantBuffer<PerView> gPerView : register(b0);
+
+// --- Vertex Shader メイン ---
+
 VertexShaderOutput main(VertexShaderInput input, uint32_t instanceId : SV_InstanceID)
 {
     VertexShaderOutput output;
 
-    // インスタンスIDからパーティクルデータを取得
+    // 1. パーティクルデータの取得
     Particle particle = gParticles[instanceId];
 
-    // ビルボード行列をベースにワールド行列を構築
+    // 2. ワールド行列の構築 (ビルボード行列ベース)
     float32_t4x4 worldMatrix = gPerView.billboardMatrix;
     
-    // スケール適用
     worldMatrix[0] *= particle.scale.x;
     worldMatrix[1] *= particle.scale.y;
     worldMatrix[2] *= particle.scale.z;
     worldMatrix[3].xyz = particle.translate;
 
-    // 座標変換 (WVP)
+    // 3. 座標変換 (WVP)
     output.position = mul(input.position, mul(worldMatrix, gPerView.viewProjection));
 
-    // UVと色
-    output.texcoord = input.texcoord;
-    output.color = particle.color;
-    
+    // 4. UV座標と色の出力
     output.texcoord = input.texcoord + particle.uvOffset;
+    output.color = particle.color;
 
     return output;
 }

@@ -20,8 +20,6 @@ PixelShaderOutput main(VertexShaderOutput input)
     output.color = textureColor * input.color;
     
     // 3. 透明部分の破棄 (Discard)
-    // α値が0.0以下（完全に透明）のピクセルのみ破棄する
-    // これにより、0.0より大きい半透明なピクセルもすべて描画に利用される
     if (output.color.a <= 0.0f)
     {
         discard;

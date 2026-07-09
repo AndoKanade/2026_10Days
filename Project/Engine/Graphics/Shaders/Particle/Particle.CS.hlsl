@@ -1,58 +1,64 @@
+// パーティクルデータ構造
 struct Particle
 {
-    float32_t3 translate;
-    float32_t padding1; // パディング追加
-    
-    float32_t3 scale;
-    float32_t lifeTime;
-    
-    float32_t3 velocity;
-    float32_t currentTime;
-    
+    float3 translate;
+    float padding1;
+
+    float3 scale;
+    float lifeTime;
+
+    float3 velocity;
+    float currentTime;
+
     float4 color;
-    
-    float32_t2 uvOffset;
-    float32_t padding2[2]; // パディング追加
+
+    float2 uvOffset;
+    uint particleType;
+    float padding2;
 };
 
+// ビュー行列用構造体
 struct ParView
 {
     float32_t4x4 viewProjection;
     float32_t4x4 billboardMatrix;
 };
 
+// 定数定義
 static const uint32_t kMaxParticles = 1024;
+static const float kDeltaTime = 1.0f / 60.0f;
+
+// リソース定義
 RWStructuredBuffer<Particle> gParticles : register(u0);
 RWStructuredBuffer<int32_t> gFreeCounter : register(u1);
 
-// 追加
-static const float kDeltaTime = 1.0f / 60.0f;
-
+// 更新処理 (256スレッド/グループ)
 [numthreads(256, 1, 1)]
-void main(uint32_t3 DTid : SV_DispatchThreadID)
+void main(uint3 DTid : SV_DispatchThreadID)
 {
     uint32_t particleIndex = DTid.x;
     
     if (particleIndex < kMaxParticles)
     {
-        // 変更 寿命が残っている（生きている）パーティクルのみ処理を行う
+        // 生存中のパーティクルのみ更新
         if (gParticles[particleIndex].lifeTime > gParticles[particleIndex].currentTime)
         {
-            // 時間を進める
+            
+            // 時間の経過
             gParticles[particleIndex].currentTime += kDeltaTime;
 
-            // 速度を加算して移動させる
+            // 速度による移動
             gParticles[particleIndex].translate += gParticles[particleIndex].velocity * kDeltaTime;
 
-            // 時間経過で透明にする
+            // 時間経過によるアルファ値（透明度）の更新
             float alpha = 1.0f - (gParticles[particleIndex].currentTime / gParticles[particleIndex].lifeTime);
             gParticles[particleIndex].color.a = saturate(alpha);
         }
     }
     
+    // カウンターのリセット（インデックス0のスレッドが担当）
     if (particleIndex == 0)
     {
-        gFreeCounter[0] = 0; // リセット
+        gFreeCounter[0] = 0;
     }
-
 }
