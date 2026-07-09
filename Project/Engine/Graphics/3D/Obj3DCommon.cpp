@@ -380,7 +380,7 @@ void Obj3dCommon::CreateComputePipelineState(){
 	assert(SUCCEEDED(hr));
 
 	// --- 2. PSOの作成 ---
-	ComPtr<IDxcBlob> computeShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Skinning.CS.hlsl",L"cs_6_0");
+	ComPtr<IDxcBlob> computeShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Obj3D/Skinning.CS.hlsl",L"cs_6_0");
 	assert(computeShaderBlob != nullptr);
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC computePipelineStateDesc{};
