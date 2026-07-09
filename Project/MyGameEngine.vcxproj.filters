@@ -411,6 +411,11 @@
     <FxCompile Include="Engine\Graphics\Shaders\Particle\Particle.CS.hlsl">
       <Filter>Resources\shader\Particle</Filter>
     </FxCompile>
-    <FxCompile Include="Engine\Graphics\Shaders\Particle\EmitParticle.CS.hlsl" />
+    <FxCompile Include="Engine\Graphics\Shaders\Particle\UpdateParticle.CS.hlsl">
+      <Filter>Resources\shader\Particle</Filter>
+    </FxCompile>
+    <FxCompile Include="Engine\Graphics\Shaders\Particle\EmitParticle.CS.hlsl">
+      <Filter>Resources\shader\Particle</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

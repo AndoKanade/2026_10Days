@@ -29,14 +29,6 @@ public:
 	void Update() override;
 	void Draw() override;
 
-	// パーティクル発生関数
-	void EmitShockwave(const Vector3& position);
-	void EmitSpark(const Vector3& position);
-	void EmitSmoke(const Vector3& position);
-	void EmitCharge(const Vector3& position);
-	void EmitAura(const Vector3& position);
-	void EmitWarp();
-
 private:
 	// 外部依存
 	Obj3dCommon* object3dCommon_ = nullptr;
