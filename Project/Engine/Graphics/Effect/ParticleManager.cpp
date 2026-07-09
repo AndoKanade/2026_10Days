@@ -272,6 +272,11 @@ void ParticleManager::Draw(const Matrix4x4& viewProjectionMatrix){
 			commandList->SetComputeRootConstantBufferView(2,group->emitterResource->GetGPUVirtualAddress());
 			commandList->SetComputeRootConstantBufferView(3,perFrameResource_->GetGPUVirtualAddress());
 			commandList->Dispatch(1,1,1);
+			D3D12_RESOURCE_BARRIER barrierUAV{};
+			barrierUAV.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+			barrierUAV.UAV.pResource = group->instancingResource.Get();
+			commandList->ResourceBarrier(1,&barrierUAV);
+
 		}
 
 		// 更新用コンピュートシェーダー実行
