@@ -35,15 +35,16 @@ struct Particle{
 /// GPUへ送る生データ (VSで行列計算を行うために使用)
 /// </summary>
 struct ParticleForGPU{
-    Vector3 translate;
-    Vector3 scale;
-    float lifeTime;
-    Vector3 velocity;
-    float currentTime;
-    Vector4 color;
-    Vector2 uvOffset;
+    Vector3 translate;     // 12 bytes
+    float padding1;        // 4 bytes (パディング)
+    Vector3 scale;         // 12 bytes
+    float lifeTime;        // 4 bytes
+    Vector3 velocity;      // 12 bytes
+    float currentTime;     // 4 bytes
+    Vector4 color;         // 16 bytes
+    Vector2 uvOffset;      // 8 bytes
+    float padding2[2];     // 8 bytes (パディング: 合計で16の倍数にする)
 };
-
 struct PerView{
     Matrix4x4 viewProjection;
     Matrix4x4 billboardMatrix;
@@ -96,6 +97,9 @@ struct ParticleGroup{
     D3D12_RESOURCE_STATES currentState = D3D12_RESOURCE_STATE_COMMON;
     Microsoft::WRL::ComPtr<ID3D12Resource> emitterResource;
     EmitterSphere* emitterData = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> freeCounterResource;
+    uint32_t freeCounterUavIndex;
 };
 
 /// <summary>

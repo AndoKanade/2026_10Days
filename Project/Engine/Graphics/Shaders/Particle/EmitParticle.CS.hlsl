@@ -35,12 +35,18 @@ class RandomGenerator
 struct Particle
 {
     float32_t3 translate;
+    float32_t padding1; // パディング追加
+    
     float32_t3 scale;
     float32_t lifeTime;
+    
     float32_t3 velocity;
     float32_t currentTime;
+    
     float4 color;
+    
     float32_t2 uvOffset;
+    float32_t padding2[2]; // パディング追加
 };
 
 struct EmitterSphere
@@ -62,6 +68,9 @@ struct PerFrame
 ConstantBuffer<EmitterSphere> gEmitter : register(b0);
 RWStructuredBuffer<Particle> gParticles : register(u0);
 ConstantBuffer<PerFrame> gPerFrame : register(b1);
+RWStructuredBuffer<int32_t> gFreeCounter : register(u1);
+
+static const uint32_t kMaxParticles = 1024;
 
 [numthreads(1, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -73,13 +82,19 @@ void main(uint3 DTid : SV_DispatchThreadID)
         
         for (uint32_t countIndex = 0; countIndex < gEmitter.count; ++countIndex)
         {
-            gParticles[countIndex].scale = generator.Generate3d();
-            gParticles[countIndex].translate = generator.Generate3d();
-            gParticles[countIndex].color.rgb = generator.Generate3d();
-            gParticles[countIndex].color.a = 1.0f;
-            gParticles[countIndex].lifeTime = 1.0f;
-            gParticles[countIndex].currentTime = 0.0f;
-            gParticles[countIndex].velocity = float32_t3(0.0f, 1.0f, 0.0f);
+            int32_t particleIndex;
+            InterlockedAdd(gFreeCounter[0], 1, particleIndex);
+            
+            if (particleIndex < kMaxParticles)
+            {
+                gParticles[particleIndex].scale = generator.Generate3d();
+                gParticles[particleIndex].translate = generator.Generate3d();
+                gParticles[particleIndex].color.rgb = generator.Generate3d();
+                gParticles[particleIndex].color.a = 1.0f;
+                gParticles[particleIndex].lifeTime = 1.0f;
+                gParticles[particleIndex].currentTime = 0.0f;
+                gParticles[particleIndex].velocity = float32_t3(0.0f, 1.0f, 0.0f);
+            }
         }
     }
 }

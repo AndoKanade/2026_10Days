@@ -1,17 +1,21 @@
 #include "Particle.hlsli"
 
-// CPUから送るパーティクルの生データ
 struct Particle
 {
-    float32_t3 translate; // 移動量
-    float32_t3 scale; // スケール
-    float32_t lifeTime; // 寿命
-    float32_t3 velocity; // 速度
-    float32_t currentTime; // 経過時間
-    float4 color; // 色
-    float32_t2 uvOffset;
+    float3 translate;
+    float padding1; // 合計16バイト
+    
+    float3 scale;
+    float lifeTime; // 合計16バイト
+    
+    float3 velocity;
+    float currentTime; // 合計16バイト
+    
+    float4 color; // 合計16バイト
+    
+    float2 uvOffset;
+    float2 padding2; // 合計16バイト 
 };
-
 // カメラ情報など（ビュー変換用）
 struct PerView
 {

@@ -1,14 +1,18 @@
-// Particle.CS.hlsl
-
 struct Particle
 {
     float32_t3 translate;
+    float32_t padding1; // パディング追加
+    
     float32_t3 scale;
     float32_t lifeTime;
+    
     float32_t3 velocity;
     float32_t currentTime;
+    
     float4 color;
+    
     float32_t2 uvOffset;
+    float32_t padding2[2]; // パディング追加
 };
 
 struct ParView
@@ -19,6 +23,7 @@ struct ParView
 
 static const uint32_t kMaxParticles = 1024;
 RWStructuredBuffer<Particle> gParticles : register(u0);
+RWStructuredBuffer<int32_t> gFreeCounter : register(u1);
 
 // 追加
 static const float kDeltaTime = 1.0f / 60.0f;
@@ -44,4 +49,10 @@ void main(uint32_t3 DTid : SV_DispatchThreadID)
             gParticles[particleIndex].color.a = saturate(alpha);
         }
     }
+    
+    if (particleIndex == 0)
+    {
+        gFreeCounter[0] = 0; // リセット
+    }
+
 }

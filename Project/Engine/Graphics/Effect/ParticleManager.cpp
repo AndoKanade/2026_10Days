@@ -145,12 +145,22 @@ void ParticleManager::CreateParticleGroup(const std::string& name,const std::str
 
     // UAV生成
     group->instancingUavIndex = srvManager_->Allocate();
+    group->freeCounterUavIndex = srvManager_->Allocate();
+
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
     uavDesc.Format = DXGI_FORMAT_UNKNOWN;
     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
     uavDesc.Buffer.FirstElement = 0;
     uavDesc.Buffer.NumElements = group->kNumMaxInstance;
     uavDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC counterUavDesc{};
+    counterUavDesc.Format = DXGI_FORMAT_UNKNOWN;
+    counterUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    counterUavDesc.Buffer.NumElements = 1;
+    counterUavDesc.Buffer.StructureByteStride = sizeof(int32_t);
+    dxCommon_->GetDevice()->CreateUnorderedAccessView(group->freeCounterResource.Get(),nullptr,&counterUavDesc,srvManager_->GetCPUDescriptorHandle(group->freeCounterUavIndex));
+
 
     dxCommon_->GetDevice()->CreateUnorderedAccessView(
         group->instancingResource.Get(),
@@ -172,26 +182,24 @@ void ParticleManager::CreateParticleGroup(const std::string& name,const std::str
     group->emitterData->emit = 0;
 
     particleGroups_.insert(std::make_pair(name,std::move(group)));
+
 }
 
 void ParticleManager::Update(Camera* camera){
     assert(camera);
     const float kDeltaTime = 1.0f / 60.0f;
 
-    // カメラ行列の取得・計算
+    // カメラ行列等の計算
     Matrix4x4 viewMatrix = camera->GetViewMatrix();
     Matrix4x4 projectionMatrix = camera->GetProjectionMatrix();
     Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix,projectionMatrix);
-
     Matrix4x4 billboardMatrix = camera->GetWorldMatrix();
-    billboardMatrix.m[3][0] = 0.0f;
-    billboardMatrix.m[3][1] = 0.0f;
-    billboardMatrix.m[3][2] = 0.0f;
+    billboardMatrix.m[3][0] = 0.0f; billboardMatrix.m[3][1] = 0.0f; billboardMatrix.m[3][2] = 0.0f;
 
     // 全グループ更新
     for(auto& [name,group] : particleGroups_){
 
-        // ▼ 追加: エミッターの更新処理 (GPUパーティクル用) ▼
+        // --- エミッターの更新処理 (GPUへの通知) ---
         if(group->emitterData){
             group->emitterData->frequencyTime += kDeltaTime;
             if(group->emitterData->frequency <= group->emitterData->frequencyTime){
@@ -201,9 +209,14 @@ void ParticleManager::Update(Camera* camera){
                 group->emitterData->emit = 0;
             }
         }
-        // ▲ 追加ここまで ▲
 
-        // 既存のCPUパーティクル更新処理
+        // --- 重要: CPU-GPU間の転送を削除 ---
+        // Compute Shaderで更新を行うため、CPU側でデータをMap/Unmapする必要はありません。
+        // GPUのメモリ（DEFAULTヒープ）は直接書き込めないため、ここを消すだけでクラッシュは直ります。
+
+        // CPU側のリスト処理（寿命管理だけ残す）
+        // ※Compute Shaderで更新しているので、このループでTransformを更新する必要はありません。
+        // ※あくまで「CPU側でパーティクルの寿命が切れたら管理リストからも消す」という目的で残します。
         uint32_t numInstance = 0;
         for(auto it = group->particles.begin(); it != group->particles.end(); ){
             if(it->lifeTime <= it->currentTime){
@@ -211,51 +224,27 @@ void ParticleManager::Update(Camera* camera){
                 continue;
             }
 
-            it->transform.translate += it->velocity * kDeltaTime;
-            it->currentTime += kDeltaTime;
-
-            // 特殊エフェクト更新処理
-            if(group->isShockwave){
-                float scaleProgress = it->currentTime * 30.0f;
-                it->transform.scale.x += scaleProgress;
-                it->transform.scale.y += scaleProgress;
-                it->transform.scale.z += scaleProgress;
-            }
-
-            if(group->isSmoke){
-                float scaleProgress = it->currentTime * 1.5f;
-                it->transform.scale.x += scaleProgress;
-                it->transform.scale.y += scaleProgress;
-                it->transform.scale.z += scaleProgress;
-            }
-
-            if(group->isCharge){
-                float shrink = 1.0f - (it->currentTime / it->lifeTime);
-                it->transform.scale.x *= shrink;
-                it->transform.scale.y *= shrink;
-                it->transform.scale.z *= shrink;
-            }
-
-            if(group->isAura){
-                it->transform.translate.x += std::sin(it->currentTime * 5.0f) * 0.02f;
-                it->transform.translate.z += std::cos(it->currentTime * 5.0f) * 0.02f;
-            }
-
+            // CPU側での更新計算はCompute Shaderに任せるため不要です。
+            // 描画用の個数カウントだけ行います。
+            numInstance++;
             ++it;
         }
+
+        // Compute Shaderで全パーティクルを計算しているため、描画個数は最大値にします。
+        // （本来はCompute Shader側でアクティブな個数をカウントすべきですが、
+        //   まずは今の実装に合わせて最大値を設定します）
         group->numInstance = group->kNumMaxInstance;
     }
 
+    // 定数バッファの更新
     if(perViewData_){
         perViewData_->viewProjection = viewProjectionMatrix;
         perViewData_->billboardMatrix = billboardMatrix;
     }
-
     if(perFrameData_){
         perFrameData_->deltaTime = kDeltaTime;
         perFrameData_->time += kDeltaTime;
     }
-
 }
 
 void ParticleManager::Draw(const Matrix4x4& viewProjectionMatrix){
@@ -279,6 +268,7 @@ void ParticleManager::Draw(const Matrix4x4& viewProjectionMatrix){
         if(group->emitterResource){
             commandList->SetComputeRootSignature(emitComputeRootSignature_.Get());
             commandList->SetPipelineState(emitComputePipelineState_.Get());
+            // u0とu1のテーブルをセット
             commandList->SetComputeRootDescriptorTable(0,srvManager_->GetGPUDescriptorHandle(group->instancingUavIndex));
             commandList->SetComputeRootConstantBufferView(1,group->emitterResource->GetGPUVirtualAddress());
             commandList->SetComputeRootConstantBufferView(2,perFrameResource_->GetGPUVirtualAddress());
@@ -289,19 +279,12 @@ void ParticleManager::Draw(const Matrix4x4& viewProjectionMatrix){
         commandList->SetComputeRootSignature(computeRootSignature_.Get());
         commandList->SetPipelineState(computePipelineState_.Get());
         commandList->SetComputeRootDescriptorTable(0,srvManager_->GetGPUDescriptorHandle(group->instancingUavIndex));
+        commandList->Dispatch(1,1,1);
 
-        // 256スレッドに変更したため計算を修正
-        uint32_t groupCount = (group->kNumMaxInstance + 255) / 256;
-        commandList->Dispatch(groupCount,1,1);
-
-        // SRV状態へ遷移
-        D3D12_RESOURCE_BARRIER barrierToSRV{};
-        barrierToSRV.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrierToSRV.Transition.pResource = group->instancingResource.Get();
-        barrierToSRV.Transition.StateBefore = group->currentState;
-        barrierToSRV.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-        barrierToSRV.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        commandList->ResourceBarrier(1,&barrierToSRV);
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrier.UAV.pResource = group->freeCounterResource.Get();
+        commandList->ResourceBarrier(1,&barrier);
         group->currentState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
 
@@ -583,7 +566,11 @@ void ParticleManager::CreateCylinderModel(){
 void ParticleManager::CreateComputePipeline(){
     HRESULT hr = S_OK;
     D3D12_DESCRIPTOR_RANGE range[1] = {};
-    range[0] = {D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND};
+    range[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    range[0].NumDescriptors = 2; // u0とu1の2つ分を確保
+    range[0].BaseShaderRegister = 0; // u0から始まる
+    range[0].RegisterSpace = 0;
+    range[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
     D3D12_ROOT_PARAMETER param[1] = {};
     param[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -603,7 +590,7 @@ void ParticleManager::CreateComputePipeline(){
 
     D3D12_DESCRIPTOR_RANGE descriptorRangeUAVEmit[1] = {};
     descriptorRangeUAVEmit[0].BaseShaderRegister = 0; // u0
-    descriptorRangeUAVEmit[0].NumDescriptors = 1;
+    descriptorRangeUAVEmit[0].NumDescriptors = 2;
     descriptorRangeUAVEmit[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
     descriptorRangeUAVEmit[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
