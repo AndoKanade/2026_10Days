@@ -35,6 +35,13 @@ void ParticleManager::Initialize(DXCommon* dxCommon,SrvManager* srvManager){
     perViewResource_->Map(0,nullptr,reinterpret_cast<void**>(&perViewData_));
     *perViewData_ = {MakeIdentity4x4(), MakeIdentity4x4()};
 
+    size_t sizePerFrame = (sizeof(PerFrame) + 0xff) & ~0xff;
+    perFrameResource_ = dxCommon_->CreateBufferResource(sizePerFrame);
+    perFrameResource_->Map(0,nullptr,reinterpret_cast<void**>(&perFrameData_));
+    perFrameData_->time = 0.0f;
+    perFrameData_->deltaTime = 1.0f / 60.0f;
+
+
     // 各種パイプラインおよびモデル生成
     CreateGraphicsPipeline();
     CreateModel();
@@ -55,6 +62,8 @@ void ParticleManager::Finalize(){
     graphicsPipelineState_.Reset();
     computeRootSignature_.Reset();
     computePipelineState_.Reset();
+	emitComputeRootSignature_.Reset();
+	emitComputePipelineState_.Reset();
 
     vertexBuffer_.Reset();
     ringVertexBuffer_.Reset();
@@ -63,6 +72,7 @@ void ParticleManager::Finalize(){
 
     // 定数バッファ解放
     perViewResource_.Reset();
+    perFrameResource_.Reset();
 }
 
 // -------------------------------------------------
@@ -135,12 +145,22 @@ void ParticleManager::CreateParticleGroup(const std::string& name,const std::str
 
     // UAV生成
     group->instancingUavIndex = srvManager_->Allocate();
+    group->freeCounterUavIndex = srvManager_->Allocate();
+
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
     uavDesc.Format = DXGI_FORMAT_UNKNOWN;
     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
     uavDesc.Buffer.FirstElement = 0;
     uavDesc.Buffer.NumElements = group->kNumMaxInstance;
     uavDesc.Buffer.StructureByteStride = sizeof(ParticleForGPU);
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC counterUavDesc{};
+    counterUavDesc.Format = DXGI_FORMAT_UNKNOWN;
+    counterUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    counterUavDesc.Buffer.NumElements = 1;
+    counterUavDesc.Buffer.StructureByteStride = sizeof(int32_t);
+    dxCommon_->GetDevice()->CreateUnorderedAccessView(group->freeCounterResource.Get(),nullptr,&counterUavDesc,srvManager_->GetCPUDescriptorHandle(group->freeCounterUavIndex));
+
 
     dxCommon_->GetDevice()->CreateUnorderedAccessView(
         group->instancingResource.Get(),
@@ -149,25 +169,54 @@ void ParticleManager::CreateParticleGroup(const std::string& name,const std::str
         srvManager_->GetCPUDescriptorHandle(group->instancingUavIndex)
     );
 
+    size_t emitterSize = (sizeof(EmitterSphere) + 0xff) & ~0xff;
+    group->emitterResource = dxCommon_->CreateBufferResource(emitterSize);
+    group->emitterResource->Map(0,nullptr,reinterpret_cast<void**>(&group->emitterData));
+
+    // エミッターの初期値設定
+    group->emitterData->count = 10;
+    group->emitterData->frequency = 0.5f;
+    group->emitterData->frequencyTime = 0.0f;
+    group->emitterData->translate = {0.0f, 0.0f, 0.0f};
+    group->emitterData->radius = 1.0f;
+    group->emitterData->emit = 0;
+
     particleGroups_.insert(std::make_pair(name,std::move(group)));
+
 }
 
 void ParticleManager::Update(Camera* camera){
     assert(camera);
     const float kDeltaTime = 1.0f / 60.0f;
 
-    // カメラ行列の取得・計算
+    // カメラ行列等の計算
     Matrix4x4 viewMatrix = camera->GetViewMatrix();
     Matrix4x4 projectionMatrix = camera->GetProjectionMatrix();
     Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix,projectionMatrix);
-
     Matrix4x4 billboardMatrix = camera->GetWorldMatrix();
-    billboardMatrix.m[3][0] = 0.0f;
-    billboardMatrix.m[3][1] = 0.0f;
-    billboardMatrix.m[3][2] = 0.0f;
+    billboardMatrix.m[3][0] = 0.0f; billboardMatrix.m[3][1] = 0.0f; billboardMatrix.m[3][2] = 0.0f;
 
     // 全グループ更新
     for(auto& [name,group] : particleGroups_){
+
+        // --- エミッターの更新処理 (GPUへの通知) ---
+        if(group->emitterData){
+            group->emitterData->frequencyTime += kDeltaTime;
+            if(group->emitterData->frequency <= group->emitterData->frequencyTime){
+                group->emitterData->frequencyTime -= group->emitterData->frequency;
+                group->emitterData->emit = 1;
+            } else{
+                group->emitterData->emit = 0;
+            }
+        }
+
+        // --- 重要: CPU-GPU間の転送を削除 ---
+        // Compute Shaderで更新を行うため、CPU側でデータをMap/Unmapする必要はありません。
+        // GPUのメモリ（DEFAULTヒープ）は直接書き込めないため、ここを消すだけでクラッシュは直ります。
+
+        // CPU側のリスト処理（寿命管理だけ残す）
+        // ※Compute Shaderで更新しているので、このループでTransformを更新する必要はありません。
+        // ※あくまで「CPU側でパーティクルの寿命が切れたら管理リストからも消す」という目的で残します。
         uint32_t numInstance = 0;
         for(auto it = group->particles.begin(); it != group->particles.end(); ){
             if(it->lifeTime <= it->currentTime){
@@ -175,54 +224,32 @@ void ParticleManager::Update(Camera* camera){
                 continue;
             }
 
-            it->transform.translate += it->velocity * kDeltaTime;
-            it->currentTime += kDeltaTime;
-
-            // 特殊エフェクト更新処理
-            if(group->isShockwave){
-                float scaleProgress = it->currentTime * 30.0f;
-                it->transform.scale.x += scaleProgress;
-                it->transform.scale.y += scaleProgress;
-                it->transform.scale.z += scaleProgress;
-            }
-
-            if(group->isSmoke){
-                float scaleProgress = it->currentTime * 1.5f;
-                it->transform.scale.x += scaleProgress;
-                it->transform.scale.y += scaleProgress;
-                it->transform.scale.z += scaleProgress;
-            }
-
-            if(group->isCharge){
-                float shrink = 1.0f - (it->currentTime / it->lifeTime);
-                it->transform.scale.x *= shrink;
-                it->transform.scale.y *= shrink;
-                it->transform.scale.z *= shrink;
-            }
-
-            if(group->isAura){
-                it->transform.translate.x += std::sin(it->currentTime * 5.0f) * 0.02f;
-                it->transform.translate.z += std::cos(it->currentTime * 5.0f) * 0.02f;
-            }
-
+            // CPU側での更新計算はCompute Shaderに任せるため不要です。
+            // 描画用の個数カウントだけ行います。
+            numInstance++;
             ++it;
         }
+
+        // Compute Shaderで全パーティクルを計算しているため、描画個数は最大値にします。
+        // （本来はCompute Shader側でアクティブな個数をカウントすべきですが、
+        //   まずは今の実装に合わせて最大値を設定します）
         group->numInstance = group->kNumMaxInstance;
     }
 
+    // 定数バッファの更新
     if(perViewData_){
         perViewData_->viewProjection = viewProjectionMatrix;
         perViewData_->billboardMatrix = billboardMatrix;
+    }
+    if(perFrameData_){
+        perFrameData_->deltaTime = kDeltaTime;
+        perFrameData_->time += kDeltaTime;
     }
 }
 
 void ParticleManager::Draw(const Matrix4x4& viewProjectionMatrix){
     assert(dxCommon_);
     auto commandList = dxCommon_->GetCommandList();
-
-    // 1. Compute Shader 実行
-    commandList->SetComputeRootSignature(computeRootSignature_.Get());
-    commandList->SetPipelineState(computePipelineState_.Get());
 
     for(auto& [name,group] : particleGroups_){
         if(group->numInstance == 0) continue;
@@ -237,22 +264,31 @@ void ParticleManager::Draw(const Matrix4x4& viewProjectionMatrix){
         commandList->ResourceBarrier(1,&barrierToUAV);
         group->currentState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
-        commandList->SetComputeRootDescriptorTable(0,srvManager_->GetGPUDescriptorHandle(group->instancingUavIndex));
-        uint32_t groupCount = (group->kNumMaxInstance + 1023) / 1024;
-        commandList->Dispatch(groupCount,1,1);
+        // エミット用コンピュートシェーダー実行
+        if(group->emitterResource){
+            commandList->SetComputeRootSignature(emitComputeRootSignature_.Get());
+            commandList->SetPipelineState(emitComputePipelineState_.Get());
+            // u0とu1のテーブルをセット
+            commandList->SetComputeRootDescriptorTable(0,srvManager_->GetGPUDescriptorHandle(group->instancingUavIndex));
+            commandList->SetComputeRootConstantBufferView(1,group->emitterResource->GetGPUVirtualAddress());
+            commandList->SetComputeRootConstantBufferView(2,perFrameResource_->GetGPUVirtualAddress());
+            commandList->Dispatch(1,1,1);
+        }
 
-        // SRV状態へ遷移
-        D3D12_RESOURCE_BARRIER barrierToSRV{};
-        barrierToSRV.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrierToSRV.Transition.pResource = group->instancingResource.Get();
-        barrierToSRV.Transition.StateBefore = group->currentState;
-        barrierToSRV.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-        barrierToSRV.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        commandList->ResourceBarrier(1,&barrierToSRV);
+        // 更新用コンピュートシェーダー実行
+        commandList->SetComputeRootSignature(computeRootSignature_.Get());
+        commandList->SetPipelineState(computePipelineState_.Get());
+        commandList->SetComputeRootDescriptorTable(0,srvManager_->GetGPUDescriptorHandle(group->instancingUavIndex));
+        commandList->Dispatch(1,1,1);
+
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrier.UAV.pResource = group->freeCounterResource.Get();
+        commandList->ResourceBarrier(1,&barrier);
         group->currentState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
 
-    // 2. Graphics 描画
+    // グラフィックス描画処理
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetPipelineState(graphicsPipelineState_.Get());
     commandList->SetGraphicsRootConstantBufferView(2,perViewResource_->GetGPUVirtualAddress());
@@ -530,7 +566,11 @@ void ParticleManager::CreateCylinderModel(){
 void ParticleManager::CreateComputePipeline(){
     HRESULT hr = S_OK;
     D3D12_DESCRIPTOR_RANGE range[1] = {};
-    range[0] = {D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND};
+    range[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    range[0].NumDescriptors = 2; // u0とu1の2つ分を確保
+    range[0].BaseShaderRegister = 0; // u0から始まる
+    range[0].RegisterSpace = 0;
+    range[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
     D3D12_ROOT_PARAMETER param[1] = {};
     param[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -547,4 +587,52 @@ void ParticleManager::CreateComputePipeline(){
     D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {computeRootSignature_.Get(), {cs->GetBufferPointer(), cs->GetBufferSize()}};
     hr = dxCommon_->GetDevice()->CreateComputePipelineState(&psoDesc,IID_PPV_ARGS(&computePipelineState_));
     assert(SUCCEEDED(hr));
+
+    D3D12_DESCRIPTOR_RANGE descriptorRangeUAVEmit[1] = {};
+    descriptorRangeUAVEmit[0].BaseShaderRegister = 0; // u0
+    descriptorRangeUAVEmit[0].NumDescriptors = 2;
+    descriptorRangeUAVEmit[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    descriptorRangeUAVEmit[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_ROOT_PARAMETER rootParametersEmit[3] = {};
+    // 0: UAV (gParticles)
+    rootParametersEmit[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParametersEmit[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParametersEmit[0].DescriptorTable.pDescriptorRanges = descriptorRangeUAVEmit;
+    rootParametersEmit[0].DescriptorTable.NumDescriptorRanges = _countof(descriptorRangeUAVEmit);
+    // 1: CBV (gEmitter)
+    rootParametersEmit[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParametersEmit[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParametersEmit[1].Descriptor.ShaderRegister = 0; // b0
+
+    rootParametersEmit[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParametersEmit[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParametersEmit[2].Descriptor.ShaderRegister = 1;
+
+    D3D12_ROOT_SIGNATURE_DESC descriptionRootSignatureEmit{};
+    descriptionRootSignatureEmit.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+    descriptionRootSignatureEmit.pParameters = rootParametersEmit;
+    descriptionRootSignatureEmit.NumParameters = _countof(rootParametersEmit);
+
+    ComPtr<ID3DBlob> signatureBlobEmit;
+    ComPtr<ID3DBlob> errorBlobEmit;
+    hr = D3D12SerializeRootSignature(&descriptionRootSignatureEmit,D3D_ROOT_SIGNATURE_VERSION_1,&signatureBlobEmit,&errorBlobEmit);
+    if(FAILED(hr)){
+        Logger::Log(reinterpret_cast<char*>(errorBlobEmit->GetBufferPointer()));
+        assert(false);
+    }
+    hr = dxCommon_->GetDevice()->CreateRootSignature(0,signatureBlobEmit->GetBufferPointer(),signatureBlobEmit->GetBufferSize(),IID_PPV_ARGS(&emitComputeRootSignature_));
+    assert(SUCCEEDED(hr));
+
+    // Emit用パイプラインステートオブジェクトの作成
+    ComPtr<IDxcBlob> emitComputeShaderBlob = dxCommon_->CompileShader(L"Engine/Graphics/Shaders/Particle/EmitParticle.CS.hlsl",L"cs_6_0");
+    assert(emitComputeShaderBlob != nullptr);
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC emitComputePipelineStateDesc{};
+    emitComputePipelineStateDesc.pRootSignature = emitComputeRootSignature_.Get();
+    emitComputePipelineStateDesc.CS = {emitComputeShaderBlob->GetBufferPointer(), emitComputeShaderBlob->GetBufferSize()};
+
+    hr = dxCommon_->GetDevice()->CreateComputePipelineState(&emitComputePipelineStateDesc,IID_PPV_ARGS(&emitComputePipelineState_));
+    assert(SUCCEEDED(hr));
+
 }

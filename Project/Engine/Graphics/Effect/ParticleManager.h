@@ -35,18 +35,33 @@ struct Particle{
 /// GPUへ送る生データ (VSで行列計算を行うために使用)
 /// </summary>
 struct ParticleForGPU{
-    Vector3 translate;
-    Vector3 scale;
-    float lifeTime;
-    Vector3 velocity;
-    float currentTime;
-    Vector4 color;
-    Vector2 uvOffset;
+    Vector3 translate;     // 12 bytes
+    float padding1;        // 4 bytes (パディング)
+    Vector3 scale;         // 12 bytes
+    float lifeTime;        // 4 bytes
+    Vector3 velocity;      // 12 bytes
+    float currentTime;     // 4 bytes
+    Vector4 color;         // 16 bytes
+    Vector2 uvOffset;      // 8 bytes
+    float padding2[2];     // 8 bytes (パディング: 合計で16の倍数にする)
 };
-
 struct PerView{
     Matrix4x4 viewProjection;
     Matrix4x4 billboardMatrix;
+};
+
+struct EmitterSphere{
+    Vector3 translate;
+    float radius;
+    uint32_t count;
+    float frequency;
+    float frequencyTime;
+    uint32_t emit;
+};
+
+struct PerFrame{
+    float time;
+    float deltaTime;
 };
 
 /// <summary>
@@ -80,6 +95,11 @@ struct ParticleGroup{
     bool isWarp = false;
 
     D3D12_RESOURCE_STATES currentState = D3D12_RESOURCE_STATE_COMMON;
+    Microsoft::WRL::ComPtr<ID3D12Resource> emitterResource;
+    EmitterSphere* emitterData = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> freeCounterResource;
+    uint32_t freeCounterUavIndex;
 };
 
 /// <summary>
@@ -207,6 +227,9 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> computeRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState_;
 
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> emitComputeRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> emitComputePipelineState_;
+
     // 板ポリゴン用の頂点バッファ
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_; // 一時バッファ
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;   // 実際のバッファ
@@ -224,4 +247,7 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12Resource> perViewResource_;
     PerView* perViewData_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> perFrameResource_;
+    PerFrame* perFrameData_ = nullptr;
 };
