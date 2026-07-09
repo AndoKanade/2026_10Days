@@ -8,8 +8,6 @@
 //=============================================================================
 
 void SkinCluster::Initialize(DXCommon* dxCommon,const Model::ModelData& modelData,const Skeleton& skeleton){
-    OutputDebugStringA("--- Checking Skinning Data ---\n");
-
     paletteSize_ = static_cast<uint32_t>(skeleton.joints.size());
     inverseBindPoseMatrices_.resize(paletteSize_,MakeIdentity4x4());
 
@@ -143,7 +141,7 @@ void SkinCluster::Update(const Skeleton& skeleton,ID3D12GraphicsCommandList* com
     commandList->SetComputeRootDescriptorTable(1,paletteSrvHandle);
     commandList->SetComputeRootDescriptorTable(2,outputUavHandle);
 
-    uint32_t groupCountX = (numVertices_ + 1023) / 1024;
+    uint32_t groupCountX = (numVertices_ + 255) / 256;
     commandList->Dispatch(groupCountX,1,1);
 
     // D. 描画用バッファへ状態を戻す (バリア)

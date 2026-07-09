@@ -49,6 +49,20 @@ struct PerView{
     Matrix4x4 billboardMatrix;
 };
 
+struct EmitterSphere{
+    Vector3 translate;
+    float radius;
+    uint32_t count;
+    float frequency;
+    float frequencyTime;
+    uint32_t emit;
+};
+
+struct PerFrame{
+    float time;
+    float deltaTime;
+};
+
 /// <summary>
 /// パーティクルグループ
 /// </summary>
@@ -80,6 +94,8 @@ struct ParticleGroup{
     bool isWarp = false;
 
     D3D12_RESOURCE_STATES currentState = D3D12_RESOURCE_STATE_COMMON;
+    Microsoft::WRL::ComPtr<ID3D12Resource> emitterResource;
+    EmitterSphere* emitterData = nullptr;
 };
 
 /// <summary>
@@ -207,6 +223,9 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> computeRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> computePipelineState_;
 
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> emitComputeRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> emitComputePipelineState_;
+
     // 板ポリゴン用の頂点バッファ
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_; // 一時バッファ
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;   // 実際のバッファ
@@ -224,4 +243,7 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12Resource> perViewResource_;
     PerView* perViewData_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> perFrameResource_;
+    PerFrame* perFrameData_ = nullptr;
 };
