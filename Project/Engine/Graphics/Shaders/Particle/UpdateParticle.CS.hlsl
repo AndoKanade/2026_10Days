@@ -1,35 +1,27 @@
-// --- データ構造体 (C++側とメモリレイアウトを一致) ---
-
 struct Particle
 {
     float3 translate;
     float padding1;
-
     float3 scale;
     float lifeTime;
-
     float3 velocity;
     float currentTime;
-
     float4 color;
-
     float2 uvOffset;
     uint particleType;
     float padding2;
 };
 
-// --- リソースバインド ---
-
+// リソースバインド
 RWStructuredBuffer<Particle> gParticles : register(u0);
-RWStructuredBuffer<int32_t> gFreeCounter : register(u1);
+RWStructuredBuffer<int32_t> gFreeListIndex : register(u1);
+RWStructuredBuffer<uint32_t> gFreeList : register(u2);
 
-// --- 定数定義 ---
-
+// 定数定義
 static const float kDeltaTime = 1.0f / 60.0f;
 static const uint32_t kMaxParticles = 1024;
 
-// --- メイン処理 (パーティクル更新) ---
-
+// メイン処理（パーティクルの更新と寿命による回収）
 [numthreads(256, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
@@ -41,17 +33,37 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    // 生存しているパーティクルのみ更新処理を行う
+    // 生存中のパーティクルのみ更新処理を行う
     if (gParticles[particleIndex].currentTime < gParticles[particleIndex].lifeTime)
     {
-        // 経過時間を進める
+        // 時間経過と位置の更新
         gParticles[particleIndex].currentTime += kDeltaTime;
-
-        // 速度に基づいて位置を移動
         gParticles[particleIndex].translate += gParticles[particleIndex].velocity * kDeltaTime;
-        
-        // 寿命に応じた透明度の計算
+
+        // アルファ値（透明度）の計算
         float alpha = 1.0f - (gParticles[particleIndex].currentTime / gParticles[particleIndex].lifeTime);
         gParticles[particleIndex].color.a = saturate(alpha);
+
+        // 寿命を迎えたパーティクルの回収処理
+        if (gParticles[particleIndex].color.a == 0.0f)
+        {
+            // スケールを0にして描画対象から除外する
+            gParticles[particleIndex].scale = float3(0.0f, 0.0f, 0.0f);
+            
+            // FreeListにインデックスを戻す
+            int32_t freeListIndex;
+            InterlockedAdd(gFreeListIndex[0], 1, freeListIndex);
+            
+            // 安全な範囲であればリストにインデックスを格納
+            if ((freeListIndex + 1) < kMaxParticles)
+            {
+                gFreeList[freeListIndex + 1] = particleIndex;
+            }
+            else
+            {
+                // 想定外の状況に対する安全策
+                InterlockedAdd(gFreeListIndex[0], -1, freeListIndex);
+            }
+        }
     }
 }
