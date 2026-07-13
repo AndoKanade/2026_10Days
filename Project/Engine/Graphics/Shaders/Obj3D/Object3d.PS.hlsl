@@ -8,6 +8,7 @@ struct Material
     float32_t4x4 uvTransform;
     float32_t shininess;
     float32_t environmentCoefficient;
+    int32_t useBlinnPhong;
 };
 
 struct DirectionalLight
@@ -83,7 +84,17 @@ PixelShaderOutput main(VertexShaderOutput input)
         float32_t dirCos = pow(dot(normal, dirFactor) * 0.5f + 0.5f, 2.0f);
         float32_t3 dirDiffuse = baseColor * gDirectionalLight.color.rgb * dirCos * gDirectionalLight.intensity;
         
-        float32_t dirSpecularPow = pow(saturate(dot(normal, normalize(dirFactor + toEye))), gMaterial.shininess);
+        // [修正] 鏡面反射計算の切り替え
+        float32_t dirSpecularPow;
+        if (gMaterial.useBlinnPhong != 0)
+        {
+            float32_t3 halfVector = normalize(dirFactor + toEye);
+            dirSpecularPow = pow(saturate(dot(normal, halfVector)), gMaterial.shininess);
+        }
+        else
+        {
+            dirSpecularPow = pow(saturate(dot(reflect(-dirFactor, normal), toEye)), gMaterial.shininess);
+        }
         float32_t3 dirSpecular = gDirectionalLight.color.rgb * gDirectionalLight.intensity * dirSpecularPow;
 
         // --- 2. Point Light ---
@@ -95,7 +106,17 @@ PixelShaderOutput main(VertexShaderOutput input)
         float32_t pCos = pow(dot(normal, pFactor) * 0.5f + 0.5f, 2.0f);
         float32_t3 pDiffuse = baseColor * gPointLight.color.rgb * pCos * gPointLight.intensity * pAttenuation;
         
-        float32_t pSpecularPow = pow(saturate(dot(normal, normalize(pFactor + toEye))), gMaterial.shininess);
+        // [修正] 鏡面反射計算の切り替え
+        float32_t pSpecularPow;
+        if (gMaterial.useBlinnPhong != 0)
+        {
+            float32_t3 halfVector = normalize(pFactor + toEye);
+            pSpecularPow = pow(saturate(dot(normal, halfVector)), gMaterial.shininess);
+        }
+        else
+        {
+            pSpecularPow = pow(saturate(dot(reflect(-pFactor, normal), toEye)), gMaterial.shininess);
+        }
         float32_t3 pSpecular = gPointLight.color.rgb * gPointLight.intensity * pSpecularPow * pAttenuation;
 
         // --- 3. Spot Light ---
@@ -111,7 +132,17 @@ PixelShaderOutput main(VertexShaderOutput input)
         float32_t sCos = pow(dot(normal, sFactor) * 0.5f + 0.5f, 2.0f);
         float32_t3 sDiffuse = baseColor * gSpotLight.color.rgb * sCos * gSpotLight.intensity * sAttenuation * sFalloff;
         
-        float32_t sSpecularPow = pow(saturate(dot(normal, normalize(sFactor + toEye))), gMaterial.shininess);
+        // [修正] 鏡面反射計算の切り替え
+        float32_t sSpecularPow;
+        if (gMaterial.useBlinnPhong != 0)
+        {
+            float32_t3 halfVector = normalize(sFactor + toEye);
+            sSpecularPow = pow(saturate(dot(normal, halfVector)), gMaterial.shininess);
+        }
+        else
+        {
+            sSpecularPow = pow(saturate(dot(reflect(-sFactor, normal), toEye)), gMaterial.shininess);
+        }
         float32_t3 sSpecular = gSpotLight.color.rgb * gSpotLight.intensity * sSpecularPow * sAttenuation * sFalloff;
 
         // --- 4. Environment Mapping ---
