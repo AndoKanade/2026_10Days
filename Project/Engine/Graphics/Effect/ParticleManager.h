@@ -98,8 +98,15 @@ struct ParticleGroup{
     D3D12_RESOURCE_STATES currentState = D3D12_RESOURCE_STATE_COMMON;
     Microsoft::WRL::ComPtr<ID3D12Resource> emitterResource;
     EmitterSphere* emitterData = nullptr;
-    Microsoft::WRL::ComPtr<ID3D12Resource> freeCounterResource;
-    uint32_t freeCounterUavIndex;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> freeListIndexResource;
+    uint32_t freeListIndexUavIndex;
+    Microsoft::WRL::ComPtr<ID3D12Resource> freeListResource;
+    uint32_t freeListUavIndex;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> indexStagingResource;
+    Microsoft::WRL::ComPtr<ID3D12Resource> listStagingResource;
+
 
     // フラグ
     bool isRing = false;
