@@ -357,6 +357,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Engine\Base\TimeManager.h" />
     <ClInclude Include="Engine\Graphics\3D\Animation\Animation.h" />
     <ClInclude Include="Engine\Base\D3DResourceLeakChecker.h" />
     <ClInclude Include="Engine\Base\DXCommon.h" />
@@ -397,6 +398,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClInclude Include="resource\resource.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Engine\Base\TimeManager.cpp" />
     <ClCompile Include="Engine\Graphics\3D\Animation\Animation.cpp" />
     <ClCompile Include="Engine\Base\DXCommon.cpp" />
     <ClCompile Include="Engine\Base\Logger.cpp" />

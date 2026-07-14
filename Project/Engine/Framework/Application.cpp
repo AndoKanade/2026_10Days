@@ -32,8 +32,7 @@ void Application::Initialize(){
 	renderTexture_ = std::make_unique<RenderTexture>();
 
 	// RTVハンドルの取得
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = dxCommon_->rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	rtvHandle.ptr += (size_t)dxCommon_->descriptorSizeRTV * 2;
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = dxCommon_->AllocateRtvDescriptor();
 
 	// SRVハンドルの取得
 	uint32_t srvIndex = SrvManager::GetInstance()->Allocate();
@@ -44,7 +43,7 @@ void Application::Initialize(){
 	renderTexture_->Create(
 		dxCommon_->GetDevice(),
 		WinAPI::kClientWidth,
-		WinAPI::kCliantHeight,
+		WinAPI::kClientHeight,
 		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
 		{0.1f, 0.25f, 0.5f, 1.0f},
 		rtvHandle,
@@ -158,7 +157,7 @@ void Application::Draw(){
 
 	// [1] 深度バッファの遷移
 	barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-	barriers[1].Transition.pResource = dxCommon_->depthStencilResource.Get();
+	barriers[1].Transition.pResource = dxCommon_->GetDepthStencilResource();
 	barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 	barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 

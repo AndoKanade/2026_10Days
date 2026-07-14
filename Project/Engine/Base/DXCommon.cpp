@@ -25,11 +25,10 @@ using namespace StringUtility;
 //=============================================================================
 
 void DXCommon::Initialize(WinAPI* winApi){
-	InitializeFixFPS();
-
 	assert(winApi);
 	this->winApi_ = winApi;
 
+	// 各種初期化関数の呼び出し
 	InitDevice();
 	InitCommand();
 	CreateSwapChain();
@@ -72,7 +71,7 @@ void DXCommon::InitDevice(){
 	}
 	assert(useAdapter != nullptr);
 
-	// Direct3D12デバイスの生成 (対応レベルの高い順に試行)
+	// Direct3D12デバイスの生成
 	D3D_FEATURE_LEVEL featureLevels[] = {
 		D3D_FEATURE_LEVEL_12_2, D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_0
 	};
@@ -89,14 +88,14 @@ void DXCommon::InitDevice(){
 	Logger::Log("Complete create D3D12Device!!\n");
 
 #ifdef _DEBUG
-	// エラー・警告発生時にブレークする情報キューの設定
+	// 情報キューの設定
 	ComPtr<ID3D12InfoQueue> infoQueue = nullptr;
 	if(SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&infoQueue)))){
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION,true);
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING,true);
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR,true);
 
-		// 特定の警告メッセージの出力を抑制
+		// 特定の警告の抑制
 		D3D12_MESSAGE_ID denyIds[] = {
 			D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE
 		};
@@ -128,7 +127,7 @@ void DXCommon::InitCommand(){
 void DXCommon::CreateSwapChain(){
 	HRESULT hr;
 	swapChainDesc.Width = winApi_->kClientWidth;
-	swapChainDesc.Height = winApi_->kCliantHeight;
+	swapChainDesc.Height = winApi_->kClientHeight;
 	swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	swapChainDesc.SampleDesc.Count = 1;
 	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -144,7 +143,7 @@ void DXCommon::CreateSwapChain(){
 void DXCommon::CreateDepthBuffer(){
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Width = winApi_->kClientWidth;
-	resourceDesc.Height = winApi_->kCliantHeight;
+	resourceDesc.Height = winApi_->kClientHeight;
 	resourceDesc.MipLevels = 1;
 	resourceDesc.DepthOrArraySize = 1;
 	resourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -170,8 +169,7 @@ void DXCommon::CreateDescriptorHeaps(){
 	descriptorSizeRTV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	descriptorSizeDSV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
-	// ポストプロセス用のオフスクリーン描画先(RenderTexture)確保のため、RTV数を 2 から 3 へ拡張
-	rtvDescriptorHeap = CreateDiscriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_RTV,3,false);
+	rtvDescriptorHeap = CreateDiscriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_RTV,50,false);
 	dsvDescriptorHeap = CreateDiscriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE_DSV,1,false);
 }
 
@@ -191,6 +189,8 @@ void DXCommon::InitRenderTargetView(){
 		device->CreateRenderTargetView(swapChainResources[i].Get(),&rtvDesc,rtvHandle);
 		rtvHandle.ptr += descriptorSizeRTV;
 	}
+
+	currentRtvIndex_ = kNumBackBuffers;
 }
 
 void DXCommon::InitDepthStancilView(){
@@ -208,10 +208,8 @@ void DXCommon::InitDepthShaderResourceView(){
 	uint32_t index = SrvManager::GetInstance()->Allocate();
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCpu = SrvManager::GetInstance()->GetCPUDescriptorHandle(index);
 
-	// ポストプロセスのシェーダー読み込み用GPUハンドルを取得・保存
 	depthSrvHandleGpu_ = SrvManager::GetInstance()->GetGPUDescriptorHandle(index);
 
-	// 深度バッファをシェーダーリソースとして扱うためのSRVビュー設定
 	D3D12_SHADER_RESOURCE_VIEW_DESC depthSrvDesc{};
 	depthSrvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 	depthSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -232,7 +230,7 @@ void DXCommon::InitFence(){
 
 void DXCommon::InitViewportRect(){
 	viewport.Width = (float)WinAPI::kClientWidth;
-	viewport.Height = (float)WinAPI::kCliantHeight;
+	viewport.Height = (float)WinAPI::kClientHeight;
 	viewport.TopLeftX = 0;
 	viewport.TopLeftY = 0;
 	viewport.MinDepth = 0.0f;
@@ -243,7 +241,7 @@ void DXCommon::InitScissorRect(){
 	scissorRect.left = 0;
 	scissorRect.right = (LONG)WinAPI::kClientWidth;
 	scissorRect.top = 0;
-	scissorRect.bottom = (LONG)WinAPI::kCliantHeight;
+	scissorRect.bottom = (LONG)WinAPI::kClientHeight;
 }
 
 void DXCommon::CreateDXCCompiler(){
@@ -266,7 +264,7 @@ void DXCommon::PreDraw(RenderTexture* renderTexture){
 	D3D12_CPU_DESCRIPTOR_HANDLE targetRtv;
 	UINT backBufferIndex = swapChain->GetCurrentBackBufferIndex();
 
-	// オフスクリーンターゲットが渡された場合のバリア・描画先変更
+	// オフスクリーン描画ターゲットの判定とリソースバリア
 	if(renderTexture){
 		targetRtv = renderTexture->GetRtvHandle();
 
@@ -279,6 +277,7 @@ void DXCommon::PreDraw(RenderTexture* renderTexture){
 	// レンダーターゲットの設定
 	commandList->OMSetRenderTargets(1,&targetRtv,false,renderTexture?&dsvHandle:nullptr);
 
+	// 画面のクリア
 	float clearColor[] = {0.1f, 0.25f, 0.5f, 1.0f};
 	commandList->ClearRenderTargetView(targetRtv,clearColor,0,nullptr);
 
@@ -294,7 +293,7 @@ void DXCommon::PostDraw(){
 	HRESULT hr;
 	UINT bbIndex = swapChain->GetCurrentBackBufferIndex();
 
-	// レンダーターゲットから画面表示状態(PRESENT)へのバリア遷移
+	// PRESENT状態へ戻すためのリソースバリア
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(swapChainResources[bbIndex].Get(),D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_PRESENT);
 	commandList->ResourceBarrier(1,&barrier);
 
@@ -305,10 +304,10 @@ void DXCommon::PostDraw(){
 	ID3D12CommandList* commandLists[] = {commandList.Get()};
 	commandQueue->ExecuteCommandLists(1,commandLists);
 
-	UpdateFixFPS();
+	// 画面への表示
 	swapChain->Present(1,0);
 
-	// フェンスによる同期処理
+	// フェンスによるGPU同期
 	fenceValue++;
 	commandQueue->Signal(fence.Get(),fenceValue);
 
@@ -317,27 +316,12 @@ void DXCommon::PostDraw(){
 		WaitForSingleObject(fenceEvent,INFINITE);
 	}
 
-	// 次フレーム用コマンド割り当て群のリセット
+	// 次フレームに向けたリセット
 	hr = commandAllocator->Reset();
 	assert(SUCCEEDED(hr));
 
 	hr = commandList->Reset(commandAllocator.Get(),nullptr);
 	assert(SUCCEEDED(hr));
-}
-
-void DXCommon::InitializeFixFPS(){
-	reference_ = std::chrono::steady_clock::now();
-}
-
-void DXCommon::UpdateFixFPS(){
-	const std::chrono::microseconds kMinTime(16666); // 1/60sec
-	std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-	std::chrono::microseconds elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - reference_);
-
-	if(elapsed < kMinTime){
-		std::this_thread::sleep_for(kMinTime - elapsed);
-	}
-	reference_ = std::chrono::steady_clock::now();
 }
 
 //=============================================================================
@@ -363,7 +347,6 @@ ComPtr<IDxcBlob> DXCommon::CompileShader(const std::wstring& filePath,const wcha
 	ComPtr<IDxcBlobEncoding> shaderSource = nullptr;
 	assert(SUCCEEDED(dxcUtils->LoadFile(filePath.c_str(),nullptr,&shaderSource)));
 
-	// バッファを一度変数として定義してからアドレスを渡す
 	DxcBuffer buffer;
 	buffer.Ptr = shaderSource->GetBufferPointer();
 	buffer.Size = shaderSource->GetBufferSize();
@@ -381,7 +364,7 @@ ComPtr<IDxcBlob> DXCommon::CompileShader(const std::wstring& filePath,const wcha
 	ComPtr<IDxcResult> shaderResult = nullptr;
 	dxcCompiler->Compile(&buffer,arguments,_countof(arguments),includeHandler,IID_PPV_ARGS(&shaderResult));
 
-	// コンパイルエラーの確認
+	// コンパイルエラーのチェック
 	ComPtr<IDxcBlobUtf8> shaderError = nullptr;
 	shaderResult->GetOutput(DXC_OUT_ERRORS,IID_PPV_ARGS(&shaderError),nullptr);
 	if(shaderError != nullptr && shaderError->GetStringLength() != 0){
@@ -399,7 +382,7 @@ ComPtr<IDxcBlob> DXCommon::CompileShader(const std::wstring& filePath,const wcha
 ComPtr<ID3D12Resource> DXCommon::CreateBufferResource(size_t sizeInBytes){
 	D3D12_HEAP_PROPERTIES uploadHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 
-	// 定数バッファのアライメント制約(256バイトの倍数)に切り上げ
+	// 256バイト境界にアライメント
 	size_t alignedSize = (sizeInBytes + 0xff) & ~0xff;
 
 	D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(alignedSize);
@@ -444,15 +427,27 @@ ComPtr<ID3D12Resource> DXCommon::UploadTextureData(const ComPtr<ID3D12Resource>&
 	uint64_t intermediateSize = GetRequiredIntermediateSize(texture.Get(),0,UINT(subresources.size()));
 	ComPtr<ID3D12Resource> intermediateResource = CreateBufferResource(intermediateSize);
 
-	// テクスチャへのデータ転送前に、転送先リソースを COPY_DEST 状態へ遷移させるバリア
+	// 転送先へ遷移
 	D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(texture.Get(),D3D12_RESOURCE_STATE_GENERIC_READ,D3D12_RESOURCE_STATE_COPY_DEST);
 	commandList->ResourceBarrier(1,&barrier);
 
+	// データ転送
 	UpdateSubresources(commandList.Get(),texture.Get(),intermediateResource.Get(),0,0,UINT(subresources.size()),subresources.data());
 
-	// サンプリング可能にするため、状態を GENERIC_READ へ戻すバリア
+	// 読み込み可能状態へ遷移
 	barrier = CD3DX12_RESOURCE_BARRIER::Transition(texture.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_GENERIC_READ);
 	commandList->ResourceBarrier(1,&barrier);
 
 	return intermediateResource;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DXCommon::AllocateRtvDescriptor(){
+	// 現在のインデックスの位置のハンドルを取得
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	handle.ptr += (size_t)descriptorSizeRTV * currentRtvIndex_;
+
+	// 次回呼ばれた時のためにインデックスを1進める
+	currentRtvIndex_++;
+
+	return handle;
 }
