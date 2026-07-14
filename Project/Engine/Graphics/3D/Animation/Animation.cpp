@@ -1,4 +1,5 @@
 #include "Animation.h"
+#include "Obj3DCommon.h"
 #include "MyMath.h"
 #include <filesystem>
 #include <cmath>

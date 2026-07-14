@@ -8,56 +8,56 @@
 
 /// <summary>
 /// アプリケーションクラス
-/// Frameworkクラスを継承し、このゲーム固有の処理（シーン管理やループ動作）を実装します。
+/// Frameworkクラスを継承し、ゲーム固有のシーン管理やメインループ動作を実装します。
 /// </summary>
 class Application : public Framework{
 public:
 	// --- コンストラクタ・デストラクタ ---
 
-	// コンストラクタ
 	Application();
-
-	// デストラクタ
-	// 基底クラスの仮想デストラクタをオーバーライドします
 	~Application() override;
 
 	// --- シングルトンアクセサ ---
 	static Application* GetInstance(){ return instance_; }
 
-	// --- Frameworkの純粋仮想関数をオーバーライド ---
+	// --- Frameworkのオーバーライド ---
 
 	/// <summary>
 	/// 初期化処理
-	/// アプリケーション起動時に一度だけ呼ばれます。
-	/// ウィンドウ生成後のリソース読み込みや、最初のシーン設定を行います。
+	/// アプリケーション起動時に一度だけ実行され、リソースやシーンの設定を行います。
 	/// </summary>
 	void Initialize() override;
 
 	/// <summary>
+	/// ゲーム固有システムの初期化
+	/// </summary>
+	void InitializeGameSystems() override;
+
+	/// <summary>
 	/// 終了処理
-	/// アプリケーション終了時に一度だけ呼ばれます。
-	/// 確保したメモリやリソースの解放を行います。
+	/// リソースの解放を行います。
 	/// </summary>
 	void Finalize() override;
 
 	/// <summary>
 	/// 更新処理
-	/// 毎フレーム呼ばれ、ゲームの計算や入力処理を行います。
+	/// 毎フレームの計算、入力、アニメーションの更新を行います。
 	/// </summary>
 	void Update() override;
 
 	/// <summary>
 	/// 描画処理
-	/// 毎フレーム呼ばれ、画面への描画コマンドを発行します。
+	/// 毎フレームの描画コマンドを発行します。
 	/// </summary>
 	void Draw() override;
 
-	// --- デバッグUI関数 ---
+	// --- デバッグUI・演出関連 ---
 
 	/// <summary>
 	/// ポストプロセスのデバッグUIを表示します。
 	/// </summary>
 	void ShowPostProcessUI();
+
 	void SetCurrentPPType(PostProcess::Type type){ currentPPType_ = type; }
 	void StartDissolveAnimation(){ isDissolving_ = true; dissolveTimer_ = 0.0f; }
 	void TriggerGlitch();
@@ -72,12 +72,13 @@ private:
 	PostProcess::Type currentPPType_ = PostProcess::Type::PostProcess;
 	std::string currentMaskPath_;
 
-	// --- Dissolveアニメーション用メンバ変数 ---
-	bool isDissolving_ = false;           // アニメーション中かどうかのフラグ
-	float dissolveTimer_ = 0.0f;          // アニメーションの経過時間
-	const float kDissolveDuration = 2.0f; // アニメーションの合計時間（秒）
+	// --- Dissolveアニメーション用管理 ---
+	bool isDissolving_ = false;           // アニメーション中フラグ
+	float dissolveTimer_ = 0.0f;          // 経過時間
+	const float kDissolveDuration = 2.0f; // 合計時間（秒）
 
-	bool isGlitchActive_ = false;         // グリッチ演出中かどうかのフラグ
-	float glitchTimer_ = 0.0f;            // グリッチの残り時間タイマー
-	const float kGlitchDuration = 0.15f;
+	// --- グリッチ演出用管理 ---
+	bool isGlitchActive_ = false;         // グリッチ演出中フラグ
+	float glitchTimer_ = 0.0f;            // 残り時間タイマー
+	const float kGlitchDuration = 0.15f;  // 演出時間（秒）
 };
