@@ -204,6 +204,9 @@
     <ClCompile Include="Engine\Graphics\3D\SkinCluster.cpp">
       <Filter>ソース ファイル\Engine\Graphics\3D</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Base\TimeManager.cpp">
+      <Filter>ソース ファイル\Engine\Base</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Base\D3DResourceLeakChecker.h">
@@ -319,6 +322,9 @@
     </ClInclude>
     <ClInclude Include="Game\TitleScene.h">
       <Filter>ヘッダー ファイル\Game\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Base\TimeManager.h">
+      <Filter>ヘッダー ファイル\Engine\Base</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

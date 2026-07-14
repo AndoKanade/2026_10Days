@@ -16,6 +16,7 @@
 #include "ParticleManager.h"
 #include "TextureManager.h"
 #include "ModelManager.h"
+#include "TimeManager.h"
 #include "SpriteCommon.h"
 #include "Obj3DCommon.h"
 

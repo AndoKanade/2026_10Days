@@ -10,7 +10,7 @@ void Framework::Initialize(){
 	// --- 1. 基盤システムの初期化 ---
 	// スマートポインタ(unique_ptr)で生成し、所有権をFrameworkが持つ
 	winApi_ = std::make_unique<WinAPI>();
-	winApi_->Initialize();
+	winApi_->Initialize(L"Andou_Kanade_就職作品",1280,720);
 
 	dxCommon_ = std::make_unique<DXCommon>();
 	dxCommon_->Initialize(winApi_.get()); // 生ポインタが必要な場合は .get() で渡す
@@ -33,6 +33,7 @@ void Framework::Initialize(){
 	ModelManager::GetInstance()->Initialize(dxCommon_.get());
 	CameraManager::GetInstance()->Initialize();
 	ParticleManager::GetInstance()->Initialize(dxCommon_.get(),SrvManager::GetInstance());
+	TimeManager::GetInstance()->Initialize();
 
 	// --- 3. 描画共通リソースの初期化 ---
 	// スプライト共通設定

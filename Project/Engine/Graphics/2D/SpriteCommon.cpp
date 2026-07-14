@@ -9,11 +9,11 @@ void SpriteCommon::Initialize(DXCommon* dxCommon){
 
 void SpriteCommon::Draw(){
 
-	dxCommon_->commandList.Get()->SetGraphicsRootSignature(
+	dxCommon_->GetCommandList()->SetGraphicsRootSignature(
 		rootSignature.Get());
-	dxCommon_->commandList.Get()->SetPipelineState(
+	dxCommon_->GetCommandList()->SetPipelineState(
 		graphicsPipelineState.Get());
-	dxCommon_->commandList.Get()->IASetPrimitiveTopology(
+	dxCommon_->GetCommandList()->IASetPrimitiveTopology(
 		D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 }

@@ -1,5 +1,6 @@
 #include "Application.h"
 #include "D3DResourceLeakChecker.h"
+#include "TimeManager.h"
 #include <memory> 
 
 int WINAPI WinMain(HINSTANCE,HINSTANCE,LPSTR,int){
@@ -18,6 +19,8 @@ int WINAPI WinMain(HINSTANCE,HINSTANCE,LPSTR,int){
 		// 更新と描画
 		game->Update();
 		game->Draw();
+
+		TimeManager::GetInstance()->Update();
 	}
 
 	// 終了処理

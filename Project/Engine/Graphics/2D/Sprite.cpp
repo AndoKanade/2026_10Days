@@ -103,7 +103,7 @@ void Sprite::Update(){
 	viewMatrix = MakeIdentity4x4();
 	projectionMatrix =
 		MakeOrthographicMatrix(0.0f,0.0f,float(WinAPI::kClientWidth),
-			float(WinAPI::kCliantHeight),0.0f,100.0f);
+			float(WinAPI::kClientHeight),0.0f,100.0f);
 
 	transformationMatrixData->WVP = Multiply(worldMatrix,Multiply(viewMatrix,projectionMatrix));
 	transformationMatrixData->World = worldMatrix;
@@ -111,20 +111,20 @@ void Sprite::Update(){
 }
 
 void Sprite::Draw(){
-	spriteCommon->GetDxCommon()->commandList.Get()->IASetVertexBuffers(0,1,
+	spriteCommon->GetDxCommon()->GetCommandList()->IASetVertexBuffers(0,1,
 		&vertexBufferView);
-	spriteCommon->GetDxCommon()->commandList.Get()->IASetIndexBuffer(&indexBufferView);
+	spriteCommon->GetDxCommon()->GetCommandList()->IASetIndexBuffer(&indexBufferView);
 
 
-	spriteCommon->GetDxCommon()->commandList.Get()->SetGraphicsRootConstantBufferView(
+	spriteCommon->GetDxCommon()->GetCommandList()->SetGraphicsRootConstantBufferView(
 		0,materialResource->GetGPUVirtualAddress());
-	spriteCommon->GetDxCommon()->commandList.Get()->SetGraphicsRootConstantBufferView(
+	spriteCommon->GetDxCommon()->GetCommandList()->SetGraphicsRootConstantBufferView(
 		1,transformationMatrixResource->GetGPUVirtualAddress());
 	spriteCommon->GetDxCommon()->GetCommandList()->SetGraphicsRootDescriptorTable(
 		2,SrvManager::GetInstance()->GetGPUDescriptorHandle(textureIndex)
 	);
 
-	spriteCommon->GetDxCommon()->commandList->DrawIndexedInstanced(6,1,0,0,0);
+	spriteCommon->GetDxCommon()->GetCommandList()->DrawIndexedInstanced(6,1,0,0,0);
 
 
 }
