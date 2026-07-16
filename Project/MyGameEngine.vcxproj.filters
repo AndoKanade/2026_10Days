@@ -189,16 +189,16 @@
     <ClCompile Include="Engine\Graphics\Effect\PostProcess.cpp">
       <Filter>ソース ファイル\Engine\Graphics\Effect</Filter>
     </ClCompile>
-    <ClCompile Include="Game\SceneFactory.cpp">
+    <ClCompile Include="Game\systems\SceneFactory.cpp">
       <Filter>ソース ファイル\Game\System</Filter>
     </ClCompile>
-    <ClCompile Include="Game\SceneManager.cpp">
+    <ClCompile Include="Game\systems\SceneManager.cpp">
       <Filter>ソース ファイル\Game\System</Filter>
     </ClCompile>
-    <ClCompile Include="Game\GameScene.cpp">
+    <ClCompile Include="Game\scenes\GameScene.cpp">
       <Filter>ソース ファイル\Game\Scenes</Filter>
     </ClCompile>
-    <ClCompile Include="Game\TitleScene.cpp">
+    <ClCompile Include="Game\scenes\TitleScene.cpp">
       <Filter>ソース ファイル\Game\Scenes</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\3D\SkinCluster.cpp">
@@ -305,22 +305,22 @@
     <ClInclude Include="Engine\Graphics\3D\SkinCluster.h">
       <Filter>ヘッダー ファイル\Engine\Graphics\3D\Animation</Filter>
     </ClInclude>
-    <ClInclude Include="Game\AbstractSceneFactory.h">
+    <ClInclude Include="Game\systems\AbstractSceneFactory.h">
       <Filter>ヘッダー ファイル\Game\System</Filter>
     </ClInclude>
-    <ClInclude Include="Game\BaseScene.h">
+    <ClInclude Include="Game\systems\BaseScene.h">
       <Filter>ヘッダー ファイル\Game\System</Filter>
     </ClInclude>
-    <ClInclude Include="Game\SceneFactory.h">
+    <ClInclude Include="Game\systems\SceneFactory.h">
       <Filter>ヘッダー ファイル\Game\System</Filter>
     </ClInclude>
-    <ClInclude Include="Game\SceneManager.h">
+    <ClInclude Include="Game\systems\SceneManager.h">
       <Filter>ヘッダー ファイル\Game\System</Filter>
     </ClInclude>
-    <ClInclude Include="Game\GameScene.h">
+    <ClInclude Include="Game\scenes\GameScene.h">
       <Filter>ヘッダー ファイル\Game\Scenes</Filter>
     </ClInclude>
-    <ClInclude Include="Game\TitleScene.h">
+    <ClInclude Include="Game\scenes\TitleScene.h">
       <Filter>ヘッダー ファイル\Game\Scenes</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Base\TimeManager.h">
