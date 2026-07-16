@@ -88,7 +88,7 @@
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <TreatWarningAsError>true</TreatWarningAsError>
       <Optimization>Custom</Optimization>
-      <AdditionalIncludeDirectories>$(ProjectDir)Engine\Base;$(ProjectDir)Engine\Framework;$(ProjectDir)Engine\Manager;$(ProjectDir)Engine\Graphics\2D;$(ProjectDir)Engine\Graphics\3D;$(ProjectDir)Engine\Graphics\Effect;$(ProjectDir)Game;$(ProjectDir);$(ProjectDir)externals\assimp\include;C:\Lessons\MyEngine\Project\Engine\Graphics\3D\Animation</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)Engine\Base;$(ProjectDir)Engine\Framework;$(ProjectDir)Engine\Manager;$(ProjectDir)Engine\Graphics\2D;$(ProjectDir)Engine\Graphics\3D;$(ProjectDir)Engine\Graphics\Effect;$(ProjectDir)Game;$(ProjectDir);$(ProjectDir)externals\assimp\include;C:\Lessons\MyEngine\Project\Engine\Graphics\3D\Animation;$(ProjectDir)Game\systems;$(ProjectDir)Game\scenes</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -116,7 +116,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <Optimization>MinSpace</Optimization>
-      <AdditionalIncludeDirectories>$(ProjectDir)Engine\Base;$(ProjectDir)Engine\Framework;$(ProjectDir)Engine\Manager;$(ProjectDir)Engine\Graphics\2D;$(ProjectDir)Engine\Graphics\3D;$(ProjectDir)Engine\Graphics\Effect;$(ProjectDir)Game;$(ProjectDir);$(ProjectDir)externals\assimp\include;C:\Lessons\MyEngine\Project\Engine\Graphics\3D\Animation</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)Engine\Base;$(ProjectDir)Engine\Framework;$(ProjectDir)Engine\Manager;$(ProjectDir)Engine\Graphics\2D;$(ProjectDir)Engine\Graphics\3D;$(ProjectDir)Engine\Graphics\Effect;$(ProjectDir)Game;$(ProjectDir);$(ProjectDir)externals\assimp\include;C:\Lessons\MyEngine\Project\Engine\Graphics\3D\Animation;$(ProjectDir)Game\systems;$(ProjectDir)Game\scenes</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -145,7 +145,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <Optimization>Disabled</Optimization>
       <WholeProgramOptimization>false</WholeProgramOptimization>
-      <AdditionalIncludeDirectories>$(ProjectDir)Engine\Base;$(ProjectDir)Engine\Framework;$(ProjectDir)Engine\Manager;$(ProjectDir)Engine\Graphics\2D;$(ProjectDir)Engine\Graphics\3D;$(ProjectDir)Engine\Graphics\Effect;$(ProjectDir)Game;$(ProjectDir);$(ProjectDir)externals\assimp\include;C:\Lessons\MyEngine\Project\Engine\Graphics\3D\Animation</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)Engine\Base;$(ProjectDir)Engine\Framework;$(ProjectDir)Engine\Manager;$(ProjectDir)Engine\Graphics\2D;$(ProjectDir)Engine\Graphics\3D;$(ProjectDir)Engine\Graphics\Effect;$(ProjectDir)Game;$(ProjectDir);$(ProjectDir)externals\assimp\include;C:\Lessons\MyEngine\Project\Engine\Graphics\3D\Animation;$(ProjectDir)Game\systems;$(ProjectDir)Game\scenes</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BaseScene.h"
+#include "systems/BaseScene.h"
 #include "MyMath.h"
 #include <memory>
 #include <string>
