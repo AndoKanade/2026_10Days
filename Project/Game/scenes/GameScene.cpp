@@ -30,11 +30,7 @@ namespace{
 	const std::string kModelTerrain = "Terrain/terrain.obj";
 	const std::string kModelSimpleSkin = "simpleSkin/simpleSkin.gltf";
 	const std::string kModelAnimationCube = "AnimatedCube/AnimatedCube.gltf";
-	const std::string kModelHuman = "human/walk.gltf";
-
-	const std::string kParticlePrimitive = "Circle";
-	const std::string kParticleRing = "Ring";
-	const std::string kParticleCylinder = "Cylinder";
+	const std::string kModelHuman = "human/sneakWalk.gltf";
 }
 
 GameScene::GameScene() = default;
@@ -120,28 +116,9 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	humanObj_->Initialize(object3dCommon_);
 	humanObj_->SetModel(kModelHuman);
 	humanObj_->SetTexture("resource/human/white.png");
-	humanObj_->LoadAnimation("resource/human/","walk.gltf");
+	humanObj_->LoadAnimation("resource/human/","sneakWalk.gltf");
 
 	// パーティクルの設定
-	ParticleManager::GetInstance()->CreateParticleGroup(kParticleRing,kTexturegradationLine,true,false);
-	Transform ringConfig = {{0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 0.0f}, {1.0f, 2.0f, 0.0f}};
-	ringEmitter_ = std::make_unique<ParticleEmitter>(kParticleRing,ringConfig,1,0.5f);
-	ringEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
-	ringEmitter_->SetLifeTime(1.0f);
-
-	ParticleManager::GetInstance()->CreateParticleGroup(kParticlePrimitive,kTextureCircle2,false,false);
-	Transform circleConfig = {{0.05f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 2.0f, 0.0f}};
-	circleEmitter_ = std::make_unique<ParticleEmitter>(kParticlePrimitive,circleConfig,3,0.5f);
-	circleEmitter_->SetVelocity({0.0f, 0.5f, 0.0f});
-	circleEmitter_->SetLifeTime(1.0f);
-
-	ParticleManager::GetInstance()->CreateParticleGroup(kParticleCylinder,kTexturegradationLine,false,true);
-	Transform cylinderConfig = {{1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
-	cylinderEmitter_ = std::make_unique<ParticleEmitter>(kParticleCylinder,cylinderConfig,1,0.1f);
-	cylinderEmitter_->SetColor({0.2f, 0.5f, 1.0f, 0.8f});
-	cylinderEmitter_->SetLifeTime(2.0f);
-	cylinderEmitter_->SetVelocity({0.0f, 0.0f, 0.0f});
-
 	ParticleManager::GetInstance()->CreateParticleGroup("Shockwave",kTexturegradationLine,true,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Spark",kTextureCircle2,false,false,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Smoke",kTextureCircle2,false,false,false,false,true);
