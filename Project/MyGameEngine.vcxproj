@@ -389,12 +389,12 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClInclude Include="Engine\Manager\SoundManager.h" />
     <ClInclude Include="Engine\Manager\SrvManager.h" />
     <ClInclude Include="Engine\Manager\TextureManager.h" />
-    <ClInclude Include="Game\AbstractSceneFactory.h" />
-    <ClInclude Include="Game\BaseScene.h" />
-    <ClInclude Include="Game\GameScene.h" />
-    <ClInclude Include="Game\SceneFactory.h" />
-    <ClInclude Include="Game\SceneManager.h" />
-    <ClInclude Include="Game\TitleScene.h" />
+    <ClInclude Include="Game\systems\AbstractSceneFactory.h" />
+    <ClInclude Include="Game\systems\BaseScene.h" />
+    <ClInclude Include="Game\scenes\GameScene.h" />
+    <ClInclude Include="Game\systems\SceneFactory.h" />
+    <ClInclude Include="Game\systems\SceneManager.h" />
+    <ClInclude Include="Game\scenes\TitleScene.h" />
     <ClInclude Include="resource\resource.h" />
   </ItemGroup>
   <ItemGroup>
@@ -429,10 +429,10 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClCompile Include="Engine\Manager\SoundManager.cpp" />
     <ClCompile Include="Engine\Manager\SrvManager.cpp" />
     <ClCompile Include="Engine\Manager\TextureManager.cpp" />
-    <ClCompile Include="Game\GameScene.cpp" />
-    <ClCompile Include="Game\SceneFactory.cpp" />
-    <ClCompile Include="Game\SceneManager.cpp" />
-    <ClCompile Include="Game\TitleScene.cpp" />
+    <ClCompile Include="Game\scenes\GameScene.cpp" />
+    <ClCompile Include="Game\systems\SceneFactory.cpp" />
+    <ClCompile Include="Game\systems\SceneManager.cpp" />
+    <ClCompile Include="Game\scenes\TitleScene.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="resource\MyGameEngine.rc">
