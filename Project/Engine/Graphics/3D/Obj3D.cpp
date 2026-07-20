@@ -88,6 +88,10 @@ void Obj3D::Update(){
 //=============================================================================
 
 void Obj3D::Draw(){
+    if(model == nullptr){
+        return;
+    }
+
     auto* commandList = object3dCommon->GetDxCommon()->GetCommandList();
     auto* lightRes = ModelManager::GetInstance()->GetModelCommon()->GetLightResource();
     Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera();

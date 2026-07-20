@@ -207,6 +207,9 @@
     <ClCompile Include="Engine\Base\TimeManager.cpp">
       <Filter>ソース ファイル\Engine\Base</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Manager\LevelManager.cpp">
+      <Filter>ソース ファイル\Engine\Manager</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Base\D3DResourceLeakChecker.h">
@@ -325,6 +328,9 @@
     </ClInclude>
     <ClInclude Include="Engine\Base\TimeManager.h">
       <Filter>ヘッダー ファイル\Engine\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Manager\LevelManager.h">
+      <Filter>ヘッダー ファイル\Engine\Manager</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
