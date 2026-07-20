@@ -15,6 +15,7 @@
 #include "Animation.h"
 #include "Application.h"
 #include "Logger.h"
+#include "LevelManager.h"
 
 namespace{
 	const std::string kTextureChecker = "resource/uvChecker.png";
@@ -125,6 +126,45 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	ParticleManager::GetInstance()->CreateParticleGroup("Charge",kTexturegradationLine,false,false,false,false,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Aura",kTextureCircle2,false,false,false,false,false,false,true);
 	ParticleManager::GetInstance()->CreateParticleGroup("Warp",kTexturegradationLine,false,true,false,false,false,false,false,true);
+
+	LevelManager levelManager;
+	levelManager.LoadJSON("level.json");
+
+	for(const auto& objData : levelManager.GetObjects()){
+		if(objData.type == "MESH"){
+			// 新しいObj3Dインスタンスを生成・初期化
+			auto newObj = std::make_shared<Obj3D>();
+			newObj->Initialize(object3dCommon_);
+
+			// ファイル名(モデル名)が指定されていればモデルをセット
+			if(!objData.fileName.empty()){
+				ModelManager::GetInstance()->LoadModel(objData.fileName);
+				newObj->SetModel(objData.fileName);
+			}
+
+			// トランスフォームの適用
+			newObj->SetTranslate(objData.translation);
+			newObj->SetScale(objData.scaling);
+
+			// JSONに保存されている回転角(度数法)をラジアンに変換
+			float radX = objData.rotation.x * (3.14159265f / 180.0f);
+			float radY = objData.rotation.y * (3.14159265f / 180.0f);
+			float radZ = objData.rotation.z * (3.14159265f / 180.0f);
+
+			// MyMathの関数を使ってオイラー角からクォータニオンに変換してセット
+			newObj->SetQuaternion(MakeQuaternionFromEuler(radX,radY,radZ));
+
+			// ※必要であればコライダーの初期化もここで行う
+			/*
+			if (objData.colliderType == "BOX") {
+				newObj->SetCollider(objData.colliderCenter, objData.colliderSize);
+			}
+			*/
+
+			// 管理用配列に追加
+			levelObjects_.push_back(newObj);
+		}
+	}
 }
 
 void GameScene::Finalize(){}
@@ -158,6 +198,10 @@ void GameScene::Update(){
 	// パーティクル更新
 	if(Camera* cam = CameraManager::GetInstance()->GetActiveCamera()){
 		ParticleManager::GetInstance()->Update(cam);
+	}
+
+	for(auto& obj : levelObjects_){
+		obj->Update();
 	}
 
 	// --- デバッグUIの表示 ---
@@ -249,6 +293,10 @@ void GameScene::Update(){
 void GameScene::Draw(){
 	object3dCommon_->Draw();
 	if(humanObj_) humanObj_->Draw();
+
+	for(const auto& obj : levelObjects_){
+		obj->Draw();
+	}
 
 	if(Camera* cam = CameraManager::GetInstance()->GetActiveCamera()){
 		Matrix4x4 viewProj = Multiply(cam->GetViewMatrix(),cam->GetProjectionMatrix());

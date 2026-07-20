@@ -2,6 +2,7 @@
 
 #include "systems/BaseScene.h"
 #include "MyMath.h"
+#include "LevelManager.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -63,4 +64,6 @@ private:
 	// 設定・状態
 	const std::string kBgmPath_ = "resource/You_and_Me.mp3";
 	bool isPaused_ = false;
+
+	std::vector<std::shared_ptr<Obj3D>> levelObjects_;
 };

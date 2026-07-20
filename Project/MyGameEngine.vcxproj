@@ -386,6 +386,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClInclude Include="Engine\Graphics\Effect\RenderTexture.h" />
     <ClInclude Include="Engine\Manager\ImGuiManager.h" />
     <ClInclude Include="Engine\Manager\Input.h" />
+    <ClInclude Include="Engine\Manager\LevelManager.h" />
     <ClInclude Include="Engine\Manager\SoundManager.h" />
     <ClInclude Include="Engine\Manager\SrvManager.h" />
     <ClInclude Include="Engine\Manager\TextureManager.h" />
@@ -426,6 +427,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClCompile Include="Engine\Graphics\Effect\RenderTexture.cpp" />
     <ClCompile Include="Engine\Manager\ImGuiManager.cpp" />
     <ClCompile Include="Engine\Manager\Input.cpp" />
+    <ClCompile Include="Engine\Manager\LevelManager.cpp" />
     <ClCompile Include="Engine\Manager\SoundManager.cpp" />
     <ClCompile Include="Engine\Manager\SrvManager.cpp" />
     <ClCompile Include="Engine\Manager\TextureManager.cpp" />
