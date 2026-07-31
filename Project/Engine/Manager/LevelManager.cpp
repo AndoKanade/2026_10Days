@@ -4,15 +4,28 @@
 #include <iostream>
 #include <cassert>
 
+namespace{
+	// resource/levelフォルダへの相対パス
+	const std::string kLevelDirectory = "resource/level/";
+	// ホットリロードのファイル更新確認を行う間隔
+	constexpr std::chrono::milliseconds kReloadCheckInterval{500};
+}
+
 void LevelManager::LoadJSON(const std::string& fileName){
+	// 再読み込み（ホットリロード）時にも同じファイルを参照できるようファイル名を保持
+	filename_ = fileName;
+
 	// resource/levelフォルダのパスを結合
-	std::string fullPath = "resource/level/" + fileName;
+	std::string fullPath = kLevelDirectory + fileName;
 
 	// ファイルを開く
 	std::ifstream file(fullPath);
 	if(!file.is_open()){
 		return;
 	}
+
+	// ホットリロード判定用に、読み込んだ時点でのファイル更新時刻を記録
+	lastWriteTime_ = std::filesystem::last_write_time(fullPath);
 
 	// 古いデータをクリア
 	objects_.clear();
@@ -92,4 +105,37 @@ void LevelManager::LoadJSON(const std::string& fileName){
 		}
 		// 種類ごとの処理・再帰処理
 	}
+}
+
+// ホットリロードの確認と実行
+bool LevelManager::CheckAndReload(){
+	// まだ一度もロードしていない場合は対象ファイルが無いので何もしない
+	if(filename_.empty()){
+		return false;
+	}
+
+	// 毎フレームファイルアクセスすると無駄が多いため一定間隔でのみ確認する
+	std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+	if(now - lastCheckTime_ < kReloadCheckInterval){
+		return false;
+	}
+	lastCheckTime_ = now;
+
+	std::string fullPath = kLevelDirectory + filename_;
+
+	// ファイルが存在しない場合は何もしない
+	if(!std::filesystem::exists(fullPath)){
+		return false;
+	}
+
+	// 現在のファイル更新時刻を取得し、前回ロード時の更新時刻と比較する
+	std::filesystem::file_time_type currentWriteTime = std::filesystem::last_write_time(fullPath);
+	if(currentWriteTime == lastWriteTime_){
+		// 更新されていないので再読み込み不要
+		return false;
+	}
+
+	// 更新が検知されたので再読み込みする
+	LoadJSON(filename_);
+	return true;
 }

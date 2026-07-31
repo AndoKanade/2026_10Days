@@ -11,13 +11,8 @@
 class Input;
 class Obj3D;
 class Obj3dCommon;
-class ParticleEmitter;
 class SpriteCommon;
-class Skybox;
-class SkyboxCommon;
 class Application;
-class Animation;
-class AnimationController;
 
 class GameScene : public BaseScene{
 public:
@@ -37,33 +32,19 @@ private:
 	SpriteCommon* spriteCommon_ = nullptr;
 	Application* app_ = nullptr;
 
-	// 3Dオブジェクト
-	std::shared_ptr<Obj3D> planeObj_;
-	std::shared_ptr<Obj3D> fenceObj_;
-	std::shared_ptr<Obj3D> sphereObj_;
-	std::shared_ptr<Obj3D> terrainObj_;
-	std::shared_ptr<Obj3D> simpleSkinObj_;
-	std::shared_ptr<Obj3D> animationCube_;
-	std::shared_ptr<Obj3D> humanObj_;
-
-	// パーティクル管理
-	std::unique_ptr<ParticleEmitter> ringEmitter_;
-	std::unique_ptr<ParticleEmitter> circleEmitter_;
-	std::unique_ptr<ParticleEmitter> cylinderEmitter_;
-	std::unique_ptr<ParticleEmitter> shockwaveEmitter_;
-
-	// 環境・エフェクト
-	std::unique_ptr<SkyboxCommon> skyboxCommon_;
-	std::unique_ptr<Skybox> skybox_;
-
-	// アニメーション
-	std::unique_ptr<Animation> animation_;
-	std::unique_ptr<AnimationController> animationController_;
-	float animationTime_ = 0.0f;
-
 	// 設定・状態
 	const std::string kBgmPath_ = "resource/You_and_Me.mp3";
 	bool isPaused_ = false;
 
+	// レベル配置オブジェクト
 	std::vector<std::shared_ptr<Obj3D>> levelObjects_;
+
+	// レベルJSONの読み込み・更新監視マネージャー
+	LevelManager levelManager_;
+
+	// レベル配置データからオブジェクトを再構築する
+	void RebuildLevelObjects();
+
+	// レベル配置オブジェクトを描画するかどうか（ImGuiで切り替え）
+	bool isLevelObjectsVisible_ = false;
 };
