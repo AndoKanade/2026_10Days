@@ -1,6 +1,8 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <chrono>
+#include <filesystem>
 #include "MyMath.h"
 
 // JSONから読み込んだオブジェクトのデータを保持する構造体
@@ -23,6 +25,10 @@ public:
 	// JSONファイルのロード
 	void LoadJSON(const std::string& filePath);
 
+	// ホットリロード機能：ファイルの更新時刻を確認し、変更されていれば自動で再読み込みを行う
+	// 戻り値：再読み込みを行った場合はtrueを返す
+	bool CheckAndReload();
+
 	// オブジェクトデータの取得
 	const std::vector<LevelObjectData>& GetObjects() const{ return objects_; }
 
@@ -31,4 +37,8 @@ private:
 
 	std::string filename_;  // ファイル名
 	std::string directory_; // ディレクトリパス
+
+	// ホットリロード用のメンバ変数
+	std::filesystem::file_time_type lastWriteTime_{};       // 最後に読み込んだ時点でのファイル更新時刻
+	std::chrono::steady_clock::time_point lastCheckTime_{}; // 最後にファイル更新確認を行った時刻（確認間隔の制御用）
 };
