@@ -3,6 +3,7 @@
 #include "systems/BaseScene.h"
 #include "MyMath.h"
 #include "LevelManager.h"
+#include "Board.h" // 追加：パズルの盤面クラス
 #include <memory>
 #include <string>
 #include <vector>
@@ -41,6 +42,9 @@ private:
 
 	// レベルJSONの読み込み・更新監視マネージャー
 	LevelManager levelManager_;
+
+	// 追加：パズルの盤面（10×10の壁とマスを描画する）
+	Board board_;
 
 	// レベル配置データからオブジェクトを再構築する
 	void RebuildLevelObjects();

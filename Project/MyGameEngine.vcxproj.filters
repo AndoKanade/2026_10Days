@@ -40,6 +40,9 @@
     <Filter Include="ソース ファイル\Game\System">
       <UniqueIdentifier>{c132f0ea-9f7e-4382-98de-ab9d1a835808}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ソース ファイル\Game\Puzzle">
+      <UniqueIdentifier>{8c1b4e07-3d92-49a6-b5f1-2a6c0d7e8f41}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ヘッダー ファイル">
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
     </Filter>
@@ -78,6 +81,9 @@
     </Filter>
     <Filter Include="ヘッダー ファイル\Game\System">
       <UniqueIdentifier>{b1a19401-e6c4-4b53-a1b9-d42788fc8bc4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ヘッダー ファイル\Game\Puzzle">
+      <UniqueIdentifier>{3f2a7c14-9b6e-4d80-a1c2-5e7f0b9d4a63}</UniqueIdentifier>
     </Filter>
     <Filter Include="Resources">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
@@ -216,6 +222,9 @@
     <ClCompile Include="Engine\Manager\LevelManager.cpp">
       <Filter>ソース ファイル\Engine\Manager</Filter>
     </ClCompile>
+    <ClCompile Include="Game\puzzle\Board.cpp">
+      <Filter>ソース ファイル\Game\Puzzle</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Base\D3DResourceLeakChecker.h">
@@ -337,6 +346,15 @@
     </ClInclude>
     <ClInclude Include="Game\scenes\GameOverScene.h">
       <Filter>ヘッダー ファイル\Game\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\puzzle\PuzzleConfig.h">
+      <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\puzzle\Cell.h">
+      <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\puzzle\Board.h">
+      <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Base\TimeManager.h">
       <Filter>ヘッダー ファイル\Engine\Base</Filter>
