@@ -63,17 +63,6 @@ void LevelManager::LoadJSON(const std::string& fileName){
 				objectData.fileName = object["file_name"];
 			}
 
-			// ファイル名が空の場合のデフォルト設定
-			//if(objectData.fileName.empty()){
-			//	if(objectData.name == "Cube"){
-			//		objectData.fileName = "Plane/plane.obj";
-			//	} else if(objectData.name == "球"){
-			//		objectData.fileName = "Sphere/sphere.obj";
-			//	} else{
-			//		objectData.fileName = "Plane/plane.obj";
-			//	}
-			//}
-
 			// トランスフォームのパラメータ読み込み（Z-upからY-upへ変換）
 			nlohmann::json& transform = object["transform"];
 
