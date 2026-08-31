@@ -10,6 +10,7 @@
 #include "Application.h"
 #include "Logger.h"
 #include "LevelManager.h"
+#include "SceneManager.h"
 
 namespace{
 	const std::string kLevelJsonFile = "level.json"; // レベル配置情報のJSONファイル名
@@ -71,12 +72,8 @@ void GameScene::RebuildLevelObjects(){
 			// オイラー角からクォータニオンに変換してセット
 			newObj->SetQuaternion(MakeQuaternionFromEuler(radX,radY,radZ));
 
-			// ※必要であればコライダーの初期化もここで行う
-			/*
-			if (objData.colliderType == "BOX") {
-				newObj->SetCollider(objData.colliderCenter, objData.colliderSize);
-			}
-			*/
+			// TODO: コライダー(Obj3D::SetCollider)が実装され次第、
+			// objData.colliderType を見てここで初期化する
 
 			// 管理用配列に追加
 			levelObjects_.push_back(newObj);
@@ -96,6 +93,11 @@ void GameScene::Update(){
 
 	for(auto& obj : levelObjects_){
 		obj->Update();
+	}
+
+	// スペースキーでゲームクリア画面へ遷移
+	if(input_->TriggerKey(DIK_SPACE)){
+		SceneManager::GetInstance()->ChangeScene("GAMECLEAR");
 	}
 
 	// --- デバッグUIの表示 ---
