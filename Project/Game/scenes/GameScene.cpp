@@ -34,6 +34,9 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
 
+	// 追加：パズルの盤面を初期化する（盤面は3Dオブジェクトで描画する）
+	board_.Initialize(object3dCommon_);
+
 	// LevelManagerを初期化し、レベル配置オブジェクトを構築
 	levelManager_.LoadJSON(kLevelJsonFile);
 	RebuildLevelObjects();
@@ -90,6 +93,9 @@ void GameScene::Update(){
 	if(levelManager_.CheckAndReload()){
 		RebuildLevelObjects();
 	}
+
+	// 追加：盤面の更新
+	board_.Update();
 
 	for(auto& obj : levelObjects_){
 		obj->Update();
@@ -163,4 +169,7 @@ void GameScene::Draw(){
 			obj->Draw();
 		}
 	}
+
+	// 追加：パズルの盤面（壁とマス）を描画する
+	board_.Draw();
 }
