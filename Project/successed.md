@@ -50,7 +50,8 @@
 ### `Board` の現状
 
 - **持っているデータ**：`cells_`（10×10 のマス配列）。論理データとして保持し、`GetCell()` で参照する。
-- **描画しているもの**：U字の壁ブロック（`wallObjs_` ＋ `CreateWallBlock(x, y)`、色 `kWallColor`）と、盤面に固定されたマス（`cellObjs_` ＋ `RebuildCellObjects()`、色 `kFilledCellColor`）。`RebuildCellObjects()` は `Place()` のたびに `cells_` から作り直す。
+- **描画しているもの**：U字の壁ブロック（`wallObjs_` ＋ `CreateWallBlock(x, y, modelPath)`）と、盤面に固定されたマス（`cellObjs_` ＋ `RebuildCellObjects()`、モデル `defaultBlock`、色 `kFilledCellColor`）。`RebuildCellObjects()` は `Place()` のたびに `cells_` から作り直す。
+  - 壁のモデル：左右の壁＝ゴールなので `goalBlock/goalBlock.obj`、下の壁＝電源なので `supplyBlock/supplyBlock.obj`（角は下扱い）。どちらも `enableLighting=0` でテクスチャそのまま表示（色の乗算はしない）。
 - **API**：`Initialize(Obj3dCommon*)` / `Update()` / `Draw()` / `GridToWorld()` / `IsInside()` / `SetWidth()` / `CanPlace()` / `CanFall()` / `Place()`
   - `CanPlace(cells)`：全マスが範囲内かつ空きなら true。現状は未使用（一般用途の判定として保持）。
   - `CanFall(cells)`：落下中ブロック専用。天井より上（y<0）は空中として通し、左右の壁・床・既存ブロックの重なりだけ不可。`FallingBlock` はこちらを使う。
@@ -120,7 +121,7 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 
 2026-08-31 調査。コードから参照されているのは以下のみと確認。
 
-**使用中**：`Fence/fence.obj`（+mtl+png）、`Skybox/rostock_laage_airport_4k.dds`、`uvChecker.png`（ルート）、`You_and_Me.mp3`、`noise0.png` `noise1.png`、`level/` 一式（level.json / level.obj / circle.obj / levelCircle.obj + 各mtl + white.png）、`resource.h` `MyGameEngine.rc`、`defaultBlock/`（defaultBlock.obj / .mtl。盤面の3D描画で使用）
+**使用中**：`Fence/fence.obj`（+mtl+png）、`Skybox/rostock_laage_airport_4k.dds`、`uvChecker.png`（ルート）、`You_and_Me.mp3`、`noise0.png` `noise1.png`、`level/` 一式（level.json / level.obj / circle.obj / levelCircle.obj + 各mtl + white.png）、`resource.h` `MyGameEngine.rc`、`defaultBlock/`（固定マス・落下ブロック・ゴーストの描画）、`goalBlock/`（左右の壁）、`supplyBlock/`（下の壁）
 
 **削除候補（テンプレート由来で未参照）**：`AnimatedCube/` `Circle/` `Plane/` `Sphere/` `Terrain/` `human/` `simpleSkin/` `levelCircle/` の各フォルダ、`You_and_Me.wav`、`circle.png` `circle2.png` `gradationLine.png`
 
@@ -129,6 +130,16 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 ---
 
 ## 作業ログ
+
+### 2026-09-02（8）
+
+**変更：壁の描画モデルを goalBlock / supplyBlock に差し替え**
+
+- `resource/goalBlock/`（obj+mtl+png）と `resource/supplyBlock/`（同）を新規追加（モデルは別途作成済み）。
+- `Board`：`CreateWallBlock(x, y)` に `const std::string& modelPath` 引数を追加。`Initialize` で左右の壁は `goalBlock/goalBlock.obj`、下の壁は `supplyBlock/supplyBlock.obj` を指定（下の角2つは下の壁扱い）。3モデルとも `Initialize` で `LoadModel`。
+- 壁の色乗算（旧 `kWallColor`）を廃止。`enableLighting=0` のみ残し、モデルのテクスチャをそのまま表示する。`kWallColor` 定数は削除。
+- 盤面に固定されたマス（`cellObjs_`）は従来どおり `defaultBlock` ＋ `kFilledCellColor`。
+- Debug/x64 ビルド成功。実機での見た目確認はまだ。
 
 ### 2026-09-02（7）
 

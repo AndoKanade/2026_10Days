@@ -2,6 +2,7 @@
 
 #include <array>
 #include <memory>
+#include <string>
 #include <vector>
 #include <cstdint>
 
@@ -92,8 +93,8 @@ private:
 	// 追加：盤面に固定されたマスの見た目を表す3Dオブジェクト
 	std::vector<std::unique_ptr<Obj3D>> cellObjs_;
 
-	// U字の壁ブロックを1個生成して wallObjs_ に追加する
-	void CreateWallBlock(int32_t x,int32_t y);
+	// U字の壁ブロックを1個生成して wallObjs_ に追加する（modelPath で使うモデルを指定する）
+	void CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath);
 
 	// 追加：cells_ の埋まっているマスから cellObjs_ を作り直す
 	void RebuildCellObjects();
