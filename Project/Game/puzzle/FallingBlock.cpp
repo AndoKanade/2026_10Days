@@ -66,11 +66,27 @@ bool FallingBlock::Update(Board& board){
 	}
 
 	// 猶予を使い切ったので盤面に固定する
-	board.Place(GetOccupiedCells(),blockId_);
+	// この形（回転込み）の端子ビットも一緒に渡す
+	board.Place(GetOccupiedCells(),blockId_,BlockShape::GetTerminals(type_,rotation_));
 	return true;
 }
 
-// 追加：左に1マス移動する。
+// 左に1マス移動する。
+bool FallingBlock::HardDrop(Board& board){
+	while(true){
+		const GridPos down = {origin_.x,origin_.y + 1};
+		if(!board.CanPlace(CalcCells(down,rotation_))){
+			break;
+		}
+		origin_ = down;
+	}
+
+	fallTimer_ = 0;
+	lockTimer_ = 0;
+	board.Place(GetOccupiedCells(),blockId_,BlockShape::GetTerminals(type_,rotation_));
+	return true;
+}
+
 void FallingBlock::MoveLeft(const Board& board){
 	const GridPos moved = {origin_.x - 1, origin_.y};
 	if(board.CanPlace(CalcCells(moved,rotation_))){

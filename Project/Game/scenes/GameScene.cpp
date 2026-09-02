@@ -135,29 +135,35 @@ void GameScene::Update(){
 
 	// 追加：落下中ブロックの操作と自動落下
 	if(!isGameOver_){
-		// 左右移動・回転はトリガー（押した瞬間）で1回ずつ
-		if(input_->TriggerKey(DIK_A)){
-			fallingBlock_.MoveLeft(board_);
-		}
-		if(input_->TriggerKey(DIK_D)){
-			fallingBlock_.MoveRight(board_);
-		}
-		if(input_->TriggerKey(DIK_W)){
-			fallingBlock_.Rotate(board_);
-		}
-		// 下キーは押しっぱなしで加速落下
-		fallingBlock_.SetSoftDrop(input_->PushKey(DIK_S));
-
-		// 時間経過を進め、盤面に固定されたら次のブロックを出す
-		if(fallingBlock_.Update(board_)){
-			++nextBlockId_;
-			if(!fallingBlock_.Spawn(board_,BlockShape::Type::T,nextBlockId_)){
-				isGameOver_ = true;
+		// 追加：消去演出中（Board::IsBusy）はブロックの操作・落下・出現を止める
+		if(!board_.IsBusy()){
+			// 左右移動・回転はトリガー（押した瞬間）で1回ずつ
+			if(input_->TriggerKey(DIK_A)){
+				fallingBlock_.MoveLeft(board_);
 			}
-		}
+			if(input_->TriggerKey(DIK_D)){
+				fallingBlock_.MoveRight(board_);
+			}
+			if(input_->TriggerKey(DIK_W)){
+				fallingBlock_.Rotate(board_);
+			}
+			// 下キーは押しっぱなしで加速落下
+			fallingBlock_.SetSoftDrop(input_->PushKey(DIK_S));
 
-		// 描画オブジェクトを現在の占有マスに合わせて動かす
-		SyncFallingObjs();
+			// 時間経過を進め、盤面に固定されたら次のブロックを出す
+			const bool blockLocked = input_->TriggerKey(DIK_RETURN)
+				? fallingBlock_.HardDrop(board_)
+				: fallingBlock_.Update(board_);
+			if(blockLocked){
+				++nextBlockId_;
+				if(!fallingBlock_.Spawn(board_,BlockShape::Type::T,nextBlockId_)){
+					isGameOver_ = true;
+				}
+			}
+
+			// 描画オブジェクトを現在の占有マスに合わせて動かす
+			SyncFallingObjs();
+		}
 		for(auto& obj : fallingObjs_){
 			obj->Update();
 		}

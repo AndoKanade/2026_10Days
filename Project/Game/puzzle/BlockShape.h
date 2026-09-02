@@ -30,4 +30,9 @@ namespace BlockShape{
 	//
 	// 現状はスタブ。担当Bが形テーブルを実装するまで空の配列を返す。
 	const std::vector<GridPos>& GetCells(Type type,int32_t rotation);
+
+	// 追加：指定した種類・回転のブロックの各マスの端子ビット（Terminal::の値）を返す。
+	// 並び順は GetCells() と対応する（同じ添字が同じマスを指す）。
+	// ブロック同士は向き・形に関係なく常に導通する仕様のため、全方向の端子ビットを返す。
+	std::vector<uint8_t> GetTerminals(Type type,int32_t rotation);
 }
