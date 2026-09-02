@@ -69,6 +69,10 @@ private:
 	// 追加：指定した基準座標・回転でブロックが占める盤面マスの絶対座標を計算する。
 	std::vector<GridPos> CalcCells(GridPos origin,int32_t rotation) const;
 
+	// 追加：固定したマス群の中に天井より上（y < 0）のものが含まれていれば
+	// lockedAboveCeiling_ を立てる。通常落下・ハードドロップ両方の固定時に呼ぶ。
+	void UpdateLockedAboveCeiling(const std::vector<GridPos>& lockedCells);
+
 	// このブロックの種類（初期値は仮）
 	BlockShape::Type type_ = BlockShape::Type::L;
 

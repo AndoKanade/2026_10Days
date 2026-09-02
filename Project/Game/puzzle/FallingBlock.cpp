@@ -67,7 +67,9 @@ bool FallingBlock::Update(Board& board){
 
 	// 猶予を使い切ったので盤面に固定する
 	// この形（回転込み）の端子ビットも一緒に渡す
-	board.Place(GetOccupiedCells(),blockId_,BlockShape::GetTerminals(type_,rotation_));
+	const std::vector<GridPos> lockedCells = GetOccupiedCells();
+	board.Place(lockedCells,blockId_,BlockShape::GetTerminals(type_,rotation_));
+	UpdateLockedAboveCeiling(lockedCells);
 	return true;
 }
 
@@ -83,21 +85,22 @@ bool FallingBlock::HardDrop(Board& board){
 
 	fallTimer_ = 0;
 	lockTimer_ = 0;
-	board.Place(GetOccupiedCells(),blockId_,BlockShape::GetTerminals(type_,rotation_));
-
-	const std::vector<GridPos> cells = GetOccupiedCells();
-
-	// 天井より上（y < 0）にマスを残したまま固定されたらゲームオーバー扱いにする
-	for(const GridPos& cell : cells){
-		if(cell.y < 0){
-			lockedAboveCeiling_ = true;
-			break;
-		}
-	}
-
-	board.Place(cells,blockId_);
+	const std::vector<GridPos> lockedCells = GetOccupiedCells();
+	board.Place(lockedCells,blockId_,BlockShape::GetTerminals(type_,rotation_));
+	UpdateLockedAboveCeiling(lockedCells);
 
 	return true;
+}
+
+// 追加：固定したマス群の中に天井より上（y < 0）のものが含まれていれば
+// lockedAboveCeiling_ を立てる。通常落下・ハードドロップ両方の固定時に呼ぶ。
+void FallingBlock::UpdateLockedAboveCeiling(const std::vector<GridPos>& lockedCells){
+	for(const GridPos& cell : lockedCells){
+		if(cell.y < 0){
+			lockedAboveCeiling_ = true;
+			return;
+		}
+	}
 }
 
 void FallingBlock::MoveLeft(const Board& board){
