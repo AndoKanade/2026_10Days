@@ -226,6 +226,26 @@ bool Board::CanPlace(const std::vector<GridPos>& cells) const{
 	return true;
 }
 
+// 追加：落下中ブロック用の配置可否判定。
+// 天井より上（y < 0）は空中とみなして通す。左右の壁・床・既存ブロックとの重なりのみ不可とする。
+bool Board::CanFall(const std::vector<GridPos>& cells) const{
+	for(const GridPos& pos : cells){
+		// 左右の壁・床は盤面幅・高さの外なので必ず不可
+		if(pos.x < 0 || pos.x >= width_ || pos.y >= PuzzleConfig::kBoardHeight){
+			return false;
+		}
+		// 天井より上（y < 0）は盤面データを持たない空中なので、常に通す
+		if(pos.y < 0){
+			continue;
+		}
+		// 盤面内は、既に別のブロックで埋まっていれば不可
+		if(!cells_[pos.y][pos.x].IsEmpty()){
+			return false;
+		}
+	}
+	return true;
+}
+
 // 指定したマス群へ blockId と端子ビットを書き込んで盤面に固定する。
 void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals){
 	for(size_t i = 0; i < cells.size(); ++i){
