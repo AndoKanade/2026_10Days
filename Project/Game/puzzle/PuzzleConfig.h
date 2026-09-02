@@ -75,4 +75,11 @@ namespace PuzzleConfig{
 	// 2連鎖目以降、連鎖が1段増えるごとに加算するボーナス
 	constexpr int32_t kSpecialGaugeBonusPerAdditionalChain = 3;
 
+	// スペシャル発動後、ゲージが0になるまでの制限時間（600フレーム = 約10秒）
+	constexpr int32_t kSpecialReadyDurationFrames = 600;
+
+	// ゲージを1減らす間隔
+	constexpr int32_t kSpecialGaugeDrainIntervalFrames =
+		kSpecialReadyDurationFrames / kSpecialGaugeMax;
+
 }

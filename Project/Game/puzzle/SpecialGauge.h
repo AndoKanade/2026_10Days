@@ -11,8 +11,14 @@ public:
 	// chainCount は最初の消去を1とし、2以上のとき連鎖ボーナスを加える。
 	void AddFromClear(int32_t clearedCellCount,int32_t chainCount);
 
-	// ゲージが満タンで発動可能か
+	// スペシャル発動後の制限時間を1フレーム分進める
+	void Update();
+
+	// ゲージが満タンでスペシャルを開始可能か
 	bool CanActivate() const;
+
+	// 満タンのゲージでスペシャルを開始し、減少を始める
+	bool StartActivation();
 
 	// 発動可能ならゲージを消費して true を返す
 	bool Consume();
@@ -24,7 +30,10 @@ public:
 	int32_t GetValue() const{ return value_; }
 	int32_t GetMaxValue() const;
 	float GetRatio() const;
+	bool IsActivationActive() const{ return isActivationActive_; }
 
 private:
 	int32_t value_ = 0;
+	int32_t drainTimer_ = 0;
+	bool isActivationActive_ = false;
 };

@@ -5,7 +5,8 @@
 #include "PuzzleConfig.h"
 
 void SpecialGauge::AddFromClear(int32_t clearedCellCount,int32_t chainCount){
-	if(clearedCellCount <= 0){
+	// スペシャル発動中は追加チャージを行わない
+	if(clearedCellCount <= 0 || isActivationActive_){
 		return;
 	}
 
@@ -17,25 +18,56 @@ void SpecialGauge::AddFromClear(int32_t clearedCellCount,int32_t chainCount){
 	value_ = std::min(value_ + gainedValue,PuzzleConfig::kSpecialGaugeMax);
 }
 
-bool SpecialGauge::CanActivate() const{
-	return value_ >= PuzzleConfig::kSpecialGaugeMax;
+void SpecialGauge::Update(){
+	if(!isActivationActive_){
+		return;
+	}
+
+	++drainTimer_;
+	if(drainTimer_ < PuzzleConfig::kSpecialGaugeDrainIntervalFrames){
+		return;
+	}
+
+	drainTimer_ = 0;
+	value_ = std::max(value_ - 1,0);
+	if(value_ == 0){
+		isActivationActive_ = false;
+	}
 }
 
-bool SpecialGauge::Consume(){
+bool SpecialGauge::CanActivate() const{
+	return !isActivationActive_ && value_ >= PuzzleConfig::kSpecialGaugeMax;
+}
+
+bool SpecialGauge::StartActivation(){
 	if(!CanActivate()){
 		return false;
 	}
 
-	value_ = 0;
+	drainTimer_ = 0;
+	isActivationActive_ = true;
+	return true;
+}
+
+bool SpecialGauge::Consume(){
+	if(!isActivationActive_ || value_ <= 0){
+		return false;
+	}
+
+	Reset();
 	return true;
 }
 
 void SpecialGauge::Fill(){
 	value_ = PuzzleConfig::kSpecialGaugeMax;
+	drainTimer_ = 0;
+	isActivationActive_ = false;
 }
 
 void SpecialGauge::Reset(){
 	value_ = 0;
+	drainTimer_ = 0;
+	isActivationActive_ = false;
 }
 
 int32_t SpecialGauge::GetMaxValue() const{

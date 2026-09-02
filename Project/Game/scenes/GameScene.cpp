@@ -148,10 +148,21 @@ void GameScene::Update(){
 	// 追加：盤面の更新
 	board_.Update();
 
+	// スペシャル発動後は、対象選択中もゲージを減少させる
+	if(!isGameOver_){
+		specialGauge_.Update();
+	}
+	if(specialSelector_.IsSelecting() && !specialGauge_.IsActivationActive()){
+		// 制限時間内に決定できなかったため、選択を終了する
+		specialSelector_.Cancel();
+	}
+
 	// Qキーでスペシャルの対象選択を開始する
 	if(!isGameOver_ && !specialSelector_.IsSelecting() &&
 		specialGauge_.CanActivate() && input_->TriggerKey(DIK_Q)){
-		specialSelector_.Begin(board_);
+		if(specialSelector_.Begin(board_)){
+			specialGauge_.StartActivation();
+		}
 	}
 
 	// 対象選択中は落下処理を止め、カーソル操作だけを受け付ける
@@ -170,10 +181,6 @@ void GameScene::Update(){
 		if(input_->TriggerKey(DIK_DOWN)){
 			specialSelector_.Move(0,1,board_);
 		}
-		if(input_->TriggerKey(DIK_ESCAPE)){
-			specialSelector_.Cancel();
-		}
-
 		SyncSpecialCursor();
 	}else if(!isGameOver_){
 		// 追加：落下中ブロックの操作と自動落下
@@ -263,7 +270,11 @@ void GameScene::Update(){
 		if(ImGui::CollapsingHeader("Special Gauge")){
 			ImGui::Text("Gauge: %d / %d",specialGauge_.GetValue(),specialGauge_.GetMaxValue());
 			ImGui::ProgressBar(specialGauge_.GetRatio(),ImVec2(-1.0f,0.0f));
-			ImGui::Text("Status: %s",specialGauge_.CanActivate() ? "READY" : "CHARGING");
+			const char* specialStatus = specialGauge_.IsActivationActive() ? "ACTIVE" :
+				(specialGauge_.CanActivate() ? "READY" : "CHARGING");
+			ImGui::Text("Status: %s",specialStatus);
+			ImGui::Text("Active Limit: %.1f seconds",
+				static_cast<float>(PuzzleConfig::kSpecialReadyDurationFrames) / PuzzleConfig::kFrameRate);
 
 			ImGui::InputInt("Cleared Cells",&debugClearedCellCount_);
 			ImGui::InputInt("Chain Count",&debugChainCount_);
@@ -276,27 +287,33 @@ void GameScene::Update(){
 				specialGauge_.Fill();
 			}
 			ImGui::SameLine();
-			if(ImGui::Button("Consume Gauge")){
-				specialGauge_.Consume();
+			if(ImGui::Button("Complete Use (Debug)")){
+				if(specialGauge_.Consume()){
+					specialSelector_.Cancel();
+				}
 			}
 			ImGui::SameLine();
 			if(ImGui::Button("Reset Gauge")){
 				specialGauge_.Reset();
+				specialSelector_.Cancel();
 			}
 
 			if(!specialSelector_.IsSelecting()){
 				if(ImGui::Button("Start Selection")){
 					if(specialGauge_.CanActivate()){
-						specialSelector_.Begin(board_);
+						if(specialSelector_.Begin(board_)){
+							specialGauge_.StartActivation();
+						}
 					}
 				}
 			}else{
 				const GridPos target = specialSelector_.GetTarget();
 				ImGui::Text("Target: (%d, %d)",target.x,target.y);
 				ImGui::Text("Target Cell: %s",specialSelector_.CanConfirm(board_) ? "VALID" : "EMPTY");
-				ImGui::Text("Arrow Keys: Move / Esc: Cancel");
-				if(ImGui::Button("Cancel Selection")){
+				ImGui::Text("Arrow Keys: Move");
+				if(ImGui::Button("Force Cancel (Debug)")){
 					specialSelector_.Cancel();
+					specialGauge_.Reset();
 				}
 			}
 		}
