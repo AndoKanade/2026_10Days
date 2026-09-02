@@ -151,6 +151,32 @@ void GameScene::Update(){
 			}
 		}
 
+		// スペシャルゲージの加算・消費を単独で確認する
+		if(ImGui::CollapsingHeader("Special Gauge")){
+			ImGui::Text("Gauge: %d / %d",specialGauge_.GetValue(),specialGauge_.GetMaxValue());
+			ImGui::ProgressBar(specialGauge_.GetRatio(),ImVec2(-1.0f,0.0f));
+			ImGui::Text("Status: %s",specialGauge_.CanActivate() ? "READY" : "CHARGING");
+
+			ImGui::InputInt("Cleared Cells",&debugClearedCellCount_);
+			ImGui::InputInt("Chain Count",&debugChainCount_);
+
+			if(ImGui::Button("Apply Clear Result")){
+				specialGauge_.AddFromClear(debugClearedCellCount_,debugChainCount_);
+			}
+
+			if(ImGui::Button("Fill Gauge")){
+				specialGauge_.Fill();
+			}
+			ImGui::SameLine();
+			if(ImGui::Button("Consume Gauge")){
+				specialGauge_.Consume();
+			}
+			ImGui::SameLine();
+			if(ImGui::Button("Reset Gauge")){
+				specialGauge_.Reset();
+			}
+		}
+
 		ModelManager::GetInstance()->UpdateLightGui();
 		ImGui::End();
 

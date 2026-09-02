@@ -4,6 +4,7 @@
 #include "MyMath.h"
 #include "LevelManager.h"
 #include "Board.h" // 追加：パズルの盤面クラス
+#include "SpecialGauge.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -45,6 +46,13 @@ private:
 
 	// 追加：パズルの盤面（10×10の壁とマスを描画する）
 	Board board_;
+
+	// スペシャル発動に使用するゲージ
+	SpecialGauge specialGauge_;
+
+	// ImGuiから消去結果を再現するための入力値
+	int32_t debugClearedCellCount_ = 3;
+	int32_t debugChainCount_ = 1;
 
 	// レベル配置データからオブジェクトを再構築する
 	void RebuildLevelObjects();

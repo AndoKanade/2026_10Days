@@ -64,4 +64,15 @@ namespace PuzzleConfig{
 	// マスが空であることを表す元ブロックID
 	constexpr int32_t kEmptyBlockId = -1;
 
+	// --- スペシャルゲージ関連 ---
+
+	// スペシャルを1回発動するために必要なゲージ量
+	constexpr int32_t kSpecialGaugeMax = 30;
+
+	// 通電して消去した1マスあたりのゲージ増加量
+	constexpr int32_t kSpecialGaugePerClearedCell = 1;
+
+	// 2連鎖目以降、連鎖が1段増えるごとに加算するボーナス
+	constexpr int32_t kSpecialGaugeBonusPerAdditionalChain = 3;
+
 }
