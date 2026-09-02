@@ -31,9 +31,6 @@ public:
 	// このフレームで盤面に固定されたら true を返す（呼び出し側が次ブロックを出す）。
 	bool Update(Board& board);
 
-	// 落下可能な最下段まで移動し、即座に盤面へ固定する。
-	bool HardDrop(Board& board);
-
 	// 追加：左に1マス移動する。移動先が壁や既存ブロックと重なる場合は動かさない。
 	void MoveLeft(const Board& board);
 

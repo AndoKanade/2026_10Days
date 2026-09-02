@@ -55,10 +55,9 @@ public:
 	// 現状はスタブ。担当Aが実装するまで常に false を返す。
 	bool CanPlace(const std::vector<GridPos>& cells) const;
 
-	// 追加：指定したマス群へ blockId と端子ビットを書き込んで盤面に固定する。
-	// terminals は cells と同じ並び・同じ要素数を想定する（対応する要素が無いマスは0のまま）。
-	// 固定と同時に通電判定を行い、ゴールまで繋がっていれば対象マスを消す。
-	void Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals);
+	// 追加：指定したマス群へ blockId を書き込んで盤面に固定する。
+	// 現状はスタブ。担当Aが実装するまで何もしない。
+	void Place(const std::vector<GridPos>& cells,int32_t blockId);
 
 	// 追加：落下中ブロック用の配置可否判定。
 	// 天井より上（y < 0）は空中とみなして通す。左右の壁・床・既存ブロックとの重なりのみ不可とする。
@@ -77,9 +76,6 @@ public:
 	// 盤面の幅を切り替える（6と10の切り替え用。デバッグUIから呼ぶ想定）
 	void SetWidth(int32_t width);
 
-	// 追加：消去演出中かどうか。true の間は呼び出し側でブロックの操作・落下を止める想定。
-	bool IsBusy() const{ return isClearing_; }
-
 private:
 
 	// 借りてくるポインタ（このクラスでは生成・解放しない）
@@ -97,31 +93,9 @@ private:
 	// 追加：盤面に固定されたマスの見た目を表す3Dオブジェクト
 	std::vector<std::unique_ptr<Obj3D>> cellObjs_;
 
-	// 追加：消去演出中に、消える予定として保持しているマス
-	std::vector<GridPos> clearingCells_;
-
-	// 追加：消去演出中かどうか
-	bool isClearing_ = false;
-
-	// 追加：消去演出の経過フレーム数
-	int32_t clearTimer_ = 0;
-  
 	// U字の壁ブロックを1個生成して wallObjs_ に追加する（modelPath で使うモデルを指定する）
 	void CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath);
+
 	// 追加：cells_ の埋まっているマスから cellObjs_ を作り直す
 	void RebuildCellObjects();
-
-	// 追加：指定マスが現在消去演出中かどうか
-	bool IsClearingCell(int32_t x,int32_t y) const;
-
-	// 追加：電源（最下段）から実際にどこまで通電が届いているかを幅優先探索で調べる。
-	// ゴールに届いているかは問わない。見た目のハイライト（2.6の常時可視化）に使う。
-	std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> ComputePoweredMask() const;
-
-	// 追加：電源（最下段）から幅優先探索で通電範囲を調べ、ゴール（左右端）まで
-	// 繋がっていれば、その範囲のマスを消去演出の対象にする（この時点ではまだ消さない）。
-	void ResolveConduction();
-
-	// 追加：空きマスを詰めるように、各列のマスをマス単位で下へ落とす
-	void ApplyGravity();
 };

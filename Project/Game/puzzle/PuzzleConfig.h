@@ -56,9 +56,6 @@ namespace PuzzleConfig{
 	// 着地してから盤面に固定されるまでの猶予フレーム数（30 = 約0.5秒）
 	constexpr int32_t kLockDelayFrames = 30;
 
-	// 追加：通電成立から実際にマスを消すまでの演出フレーム数（消えるマスを光らせる時間）（20 = 約0.3秒）
-	constexpr int32_t kClearEffectFrames = 20;
-
 	// --- ブロック関連 ---
 
 	// ブロックが出現する列（盤面上端。左端を0とした列インデックス）
