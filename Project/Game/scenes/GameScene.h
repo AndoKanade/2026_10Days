@@ -7,6 +7,7 @@
 #include "FallingBlock.h" // 追加：落下中のブロック
 #include <cstdint>
 #include "SpecialGauge.h"
+#include "SpecialSelector.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -64,6 +65,12 @@ private:
 	// スペシャル発動に使用するゲージ
 	SpecialGauge specialGauge_;
 
+	// スペシャルで最強マスにする対象の選択状態
+	SpecialSelector specialSelector_;
+
+	// 対象選択中のマスを示すカーソル
+	std::unique_ptr<Obj3D> specialCursorObj_;
+
 	// ImGuiから消去結果を再現するための入力値
 	int32_t debugClearedCellCount_ = 3;
 	int32_t debugChainCount_ = 1;
@@ -73,6 +80,9 @@ private:
 
 	// 追加：落下中ブロックの描画オブジェクトの位置を、現在の占有マスに合わせる
 	void SyncFallingObjs();
+
+	// スペシャル選択カーソルの位置と色を現在の対象に合わせる
+	void SyncSpecialCursor();
 
 	// レベル配置オブジェクトを描画するかどうか（ImGuiで切り替え）
 	bool isLevelObjectsVisible_ = false;

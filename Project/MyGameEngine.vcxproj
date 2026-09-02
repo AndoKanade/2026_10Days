@@ -391,6 +391,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClInclude Include="Engine\Manager\SrvManager.h" />
     <ClInclude Include="Engine\Manager\TextureManager.h" />
     <ClInclude Include="Game\puzzle\SpecialGauge.h" />
+    <ClInclude Include="Game\puzzle\SpecialSelector.h" />
     <ClInclude Include="Game\systems\AbstractSceneFactory.h" />
     <ClInclude Include="Game\systems\BaseScene.h" />
     <ClInclude Include="Game\scenes\GameScene.h" />
@@ -441,6 +442,7 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClCompile Include="Engine\Manager\SrvManager.cpp" />
     <ClCompile Include="Engine\Manager\TextureManager.cpp" />
     <ClCompile Include="Game\puzzle\SpecialGauge.cpp" />
+    <ClCompile Include="Game\puzzle\SpecialSelector.cpp" />
     <ClCompile Include="Game\scenes\GameScene.cpp" />
     <ClCompile Include="Game\scenes\GameClearScene.cpp" />
     <ClCompile Include="Game\scenes\GameOverScene.cpp" />

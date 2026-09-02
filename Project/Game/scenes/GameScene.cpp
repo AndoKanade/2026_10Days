@@ -20,6 +20,11 @@ namespace{
 
 	// 追加：落下中ブロックの色（壁・固定マスと区別できる暖色にする）
 	const Vector4 kFallingBlockColor = {0.95f, 0.75f, 0.25f, 1.0f};
+
+	// スペシャル選択カーソルの見た目
+	constexpr float kSpecialCursorScale = 0.50f;
+	const Vector4 kSpecialCursorValidColor = {0.25f, 1.0f, 0.45f, 0.75f};
+	const Vector4 kSpecialCursorInvalidColor = {1.0f, 0.25f, 0.25f, 0.75f};
 }
 
 GameScene::GameScene() = default;
@@ -64,6 +69,16 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 		fallingObjs_.push_back(std::move(obj));
 	}
 	SyncFallingObjs();
+
+	// スペシャルの対象選択カーソルを用意する
+	specialCursorObj_ = std::make_unique<Obj3D>();
+	specialCursorObj_->Initialize(object3dCommon_);
+	specialCursorObj_->SetModel(kBlockModel);
+	specialCursorObj_->SetScale({kSpecialCursorScale,kSpecialCursorScale,kSpecialCursorScale});
+	if(Model::Material* material = specialCursorObj_->GetMaterial()){
+		material->color = kSpecialCursorValidColor;
+		material->enableLighting = 0;
+	}
 
 	// LevelManagerを初期化し、レベル配置オブジェクトを構築
 	levelManager_.LoadJSON(kLevelJsonFile);
@@ -133,8 +148,35 @@ void GameScene::Update(){
 	// 追加：盤面の更新
 	board_.Update();
 
-	// 追加：落下中ブロックの操作と自動落下
-	if(!isGameOver_){
+	// Qキーでスペシャルの対象選択を開始する
+	if(!isGameOver_ && !specialSelector_.IsSelecting() &&
+		specialGauge_.CanActivate() && input_->TriggerKey(DIK_Q)){
+		specialSelector_.Begin(board_);
+	}
+
+	// 対象選択中は落下処理を止め、カーソル操作だけを受け付ける
+	if(specialSelector_.IsSelecting()){
+		fallingBlock_.SetSoftDrop(false);
+
+		if(input_->TriggerKey(DIK_LEFT)){
+			specialSelector_.Move(-1,0,board_);
+		}
+		if(input_->TriggerKey(DIK_RIGHT)){
+			specialSelector_.Move(1,0,board_);
+		}
+		if(input_->TriggerKey(DIK_UP)){
+			specialSelector_.Move(0,-1,board_);
+		}
+		if(input_->TriggerKey(DIK_DOWN)){
+			specialSelector_.Move(0,1,board_);
+		}
+		if(input_->TriggerKey(DIK_ESCAPE)){
+			specialSelector_.Cancel();
+		}
+
+		SyncSpecialCursor();
+	}else if(!isGameOver_){
+		// 追加：落下中ブロックの操作と自動落下
 		// 左右移動・回転はトリガー（押した瞬間）で1回ずつ
 		if(input_->TriggerKey(DIK_A)){
 			fallingBlock_.MoveLeft(board_);
@@ -168,7 +210,7 @@ void GameScene::Update(){
 	}
 
 	// スペースキーでゲームクリア画面へ遷移
-	if(input_->TriggerKey(DIK_SPACE)){
+	if(!specialSelector_.IsSelecting() && input_->TriggerKey(DIK_SPACE)){
 		SceneManager::GetInstance()->ChangeScene("GAMECLEAR");
 	}
 
@@ -241,6 +283,22 @@ void GameScene::Update(){
 			if(ImGui::Button("Reset Gauge")){
 				specialGauge_.Reset();
 			}
+
+			if(!specialSelector_.IsSelecting()){
+				if(ImGui::Button("Start Selection")){
+					if(specialGauge_.CanActivate()){
+						specialSelector_.Begin(board_);
+					}
+				}
+			}else{
+				const GridPos target = specialSelector_.GetTarget();
+				ImGui::Text("Target: (%d, %d)",target.x,target.y);
+				ImGui::Text("Target Cell: %s",specialSelector_.CanConfirm(board_) ? "VALID" : "EMPTY");
+				ImGui::Text("Arrow Keys: Move / Esc: Cancel");
+				if(ImGui::Button("Cancel Selection")){
+					specialSelector_.Cancel();
+				}
+			}
 		}
 
 		ModelManager::GetInstance()->UpdateLightGui();
@@ -271,4 +329,26 @@ void GameScene::Draw(){
 			obj->Draw();
 		}
 	}
+
+	// スペシャルの対象選択カーソルを最後に重ねて描画する
+	if(specialSelector_.IsSelecting() && specialCursorObj_){
+		specialCursorObj_->Draw();
+	}
+}
+
+// スペシャル選択カーソルの位置と色を現在の対象に合わせる
+void GameScene::SyncSpecialCursor(){
+	if(!specialSelector_.IsSelecting() || !specialCursorObj_){
+		return;
+	}
+
+	const GridPos target = specialSelector_.GetTarget();
+	specialCursorObj_->SetTranslate(board_.GridToWorld(target.x,target.y));
+
+	if(Model::Material* material = specialCursorObj_->GetMaterial()){
+		material->color = specialSelector_.CanConfirm(board_) ?
+			kSpecialCursorValidColor : kSpecialCursorInvalidColor;
+	}
+
+	specialCursorObj_->Update();
 }
