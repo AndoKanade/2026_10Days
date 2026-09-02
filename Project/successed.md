@@ -50,17 +50,24 @@
 ### `Board` の現状
 
 - **持っているデータ**：`cells_`（10×10 のマス配列）。論理データとして保持し、`GetCell()` で参照する。
-- **描画しているもの**：U字の壁ブロックのみ。マス領域のすぐ外側を左・下・右で囲み、上辺は開ける。`wallObjs_`（`std::vector<std::unique_ptr<Obj3D>>`）＋ `CreateWallBlock(x, y)`。色は `kWallColor`。
-- **描画していないもの**：マスの中身。ブロック実装時に追加する。
-- **API**：`Initialize(Obj3dCommon*)` / `Update()` / `Draw()` / `GridToWorld()` / `IsInside()` / `SetWidth()`
+- **描画しているもの**：U字の壁ブロック（`wallObjs_` ＋ `CreateWallBlock(x, y)`、色 `kWallColor`）と、盤面に固定されたマス（`cellObjs_` ＋ `RebuildCellObjects()`、色 `kFilledCellColor`）。`RebuildCellObjects()` は `Place()` のたびに `cells_` から作り直す。
+- **API**：`Initialize(Obj3dCommon*)` / `Update()` / `Draw()` / `GridToWorld()` / `IsInside()` / `SetWidth()` / `CanPlace()` / `Place()`
+  - `CanPlace(cells)`：全マスが範囲内かつ空きなら true。
+  - `Place(cells, blockId)`：各マスに blockId を書き込み、`RebuildCellObjects()` を呼ぶ。
   - `GridToWorld()`：マス座標 → ワールド座標（`Vector3`、y=0 が上）。負座標・範囲外座標もそのまま計算できるので、壁は grid 座標 x=-1 / x=width / y=height に配置している。
   - `SetWidth()`：6/10 切り替え用。口だけ実装済みで UI 連携は未実装。
 - 前方宣言した `Obj3D` を `unique_ptr` で持つため、コンストラクタ／デストラクタは cpp 側で `= default` 定義。
 
+### `BlockShape` / `FallingBlock` の現状
+
+- `BlockShape::GetCells(Type, rotation)`：T字の4回転テーブルを実装済み。L字はまだ空配列（担当B予定）。基準(0,0)は横棒の中央マス。
+- `FallingBlock`：`Spawn` / `Update` / `MoveLeft` / `MoveRight` / `Rotate` / `SetSoftDrop` / `GetOccupiedCells` / `GetType` / `GetBlockId`。自動落下・固定猶予・衝突時拒否の回転を実装。壁蹴り（押し戻し）は未実装。
+- `GameScene`：`fallingBlock_` を持ち、WASD（A/D=左右、W=回転、S=加速落下）で操作。固定されたら次のT字を自動出現。出現不可なら `isGameOver_`（現状は出現停止のみ。天井警告やリザルト遷移は未実装）。
+
 ### ビルド・動作確認
 
-Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル画面でスペースキーを押すと GAME シーンに入り盤面が見える。
-**実機での見た目確認はまだ。**
+Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル画面でスペースキーを押すと GAME シーンに入り、盤面とT字ブロックが見える想定。
+**実機での見た目・操作確認はまだ。**
 
 ---
 
@@ -71,12 +78,12 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 **共通の土台（役割分担の前提）は用意済み。** `GridPos.h`、`BlockShape` / `FallingBlock` のヘッダ雛形、`Board::CanPlace` / `Place` の宣言を作り、スタブ実装でビルドが通る状態にした。3人が並行して中身を埋められる。
 
 1. ~~`Game/puzzle/GridPos.h`~~ **完了。**
-2. `Game/puzzle/BlockShape.h/.cpp`：L字・T字の形。4回転分のマス相対座標テーブル（固定データ）。**ヘッダ雛形とスタブのみ。担当Bが中身を実装。**
-3. `Game/puzzle/FallingBlock.h/.cpp`：落下中ブロック。基準座標＋回転index、自動落下、左右移動、回転（衝突時は拒否）、次ブロック出現。**ヘッダ雛形とスタブのみ。担当Bが中身を実装。**
-4. 落下中ブロック・盤面に置かれたブロックの3D描画（`defaultBlock` キューブ、種類ごとに色分け）。担当C。
-5. `Board` にロジック追加：`CanPlace(cells)` / `Place(cells, blockId)`（**宣言・スタブ済み。中身は未実装**）、着地して盤面に固定、天井到達（ゲームオーバー）判定。担当A。
-6. `GameScene` に `FallingBlock` を組み込み、キー入力（左右・回転・下加速）を接続。担当C。
-7. デバッグUI：盤面幅 6/10 の切り替え。担当C。
+2. `Game/puzzle/BlockShape.h/.cpp`：**T字は完了**（4回転テーブル実装）。L字の形テーブルが未実装。
+3. `Game/puzzle/FallingBlock.h/.cpp`：**自動落下・左右移動・回転（拒否方式）・次ブロック出現は完了**。壁蹴りは未実装。
+4. 落下中ブロック・盤面に置かれたブロックの3D描画：**単色で完了**。種類ごとの色分けは未対応（`Cell` が種類を持たないため）。
+5. `Board` の `CanPlace` / `Place` ＋ 着地固定：**完了**。天井到達（ゲームオーバー）判定は未実装（現状は出現不可で停止するのみ）。
+6. `GameScene` に `FallingBlock` を組み込み、キー入力（WASD）を接続：**完了**。
+7. デバッグUI：盤面幅 6/10 の切り替え。担当C。**未着手。**
 
 ### 次にやるステップ
 
@@ -121,6 +128,19 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 ---
 
 ## 作業ログ
+
+### 2026-09-02（2）
+
+**実装：T字ブロックの出現・操作・落下・盤面固定**
+「まずT字を落として積める」ところまで。
+
+- `BlockShape.cpp`：T字（Tテトロミノ・4マス）の4回転分の相対座標テーブルを実装。基準(0,0)は横棒の中央マスで回転しても動かない。`GetCells()` は回転indexを0〜3に丸めて `switch(type)` で引く。L字はまだ空を返す（担当B予定）。
+- `FallingBlock.h/.cpp`：`Spawn()` / `Update()` / `MoveLeft()` / `MoveRight()` / `Rotate()` / `SetSoftDrop()` / `GetType()` を追加。`Update()` は「真下に置けるか」で空中/着地を判定し、空中は落下間隔ごとに1マス落下、着地は `kLockDelayFrames` の固定猶予を毎フレーム進め、猶予切れで `Board::Place()` して true を返す。移動・回転が成功すると固定猶予をリセット。回転は重なったら拒否（押し戻しなし）。出現位置は `kSpawnColumn` の y=1。
+- `Board.cpp`：`CanPlace()`（範囲内かつ空きマスか）と `Place()`（blockId書き込み＋`RebuildCellObjects()`）を実装（スタブ→本実装）。`cellObjs_` と `RebuildCellObjects()` を追加し、固定されたマスをキューブで描画（色 `kFilledCellColor`）。`Update()` / `Draw()` に `cellObjs_` のループを追加。
+- `GameScene`：`FallingBlock fallingBlock_` ＋ `fallingObjs_`（マス数分のキューブ、色 `kFallingBlockColor`）＋ `nextBlockId_` ＋ `isGameOver_` を追加。`Initialize()` で最初のT字を出現。`Update()` で WASD 入力（A/D=左右、W=回転、S=加速落下）→ `fallingBlock_.Update()` → 固定されたら次のT字を出現（置けなければ `isGameOver_`）→ `SyncFallingObjs()` で描画位置を同期。`Draw()` で落下ブロックを描画。
+- 操作キー：A/D/W/S。元ブロックIDは出現ごとに 0 から連番。
+- Debug/x64 ビルド成功。実機での見た目確認はまだ。
+- 既存の「スペースキーで GAMECLEAR へ遷移」はそのまま残している。
 
 ### 2026-09-02
 

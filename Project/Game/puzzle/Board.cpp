@@ -13,6 +13,9 @@ namespace{
 
 	// U字の壁ブロックの色
 	const Vector4 kWallColor = {0.35f, 0.38f, 0.48f, 1.0f};
+
+	// 追加：盤面に固定されたマスの色
+	const Vector4 kFilledCellColor = {0.55f, 0.65f, 0.85f, 1.0f};
 }
 
 // コンストラクタ・デストラクタ
@@ -56,11 +59,43 @@ void Board::CreateWallBlock(int32_t x,int32_t y){
 	wallObjs_.push_back(std::move(obj));
 }
 
+// U字の壁ブロックを1個生成して wallObjs_ に追加する処理と同じ手順で、
+// 追加：盤面に固定されたマスの見た目を cells_ から作り直す
+void Board::RebuildCellObjects(){
+	cellObjs_.clear();
+
+	for(int32_t y = 0; y < PuzzleConfig::kBoardHeight; ++y){
+		for(int32_t x = 0; x < width_; ++x){
+			// 空きマスは描画しない
+			if(cells_[y][x].IsEmpty()){
+				continue;
+			}
+
+			auto obj = std::make_unique<Obj3D>();
+			obj->Initialize(object3dCommon_);
+			obj->SetModel(kBlockModel);
+			obj->SetScale({PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale});
+			obj->SetTranslate(GridToWorld(x,y));
+
+			if(Model::Material* cellMaterial = obj->GetMaterial()){
+				cellMaterial->color = kFilledCellColor;
+				cellMaterial->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+			}
+
+			cellObjs_.push_back(std::move(obj));
+		}
+	}
+}
+
 // 毎フレームの更新
 void Board::Update(){
 	// カメラ移動などに追従できるよう、行列は毎フレーム更新する。
 	for(auto& wallObj : wallObjs_){
 		wallObj->Update();
+	}
+	// 追加：固定されたマスの行列も毎フレーム更新する
+	for(auto& cellObj : cellObjs_){
+		cellObj->Update();
 	}
 }
 
@@ -69,22 +104,39 @@ void Board::Draw(){
 	for(auto& wallObj : wallObjs_){
 		wallObj->Draw();
 	}
+	// 追加：固定されたマスを描画する
+	for(auto& cellObj : cellObjs_){
+		cellObj->Draw();
+	}
 }
 
 // 追加：指定したマス群すべてが盤面内かつ空きなら配置可能とみなす。
-// 現状はスタブ。担当Aが実装するまで常に false を返す。
 bool Board::CanPlace(const std::vector<GridPos>& cells) const{
-	// 担当A実装予定：各マスについて IsInside かつ GetCell().IsEmpty() を確認する
-	(void)cells;
-	return false;
+	for(const GridPos& pos : cells){
+		// 盤面の範囲外に出るマスがあれば配置不可
+		if(!IsInside(pos.x,pos.y)){
+			return false;
+		}
+		// 既に別のブロックで埋まっているマスがあれば配置不可
+		if(!cells_[pos.y][pos.x].IsEmpty()){
+			return false;
+		}
+	}
+	return true;
 }
 
 // 追加：指定したマス群へ blockId を書き込んで盤面に固定する。
-// 現状はスタブ。担当Aが実装するまで何もしない。
 void Board::Place(const std::vector<GridPos>& cells,int32_t blockId){
-	// 担当A実装予定：各マスの cells_[y][x].blockId に blockId を書き込む
-	(void)cells;
-	(void)blockId;
+	for(const GridPos& pos : cells){
+		// 安全のため範囲外のマスには書き込まない
+		if(!IsInside(pos.x,pos.y)){
+			continue;
+		}
+		cells_[pos.y][pos.x].blockId = blockId;
+	}
+
+	// 追加：盤面に置かれたマスの見た目を作り直す
+	RebuildCellObjects();
 }
 
 // 指定マス座標が現在の盤面の範囲内かどうか

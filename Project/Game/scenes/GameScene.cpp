@@ -14,6 +14,12 @@
 
 namespace{
 	const std::string kLevelJsonFile = "level.json"; // レベル配置情報のJSONファイル名
+
+	// 追加：落下ブロックの描画に使うモデル（盤面と同じキューブで代用する）
+	const std::string kBlockModel = "defaultBlock/defaultBlock.obj";
+
+	// 追加：落下中ブロックの色（壁・固定マスと区別できる暖色にする）
+	const Vector4 kFallingBlockColor = {0.95f, 0.75f, 0.25f, 1.0f};
 }
 
 GameScene::GameScene() = default;
@@ -37,9 +43,39 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	// 追加：パズルの盤面を初期化する（盤面は3Dオブジェクトで描画する）
 	board_.Initialize(object3dCommon_);
 
+	// 追加：最初の落下ブロック（T字）を出現させる
+	if(!fallingBlock_.Spawn(board_,BlockShape::Type::T,nextBlockId_)){
+		isGameOver_ = true;
+	}
+
+	// 追加：落下中ブロックの描画オブジェクトを、ブロックのマス数だけ用意する
+	const size_t cellCount = fallingBlock_.GetOccupiedCells().size();
+	for(size_t i = 0; i < cellCount; ++i){
+		auto obj = std::make_unique<Obj3D>();
+		obj->Initialize(object3dCommon_);
+		obj->SetModel(kBlockModel);
+		obj->SetScale({PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale});
+
+		if(Model::Material* material = obj->GetMaterial()){
+			material->color = kFallingBlockColor;
+			material->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+		}
+
+		fallingObjs_.push_back(std::move(obj));
+	}
+	SyncFallingObjs();
+
 	// LevelManagerを初期化し、レベル配置オブジェクトを構築
 	levelManager_.LoadJSON(kLevelJsonFile);
 	RebuildLevelObjects();
+}
+
+// 追加：落下中ブロックの描画オブジェクトの位置を、現在の占有マスに合わせる
+void GameScene::SyncFallingObjs(){
+	const std::vector<GridPos> cells = fallingBlock_.GetOccupiedCells();
+	for(size_t i = 0; i < fallingObjs_.size() && i < cells.size(); ++i){
+		fallingObjs_[i]->SetTranslate(board_.GridToWorld(cells[i].x,cells[i].y));
+	}
 }
 
 // レベル配置データからオブジェクトを再構築する処理
@@ -96,6 +132,36 @@ void GameScene::Update(){
 
 	// 追加：盤面の更新
 	board_.Update();
+
+	// 追加：落下中ブロックの操作と自動落下
+	if(!isGameOver_){
+		// 左右移動・回転はトリガー（押した瞬間）で1回ずつ
+		if(input_->TriggerKey(DIK_A)){
+			fallingBlock_.MoveLeft(board_);
+		}
+		if(input_->TriggerKey(DIK_D)){
+			fallingBlock_.MoveRight(board_);
+		}
+		if(input_->TriggerKey(DIK_W)){
+			fallingBlock_.Rotate(board_);
+		}
+		// 下キーは押しっぱなしで加速落下
+		fallingBlock_.SetSoftDrop(input_->PushKey(DIK_S));
+
+		// 時間経過を進め、盤面に固定されたら次のブロックを出す
+		if(fallingBlock_.Update(board_)){
+			++nextBlockId_;
+			if(!fallingBlock_.Spawn(board_,BlockShape::Type::T,nextBlockId_)){
+				isGameOver_ = true;
+			}
+		}
+
+		// 描画オブジェクトを現在の占有マスに合わせて動かす
+		SyncFallingObjs();
+		for(auto& obj : fallingObjs_){
+			obj->Update();
+		}
+	}
 
 	for(auto& obj : levelObjects_){
 		obj->Update();
@@ -172,4 +238,11 @@ void GameScene::Draw(){
 
 	// 追加：パズルの盤面（壁とマス）を描画する
 	board_.Draw();
+
+	// 追加：落下中のブロックを描画する
+	if(!isGameOver_){
+		for(const auto& obj : fallingObjs_){
+			obj->Draw();
+		}
+	}
 }
