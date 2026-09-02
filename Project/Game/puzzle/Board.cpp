@@ -139,6 +139,29 @@ void Board::Place(const std::vector<GridPos>& cells,int32_t blockId){
 	RebuildCellObjects();
 }
 
+// 追加：落下中ブロック用の配置可否判定。
+bool Board::CanFall(const std::vector<GridPos>& cells) const{
+	for(const GridPos& pos : cells){
+		// 左右の壁の外に出るマスがあれば不可
+		if(pos.x < 0 || pos.x >= width_){
+			return false;
+		}
+		// 床より下に出るマスがあれば不可
+		if(pos.y >= PuzzleConfig::kBoardHeight){
+			return false;
+		}
+		// 天井より上（y < 0）は空中。盤面データを持たないので衝突しない
+		if(pos.y < 0){
+			continue;
+		}
+		// 盤面内で既に別のブロックに埋まっているマスがあれば不可
+		if(!cells_[pos.y][pos.x].IsEmpty()){
+			return false;
+		}
+	}
+	return true;
+}
+
 // 指定マス座標が現在の盤面の範囲内かどうか
 bool Board::IsInside(int32_t x,int32_t y) const{
 	return x >= 0 && x < width_ && y >= 0 && y < PuzzleConfig::kBoardHeight;

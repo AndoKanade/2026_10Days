@@ -24,24 +24,24 @@ bool FallingBlock::Spawn(const Board& board,BlockShape::Type type,int32_t blockI
 	rotation_ = 0;
 	blockId_ = blockId;
 
-	// タイマー類を初期化する
+	// タイマー・フラグ類を初期化する
 	fallTimer_ = 0;
 	lockTimer_ = 0;
 	isSoftDrop_ = false;
+	lockedAboveCeiling_ = false;
 
-	// 出現位置。T字の基準(0,0)は横棒の中央マスで、rot0では1マス上に出っ張りがあるため、
-	// 出っ張りが盤面からはみ出さないよう y は 1 から始める。
-	origin_ = {PuzzleConfig::kSpawnColumn, 1};
+	// 出現位置。天井より上の空中（kSpawnRow は負値）から落とし始める。
+	origin_ = {PuzzleConfig::kSpawnColumn, PuzzleConfig::kSpawnRow};
 
-	// 出現位置が既に埋まっていれば置けない（ゲームオーバー）
-	return board.CanPlace(GetOccupiedCells());
+	// 出現位置が壁や既存ブロックと重なっていれば出現できない
+	return board.CanFall(GetOccupiedCells());
 }
 
 // 追加：自動落下と固定猶予の時間経過を1フレーム分進める。
 bool FallingBlock::Update(Board& board){
 	// 真下に1マス動けるかどうか
 	const GridPos down = {origin_.x, origin_.y + 1};
-	const bool canFall = board.CanPlace(CalcCells(down,rotation_));
+	const bool canFall = board.CanFall(CalcCells(down,rotation_));
 
 	if(canFall){
 		// 空中にいる間は固定猶予をリセットしておく
@@ -66,14 +66,24 @@ bool FallingBlock::Update(Board& board){
 	}
 
 	// 猶予を使い切ったので盤面に固定する
-	board.Place(GetOccupiedCells(),blockId_);
+	const std::vector<GridPos> cells = GetOccupiedCells();
+
+	// 天井より上（y < 0）にマスを残したまま固定されたらゲームオーバー扱いにする
+	for(const GridPos& cell : cells){
+		if(cell.y < 0){
+			lockedAboveCeiling_ = true;
+			break;
+		}
+	}
+
+	board.Place(cells,blockId_);
 	return true;
 }
 
 // 追加：左に1マス移動する。
 void FallingBlock::MoveLeft(const Board& board){
 	const GridPos moved = {origin_.x - 1, origin_.y};
-	if(board.CanPlace(CalcCells(moved,rotation_))){
+	if(board.CanFall(CalcCells(moved,rotation_))){
 		origin_ = moved;
 		// 動かせたら固定猶予をリセットする（着地際の操作を受け付けるため）
 		lockTimer_ = 0;
@@ -83,7 +93,7 @@ void FallingBlock::MoveLeft(const Board& board){
 // 追加：右に1マス移動する。
 void FallingBlock::MoveRight(const Board& board){
 	const GridPos moved = {origin_.x + 1, origin_.y};
-	if(board.CanPlace(CalcCells(moved,rotation_))){
+	if(board.CanFall(CalcCells(moved,rotation_))){
 		origin_ = moved;
 		lockTimer_ = 0;
 	}
@@ -92,7 +102,7 @@ void FallingBlock::MoveRight(const Board& board){
 // 追加：時計回りに1段階回転する。重なる場合は回転しない（押し戻しはしない）。
 void FallingBlock::Rotate(const Board& board){
 	const int32_t nextRotation = (rotation_ + 1) % BlockShape::kRotationCount;
-	if(board.CanPlace(CalcCells(origin_,nextRotation))){
+	if(board.CanFall(CalcCells(origin_,nextRotation))){
 		rotation_ = nextRotation;
 		lockTimer_ = 0;
 	}
@@ -101,6 +111,16 @@ void FallingBlock::Rotate(const Board& board){
 // 現在このブロックが占めている盤面マスの絶対座標を返す。
 std::vector<GridPos> FallingBlock::GetOccupiedCells() const{
 	return CalcCells(origin_,rotation_);
+}
+
+// 追加：いまこの瞬間に真下まで落とした場合に着地する位置の占有マスを返す。
+std::vector<GridPos> FallingBlock::GetLandingCells(const Board& board) const{
+	// 現在の基準座標から、真下に1マスずつ下げられなくなるまで下げる
+	GridPos landing = origin_;
+	while(board.CanFall(CalcCells({landing.x, landing.y + 1},rotation_))){
+		landing.y += 1;
+	}
+	return CalcCells(landing,rotation_);
 }
 
 // このブロックの元ブロックID。
