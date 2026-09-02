@@ -1,21 +1,51 @@
 #include "BlockShape.h"
 
+#include <array>
+
 // このファイル内だけで使う定数・データ
 namespace{
 
-	// スタブ実装で返す空の配列。
-	// 担当Bが形テーブルを実装したらこれは不要になる。
+	// まだ形テーブルを実装していない種類のために返す空の配列。
 	const std::vector<GridPos> kEmptyCells{};
+
+	// 追加：T字ブロックの4回転分のマス相対座標テーブル。
+	// 基準(0,0)は横棒の中央マス。回転してもこのマスが動かないため、回転の見た目が安定する。
+	// rotation はここでは時計回り。
+	//   rot0：上に出っ張り   rot1：右に出っ張り   rot2：下に出っ張り   rot3：左に出っ張り
+	// x は右方向、y は下方向が正（GridPos と同じ向き）。
+	const std::array<std::vector<GridPos>,BlockShape::kRotationCount> kTShapeCells = {{
+		// rot0： .X.
+		//        XXX
+		{ {-1, 0}, {0, 0}, {1, 0}, {0, -1} },
+		// rot1： X.
+		//        XX
+		//        X.
+		{ {0, -1}, {0, 0}, {0, 1}, {1, 0} },
+		// rot2： XXX
+		//        .X.
+		{ {-1, 0}, {0, 0}, {1, 0}, {0, 1} },
+		// rot3： .X
+		//        XX
+		//        .X
+		{ {0, -1}, {0, 0}, {0, 1}, {-1, 0} },
+	}};
 }
 
 namespace BlockShape{
 
 	// 指定した種類・回転のブロックが占めるマスの相対座標を返す。
-	// 現状はスタブ。常に空の配列を返す。
 	const std::vector<GridPos>& GetCells(Type type,int32_t rotation){
-		// 担当B実装予定：type と rotation から固定の形テーブルを引いて返す
-		(void)type;
-		(void)rotation;
+		// 追加：回転indexを 0〜kRotationCount-1 の範囲に丸める（負の値にも対応する）
+		const int32_t r = ((rotation % kRotationCount) + kRotationCount) % kRotationCount;
+
+		switch(type){
+		case Type::T:
+			return kTShapeCells[r];
+		case Type::L:
+			// 担当BがL字の形テーブルを実装予定。現状は空を返す。
+			return kEmptyCells;
+		}
+
 		return kEmptyCells;
 	}
 }
