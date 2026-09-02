@@ -2,6 +2,8 @@
 
 #include <array>
 
+#include "Cell.h"
+
 // このファイル内だけで使う定数・データ
 namespace{
 
@@ -29,6 +31,27 @@ namespace{
 		//        .X
 		{ {0, -1}, {0, 0}, {0, 1}, {-1, 0} },
 	}};
+
+	// 追加：L字ブロック（Lテトロミノ・4マス）の4回転分のマス相対座標テーブル。
+	// 基準(0,0)は縦棒／横棒の中央マス。rot0 から時計回りに回転する。
+	//   rot0：縦棒＋右下の足   rot1：横棒＋左下の足
+	//   rot2：縦棒＋左上の足   rot3：横棒＋右上の足
+	const std::array<std::vector<GridPos>,BlockShape::kRotationCount> kLShapeCells = {{
+		// rot0： X.
+		//        X.
+		//        XX
+		{ {0, -1}, {0, 0}, {0, 1}, {1, 1} },
+		// rot1： XXX
+		//        X..
+		{ {-1, 0}, {0, 0}, {1, 0}, {-1, 1} },
+		// rot2： XX
+		//        .X
+		//        .X
+		{ {0, -1}, {0, 0}, {0, 1}, {-1, -1} },
+		// rot3： ..X
+		//        XXX
+		{ {-1, 0}, {0, 0}, {1, 0}, {1, -1} },
+	}};
 }
 
 namespace BlockShape{
@@ -42,10 +65,19 @@ namespace BlockShape{
 		case Type::T:
 			return kTShapeCells[r];
 		case Type::L:
-			// 担当BがL字の形テーブルを実装予定。現状は空を返す。
-			return kEmptyCells;
+			return kLShapeCells[r];
 		}
 
 		return kEmptyCells;
+	}
+
+	// 指定した種類・回転のブロックの各マスの端子ビットを返す。
+	// ブロック同士は向き・形に関係なく常に導通する仕様のため、
+	// 実際に置かれるマス数ぶん、全方向の端子ビットを返す。
+	std::vector<uint8_t> GetTerminals(Type type,int32_t rotation){
+		const size_t cellCount = GetCells(type,rotation).size();
+		constexpr uint8_t kAllDirections = Terminal::kUp | Terminal::kDown | Terminal::kLeft | Terminal::kRight;
+
+		return std::vector<uint8_t>(cellCount,kAllDirections);
 	}
 }

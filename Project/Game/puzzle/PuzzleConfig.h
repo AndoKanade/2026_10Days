@@ -56,10 +56,18 @@ namespace PuzzleConfig{
 	// 着地してから盤面に固定されるまでの猶予フレーム数（30 = 約0.5秒）
 	constexpr int32_t kLockDelayFrames = 30;
 
+	// 追加：通電成立から実際にマスを消すまでの演出フレーム数（消えるマスを光らせる時間）（20 = 約0.3秒）
+	constexpr int32_t kClearEffectFrames = 20;
+
 	// --- ブロック関連 ---
 
 	// ブロックが出現する列（盤面上端。左端を0とした列インデックス）
 	constexpr int32_t kSpawnColumn = kBoardWidth / 2 - 1;
+
+	// ブロックが出現するときの基準マスの行。
+	// 負の値は盤面上端（y=0）より上の空中を表す。落下してくる様子を見せるための余白で、
+	// この範囲には盤面データを持たない。天井より上にはみ出したまま固定されるとゲームオーバー。
+	constexpr int32_t kSpawnRow = -2;
 
 	// マスが空であることを表す元ブロックID
 	constexpr int32_t kEmptyBlockId = -1;

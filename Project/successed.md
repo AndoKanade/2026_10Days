@@ -45,24 +45,26 @@
 - `kCellModelScale`：キューブ拡大率 0.45
 - `kBoardCenterZ`
 - 落下間隔・固定猶予（フレーム単位、60fps 固定前提）
-- 出現列、空マスID
+- 出現列 `kSpawnColumn`、出現行 `kSpawnRow`（= -2、天井より上の空中）、空マスID
 
 ### `Board` の現状
 
 - **持っているデータ**：`cells_`（10×10 のマス配列）。論理データとして保持し、`GetCell()` で参照する。
-- **描画しているもの**：U字の壁ブロック（`wallObjs_` ＋ `CreateWallBlock(x, y)`、色 `kWallColor`）と、盤面に固定されたマス（`cellObjs_` ＋ `RebuildCellObjects()`、色 `kFilledCellColor`）。`RebuildCellObjects()` は `Place()` のたびに `cells_` から作り直す。
-- **API**：`Initialize(Obj3dCommon*)` / `Update()` / `Draw()` / `GridToWorld()` / `IsInside()` / `SetWidth()` / `CanPlace()` / `Place()`
-  - `CanPlace(cells)`：全マスが範囲内かつ空きなら true。
-  - `Place(cells, blockId)`：各マスに blockId を書き込み、`RebuildCellObjects()` を呼ぶ。
+- **描画しているもの**：U字の壁ブロック（`wallObjs_` ＋ `CreateWallBlock(x, y, modelPath)`）と、盤面に固定されたマス（`cellObjs_` ＋ `RebuildCellObjects()`、モデル `defaultBlock`、色 `kFilledCellColor`）。`RebuildCellObjects()` は `Place()` のたびに `cells_` から作り直す。
+  - 壁のモデル：左右の壁＝ゴールなので `goalBlock/goalBlock.obj`、下の壁＝電源なので `supplyBlock/supplyBlock.obj`（角は下扱い）。どちらも `enableLighting=0` でテクスチャそのまま表示（色の乗算はしない）。
+- **API**：`Initialize(Obj3dCommon*)` / `Update()` / `Draw()` / `GridToWorld()` / `IsInside()` / `SetWidth()` / `CanPlace()` / `CanFall()` / `Place()`
+  - `CanPlace(cells)`：全マスが範囲内かつ空きなら true。現状は未使用（一般用途の判定として保持）。
+  - `CanFall(cells)`：落下中ブロック専用。天井より上（y<0）は空中として通し、左右の壁・床・既存ブロックの重なりだけ不可。`FallingBlock` はこちらを使う。
+  - `Place(cells, blockId)`：各マスに blockId を書き込み、`RebuildCellObjects()` を呼ぶ（範囲外マスはスキップ）。
   - `GridToWorld()`：マス座標 → ワールド座標（`Vector3`、y=0 が上）。負座標・範囲外座標もそのまま計算できるので、壁は grid 座標 x=-1 / x=width / y=height に配置している。
   - `SetWidth()`：6/10 切り替え用。口だけ実装済みで UI 連携は未実装。
 - 前方宣言した `Obj3D` を `unique_ptr` で持つため、コンストラクタ／デストラクタは cpp 側で `= default` 定義。
 
 ### `BlockShape` / `FallingBlock` の現状
 
-- `BlockShape::GetCells(Type, rotation)`：T字の4回転テーブルを実装済み。L字はまだ空配列（担当B予定）。基準(0,0)は横棒の中央マス。
-- `FallingBlock`：`Spawn` / `Update` / `MoveLeft` / `MoveRight` / `Rotate` / `SetSoftDrop` / `GetOccupiedCells` / `GetType` / `GetBlockId`。自動落下・固定猶予・衝突時拒否の回転を実装。壁蹴り（押し戻し）は未実装。
-- `GameScene`：`fallingBlock_` を持ち、WASD（A/D=左右、W=回転、S=加速落下）で操作。固定されたら次のT字を自動出現。出現不可なら `isGameOver_`（現状は出現停止のみ。天井警告やリザルト遷移は未実装）。
+- `BlockShape::GetCells(Type, rotation)`：T字・L字とも4回転テーブルを実装済み（どちらも4マスのテトロミノ）。基準(0,0)は棒の中央マス。
+- `FallingBlock`：`Spawn` / `Update` / `MoveLeft` / `MoveRight` / `Rotate` / `SetSoftDrop` / `GetOccupiedCells` / `GetLandingCells` / `GetType` / `GetBlockId` / `IsLockedAboveCeiling`。自動落下・固定猶予・衝突時拒否の回転を実装。出現は `kSpawnRow`（= -2、天井より上の空中）から。衝突判定は `Board::CanFall`。固定時に y<0 のマスが残れば `IsLockedAboveCeiling()` が true。`GetLandingCells()` はいま真下に落とした場合の着地マス（ゴースト表示用）。壁蹴り（押し戻し）は未実装。
+- `GameScene`：`fallingBlock_` を持ち、WASD（A/D=左右、W=回転、S=加速落下）で操作。`nextType_` でネクストを管理し、`SpawnNextBlock()` が「ネクストを出現 → 次のネクストを抽選」を行う。`PickNextBlockType()` は T字・L字を等確率抽選（`randomEngine_`）。固定されたら自動で次を出現。固定時に `IsLockedAboveCeiling()` が true（または出現不可）なら `SceneManager::ChangeScene("GAMEOVER")` へ遷移。落下中ブロック（`fallingObjs_`）と着地予測ゴースト（`ghostObjs_`、暗色・少し小さめ）を描画。ネクストは ImGui「GameScene Debug」→「Next Block」に等幅テキストのグリッドで表示。天井警告演出は未実装。
 
 ### ビルド・動作確認
 
@@ -78,10 +80,10 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 **共通の土台（役割分担の前提）は用意済み。** `GridPos.h`、`BlockShape` / `FallingBlock` のヘッダ雛形、`Board::CanPlace` / `Place` の宣言を作り、スタブ実装でビルドが通る状態にした。3人が並行して中身を埋められる。
 
 1. ~~`Game/puzzle/GridPos.h`~~ **完了。**
-2. `Game/puzzle/BlockShape.h/.cpp`：**T字は完了**（4回転テーブル実装）。L字の形テーブルが未実装。
-3. `Game/puzzle/FallingBlock.h/.cpp`：**自動落下・左右移動・回転（拒否方式）・次ブロック出現は完了**。壁蹴りは未実装。
+2. `Game/puzzle/BlockShape.h/.cpp`：**T字・L字とも完了**（各4回転テーブル。どちらも4マスのテトロミノ）。
+3. `Game/puzzle/FallingBlock.h/.cpp`：**自動落下・左右移動・回転（拒否方式）・次ブロック出現＋ネクスト抽選は完了**。壁蹴りは未実装。
 4. 落下中ブロック・盤面に置かれたブロックの3D描画：**単色で完了**。種類ごとの色分けは未対応（`Cell` が種類を持たないため）。
-5. `Board` の `CanPlace` / `Place` ＋ 着地固定：**完了**。天井到達（ゲームオーバー）判定は未実装（現状は出現不可で停止するのみ）。
+5. `Board` の `CanPlace` / `Place` ＋ 着地固定：**完了**。天井到達（ゲームオーバー）判定も**完了**（次ブロックが出現位置に置けなければ GAMEOVER シーンへ遷移）。
 6. `GameScene` に `FallingBlock` を組み込み、キー入力（WASD）を接続：**完了**。
 7. デバッグUI：盤面幅 6/10 の切り替え。担当C。**未着手。**
 
@@ -119,7 +121,7 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 
 2026-08-31 調査。コードから参照されているのは以下のみと確認。
 
-**使用中**：`Fence/fence.obj`（+mtl+png）、`Skybox/rostock_laage_airport_4k.dds`、`uvChecker.png`（ルート）、`You_and_Me.mp3`、`noise0.png` `noise1.png`、`level/` 一式（level.json / level.obj / circle.obj / levelCircle.obj + 各mtl + white.png）、`resource.h` `MyGameEngine.rc`、`defaultBlock/`（defaultBlock.obj / .mtl。盤面の3D描画で使用）
+**使用中**：`Fence/fence.obj`（+mtl+png）、`Skybox/rostock_laage_airport_4k.dds`、`uvChecker.png`（ルート）、`You_and_Me.mp3`、`noise0.png` `noise1.png`、`level/` 一式（level.json / level.obj / circle.obj / levelCircle.obj + 各mtl + white.png）、`resource.h` `MyGameEngine.rc`、`defaultBlock/`（固定マス・落下ブロック・ゴーストの描画）、`goalBlock/`（左右の壁）、`supplyBlock/`（下の壁）
 
 **削除候補（テンプレート由来で未参照）**：`AnimatedCube/` `Circle/` `Plane/` `Sphere/` `Terrain/` `human/` `simpleSkin/` `levelCircle/` の各フォルダ、`You_and_Me.wav`、`circle.png` `circle2.png` `gradationLine.png`
 
@@ -128,6 +130,64 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 ---
 
 ## 作業ログ
+
+### 2026-09-02（8）
+
+**変更：壁の描画モデルを goalBlock / supplyBlock に差し替え**
+
+- `resource/goalBlock/`（obj+mtl+png）と `resource/supplyBlock/`（同）を新規追加（モデルは別途作成済み）。
+- `Board`：`CreateWallBlock(x, y)` に `const std::string& modelPath` 引数を追加。`Initialize` で左右の壁は `goalBlock/goalBlock.obj`、下の壁は `supplyBlock/supplyBlock.obj` を指定（下の角2つは下の壁扱い）。3モデルとも `Initialize` で `LoadModel`。
+- 壁の色乗算（旧 `kWallColor`）を廃止。`enableLighting=0` のみ残し、モデルのテクスチャをそのまま表示する。`kWallColor` 定数は削除。
+- 盤面に固定されたマス（`cellObjs_`）は従来どおり `defaultBlock` ＋ `kFilledCellColor`。
+- Debug/x64 ビルド成功。実機での見た目確認はまだ。
+
+### 2026-09-02（7）
+
+**実装：着地予測（ゴースト）表示「ここに落とすとこうなる」**
+
+- `FallingBlock::GetLandingCells(const Board&)` を追加。現在の基準座標・回転のまま、`Board::CanFall` が通らなくなるまで真下に下げ、着地位置の占有マスを返す（盤面は変更しない）。
+- `GameScene` に `ghostObjs_`（本体と同じマス数の Obj3D プール）を追加。色 `kGhostBlockColor`（落下色を暗くした影っぽい色）、拡大率は `kCellModelScale * kGhostScaleRate`（`kGhostScaleRate` = 0.7、本体より少し小さく）。
+- `SyncFallingObjs()` で本体に加えてゴーストも `GetLandingCells()` の位置へ毎フレーム同期。`Update()` でゴーストも行列更新、`Draw()` はゴースト → 本体の順（本体が上に重なる）。ゲームオーバー中は非表示。
+- Obj3D パイプラインはアルファブレンド無効のため、半透明ではなく暗い色＋小さめスケールで区別している。
+- Debug/x64 ビルド成功。実機確認はまだ。
+
+### 2026-09-02（6）
+
+**変更：ブロックの出現位置を天井より上の空中からに**
+
+- `PuzzleConfig::kSpawnRow`（＝ -2）を追加。負値＝盤面上端 y=0 より上の空中。`FallingBlock::Spawn` の出現基準を `{kSpawnColumn, 1}`（マジックナンバー）から `{kSpawnColumn, kSpawnRow}` に変更。
+- `Board::CanFall(cells)` を追加。落下中ブロック専用の判定で、天井より上（y<0）は空中として通し、左右の壁（x範囲外）・床（y>=高さ）・既存ブロックの重なりだけ不可とする。`FallingBlock` の Spawn / MoveLeft / MoveRight / Rotate / Update の落下判定を `CanPlace` から `CanFall` に差し替え。`Board::CanPlace` は残置（未使用だが一般用途の判定として保持）。
+- ゲームオーバー判定を変更。出現位置が常に空中になったため「Spawn 失敗」ではほぼ検出できない。代わりに `FallingBlock::IsLockedAboveCeiling()` を追加し、固定時に占有マスが1つでも y<0 なら true。`GameScene` は固定検出時にこれを見て（Spawn失敗も保険で併用）`GAMEOVER` へ遷移。
+- 出現直後のブロックは盤面（U字の壁）より上に描画され、落下して視界に入ってくる。
+- Debug/x64 ビルド成功。実機確認はまだ。
+
+### 2026-09-02（5）
+
+**実装：L字ブロック（Lテトロミノ・4マス）の追加**
+
+- `BlockShape.cpp`：`kLShapeCells`（4回転分の相対座標テーブル）を追加し、`GetCells()` の `Type::L` で返すようにした。基準(0,0)は縦棒／横棒の中央マス。rot0＝縦棒＋右下の足、以降時計回り。T字と同じくrot0で最上段（y=-1）にマスが来るため、出現基準 y=1 で天井に接して出現する。
+- `GameScene::PickNextBlockType()`：T字・L字を等確率（`uniform_int_distribution<int32_t>(0,1)`）で抽選するように変更。`const` を外し、メンバ乱数エンジン `randomEngine_`（`Initialize` で `random_device` シード、`ParticleManager` と同じ流儀）を使う。
+- 落下ブロックの色は T/L 共通（種類ごとの色分けはしていない）。`fallingObjs_` は4マス分のプールで T/L どちらも足りる。
+- 補足：CLAUDE.md の「L字（3マス）／T字（3マス）」は記載当時の想定。実装は L・T とも4マスのテトロミノになっている。
+- Debug/x64 ビルド成功。実機確認はまだ。
+
+### 2026-09-02（4）
+
+**実装：ImGui にネクスト（次に落ちてくるブロック）表示＋ネクスト管理**
+L字追加の前段として、次ブロックの仕組みと表示を用意。
+
+- `GameScene` に `nextType_`（次に出るブロックの種類）を追加。
+- `SpawnNextBlock()`：`nextType_` を `fallingBlock_.Spawn()` に渡して出現させ、`nextBlockId_` を進め、`PickNextBlockType()` で次の `nextType_` を抽選する。初回出現（`Initialize`）と固定後の出現（`Update`）の両方でこれを呼ぶ。
+- `PickNextBlockType()`：現状はT字のみ対応のため常に `Type::T` を返す。L字の形テーブルを実装したらここで T/L をランダム抽選する。
+- `ShowNextBlockGui()`：ImGui の「GameScene Debug」ウィンドウ先頭に「Next Block」ヘッダを追加。種類名（T/L）と、形テーブル（回転0）の外接矩形を等幅テキストで `[]` / 空白のグリッド表示する。`#ifdef USE_IMGUI` 内のみ。
+- `nextBlockId_` の採番は 0 始まりのまま（`SpawnNextBlock` 内で Spawn 後にインクリメント）。
+- `std::min` / `std::max` は Windows の min/max マクロと衝突するため使わず、if 比較で外接矩形を求めている。
+- Debug/x64 ビルド成功。実機確認はまだ。
+
+### 2026-09-02（3）
+
+**実装：天井到達でゲームオーバーシーンへ遷移**
+`GameScene::Update()` で、ブロック固定後の次のT字の `Spawn()` が失敗したとき（出現位置＝天井付近が既に埋まっている＝天井より上まで積み上がった）に `isGameOver_` を立て、`SceneManager::GetInstance()->ChangeScene("GAMEOVER")` を呼んで即 `return`。T字の出現基準は y=1 で、rot0 では最上段（y=0）にマスが来るため、中央列が天井付近まで積み上がると出現できずゲームオーバーになる。天井警告の点滅演出は未実装。
 
 ### 2026-09-02（2）
 
@@ -140,7 +200,6 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 - `GameScene`：`FallingBlock fallingBlock_` ＋ `fallingObjs_`（マス数分のキューブ、色 `kFallingBlockColor`）＋ `nextBlockId_` ＋ `isGameOver_` を追加。`Initialize()` で最初のT字を出現。`Update()` で WASD 入力（A/D=左右、W=回転、S=加速落下）→ `fallingBlock_.Update()` → 固定されたら次のT字を出現（置けなければ `isGameOver_`）→ `SyncFallingObjs()` で描画位置を同期。`Draw()` で落下ブロックを描画。
 - 操作キー：A/D/W/S。元ブロックIDは出現ごとに 0 から連番。
 - Debug/x64 ビルド成功。実機での見た目確認はまだ。
-- 既存の「スペースキーで GAMECLEAR へ遷移」はそのまま残している。
 
 ### 2026-09-02
 

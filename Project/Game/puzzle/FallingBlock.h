@@ -31,6 +31,9 @@ public:
 	// このフレームで盤面に固定されたら true を返す（呼び出し側が次ブロックを出す）。
 	bool Update(Board& board);
 
+	// 落下可能な最下段まで移動し、即座に盤面へ固定する。
+	bool HardDrop(Board& board);
+
 	// 追加：左に1マス移動する。移動先が壁や既存ブロックと重なる場合は動かさない。
 	void MoveLeft(const Board& board);
 
@@ -47,8 +50,16 @@ public:
 	// Board::CanPlace / Board::Place にそのまま渡せる形にする。
 	std::vector<GridPos> GetOccupiedCells() const;
 
+	// 追加：いまこの瞬間に真下までまっすぐ落とした場合に着地する位置の占有マスを返す。
+	// 「ここに落とすとこうなる」を見せるゴースト表示に使う。盤面自体は変更しない。
+	std::vector<GridPos> GetLandingCells(const Board& board) const;
+
 	// 追加：描画の色分けなどに使うブロックの種類。
 	BlockShape::Type GetType() const{ return type_; }
+
+	// 追加：直前の Update() で、天井より上（y < 0）にマスを残したまま固定されたかどうか。
+	// Update() が true を返した直後に参照する。true ならゲームオーバー。
+	bool IsLockedAboveCeiling() const{ return lockedAboveCeiling_; }
 
 	// このブロックの元ブロックID。盤面に固定するときに各マスへ書き込む。
 	int32_t GetBlockId() const;
@@ -57,6 +68,10 @@ private:
 
 	// 追加：指定した基準座標・回転でブロックが占める盤面マスの絶対座標を計算する。
 	std::vector<GridPos> CalcCells(GridPos origin,int32_t rotation) const;
+
+	// 追加：固定したマス群の中に天井より上（y < 0）のものが含まれていれば
+	// lockedAboveCeiling_ を立てる。通常落下・ハードドロップ両方の固定時に呼ぶ。
+	void UpdateLockedAboveCeiling(const std::vector<GridPos>& lockedCells);
 
 	// このブロックの種類（初期値は仮）
 	BlockShape::Type type_ = BlockShape::Type::L;
@@ -78,4 +93,7 @@ private:
 
 	// 追加：下キーによる加速落下中かどうか
 	bool isSoftDrop_ = false;
+
+	// 追加：天井より上にマスを残したまま固定されたかどうか
+	bool lockedAboveCeiling_ = false;
 };
