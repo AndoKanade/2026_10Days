@@ -233,14 +233,26 @@ void Board::Update(){
 	if(isClearing_){
 		++clearTimer_;
 		if(clearTimer_ >= PuzzleConfig::kClearEffectFrames){
+			// 変更ここから：消去で空いた列だけを後で下詰めするため、
+			// 実際にマスを消す前に「消去が起きた列」を記録しておく。
+			std::array<bool,PuzzleConfig::kBoardWidthMax> clearedColumns{};
+			for(const GridPos& pos : clearingCells_){
+				if(pos.x >= 0 && pos.x < width_){
+					clearedColumns[pos.x] = true;
+				}
+			}
+			// 変更ここまで
+
 			for(const GridPos& pos : clearingCells_){
 				cells_[pos.y][pos.x] = Cell{};
 			}
 			clearingCells_.clear();
 			isClearing_ = false;
 
-			// マス単位で下に詰める（ブロックの形は保持しない）
-			ApplyGravity();
+			// マス単位で下に詰める（ブロックの形は保持しない）。
+			// 変更：消去が起きた列だけを対象にする。消去の影響で真下のマスが
+			// 無くなったマスだけが落ち、消去と無関係な列の浮いた出っ張りマスは残る。
+			ApplyGravity(clearedColumns);
 
 			// 落下後に再度通電判定を行う。まだ繋がっていれば連鎖してまた消去演出に入る
 			// （isClearing_ は直前で false にしてあるため、ここで判定が素通りされることはない）
@@ -492,8 +504,15 @@ void Board::ResolveConduction(){
 
 // 空きマスを詰めるように、各列のマスをマス単位で下へ落とす。
 // ブロックの形は保持しない（欠片ごとにバラバラに落ちる）。
-void Board::ApplyGravity(){
+// 変更：clearedColumns が true の列（今回の消去でマスが空いた列）だけを処理する。
+void Board::ApplyGravity(const std::array<bool,PuzzleConfig::kBoardWidthMax>& clearedColumns){
 	for(int32_t x = 0; x < width_; ++x){
+		// 変更：消去が起きていない列は触らない。
+		// もともと宙に浮いていた出っ張りマスを落とさないようにするため。
+		if(!clearedColumns[x]){
+			continue;
+		}
+
 		// この列に残っているマスを上から順に集める
 		std::vector<Cell> remaining;
 		for(int32_t y = 0; y < PuzzleConfig::kBoardHeight; ++y){

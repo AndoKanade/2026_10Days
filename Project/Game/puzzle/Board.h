@@ -123,6 +123,9 @@ private:
 	// 繋がっていれば、その範囲のマスを消去演出の対象にする（この時点ではまだ消さない）。
 	void ResolveConduction();
 
-	// 追加：空きマスを詰めるように、各列のマスをマス単位で下へ落とす
-	void ApplyGravity();
+	// 追加：空きマスを詰めるように、各列のマスをマス単位で下へ落とす。
+	// 変更：消去が起きた列（clearedColumns が true の列）だけを対象にする。
+	// 消去とは無関係な列にある、もともと宙に浮いていた出っ張りマスを
+	// 巻き込んで落とさないようにするため。
+	void ApplyGravity(const std::array<bool,PuzzleConfig::kBoardWidthMax>& clearedColumns);
 };
