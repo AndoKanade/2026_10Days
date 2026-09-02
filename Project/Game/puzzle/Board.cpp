@@ -335,15 +335,12 @@ void Board::ResolveConduction(){
 		}
 
 		// この一かたまりから、行き止まりの枝（他のマスと1本以下しか繋がっていないマス）を
-		// 繰り返し取り除いていく。電源・ゴールに直接触れているマスは、行き止まりに
-		// 見えても例外として絶対に取り除かない。残ったマスが消去対象になる。
+		// 繰り返し取り除いていく。残ったマスが消去対象になる。
 		std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> inSet{};
 		std::array<std::array<int32_t,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> degree{};
-		std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> isProtected{};
 
 		for(const GridPos& pos : component){
 			inSet[pos.y][pos.x] = true;
-			isProtected[pos.y][pos.x] = (pos.y == bottomY) || (pos.x == 0) || (pos.x == width_ - 1);
 		}
 		for(const GridPos& pos : component){
 			int32_t d = 0;
@@ -354,13 +351,20 @@ void Board::ResolveConduction(){
 					++d;
 				}
 			}
+			// 電源（最下段）・ゴール（左右端）は、外部と繋がっている仮想の1本があるものとして数える
+			if(pos.y == bottomY){
+				++d;
+			}
+			if(pos.x == 0 || pos.x == width_ - 1){
+				++d;
+			}
 			degree[pos.y][pos.x] = d;
 		}
 
-		// 保護されていない、繋がりが1本以下のマスを取り除きの起点にする
+		// 繋がりが1本以下のマスを取り除きの起点にする
 		std::vector<GridPos> pruneQueue;
 		for(const GridPos& pos : component){
-			if(!isProtected[pos.y][pos.x] && degree[pos.y][pos.x] <= 1){
+			if(degree[pos.y][pos.x] <= 1){
 				pruneQueue.push_back(pos);
 			}
 		}
@@ -386,7 +390,7 @@ void Board::ResolveConduction(){
 				}
 
 				--degree[ny][nx];
-				if(!isProtected[ny][nx] && degree[ny][nx] <= 1){
+				if(degree[ny][nx] <= 1){
 					pruneQueue.push_back({nx, ny});
 				}
 			}

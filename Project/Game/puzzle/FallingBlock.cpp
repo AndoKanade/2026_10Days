@@ -73,11 +73,14 @@ bool FallingBlock::Update(Board& board){
 	return true;
 }
 
-// 左に1マス移動する。
+// 落下可能な最下段まで移動し、即座に盤面へ固定する。
 bool FallingBlock::HardDrop(Board& board){
 	while(true){
 		const GridPos down = {origin_.x,origin_.y + 1};
-		if(!board.CanPlace(CalcCells(down,rotation_))){
+		// 天井より上（y < 0）は空中として通す必要があるため CanFall を使う。
+		// ここで CanPlace を使うと、天井より上にいる間は1マスも落とせず、
+		// その場で固定されたことになって誤ってゲームオーバー扱いになる。
+		if(!board.CanFall(CalcCells(down,rotation_))){
 			break;
 		}
 		origin_ = down;
