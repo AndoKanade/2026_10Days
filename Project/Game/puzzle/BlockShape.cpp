@@ -52,6 +52,81 @@ namespace{
 		//        XXX
 		{ {-1, 0}, {0, 0}, {1, 0}, {1, -1} },
 	}};
+
+	// 追加：まだ端子テーブルを持たない種類のために返す空の配列。
+	const std::vector<uint8_t> kEmptyTerminals{};
+
+	// 追加：ブロック内で隣接するマス同士を見て、各マスの内部配線ビットを計算する。
+	// 形そのものが配線になる仕様のため、端子専用のテーブルは持たずここから毎回計算する。
+	std::vector<uint8_t> ComputeTerminals(const std::vector<GridPos>& cells){
+		std::vector<uint8_t> terminals(cells.size(),0);
+
+		for(size_t i = 0; i < cells.size(); ++i){
+			for(size_t j = 0; j < cells.size(); ++j){
+				if(i == j){
+					continue;
+				}
+
+				const int32_t dx = cells[j].x - cells[i].x;
+				const int32_t dy = cells[j].y - cells[i].y;
+
+				// 上下左右いずれかに隣接するマスがあれば、その向きの端子ビットを立てる
+				if(dx == 0 && dy == -1){
+					terminals[i] |= Terminal::kUp;
+				} else if(dx == 0 && dy == 1){
+					terminals[i] |= Terminal::kDown;
+				} else if(dx == -1 && dy == 0){
+					terminals[i] |= Terminal::kLeft;
+				} else if(dx == 1 && dy == 0){
+					terminals[i] |= Terminal::kRight;
+				}
+			}
+		}
+
+		// 追加：ブロック内の繋がりが1方向だけのマス（先端）は、
+		// 反対側の辺にも配線を露出させる。これが無いと、先端は常に
+		// 自分のブロックの中心側だけを向いてしまい、隣に置いた別ブロックと
+		// 絶対に繋がる余地が無くなってしまう。
+		for(size_t i = 0; i < cells.size(); ++i){
+			const uint8_t bits = terminals[i];
+
+			// 立っているビット数（＝ブロック内での隣接数）を数える
+			int32_t degree = 0;
+			if(bits & Terminal::kUp)    ++degree;
+			if(bits & Terminal::kDown)  ++degree;
+			if(bits & Terminal::kLeft)  ++degree;
+			if(bits & Terminal::kRight) ++degree;
+
+			if(degree == 1){
+				// 唯一繋がっている方向の、真逆の辺を露出させる
+				if(bits & Terminal::kUp){
+					terminals[i] |= Terminal::kDown;
+				} else if(bits & Terminal::kDown){
+					terminals[i] |= Terminal::kUp;
+				} else if(bits & Terminal::kLeft){
+					terminals[i] |= Terminal::kRight;
+				} else if(bits & Terminal::kRight){
+					terminals[i] |= Terminal::kLeft;
+				}
+			}
+		}
+
+		return terminals;
+	}
+
+	// 追加：T字・L字の4回転分の端子ビットテーブル。各形の Cells から計算する。
+	const std::array<std::vector<uint8_t>,BlockShape::kRotationCount> kTShapeTerminals = {
+		ComputeTerminals(kTShapeCells[0]),
+		ComputeTerminals(kTShapeCells[1]),
+		ComputeTerminals(kTShapeCells[2]),
+		ComputeTerminals(kTShapeCells[3]),
+	};
+	const std::array<std::vector<uint8_t>,BlockShape::kRotationCount> kLShapeTerminals = {
+		ComputeTerminals(kLShapeCells[0]),
+		ComputeTerminals(kLShapeCells[1]),
+		ComputeTerminals(kLShapeCells[2]),
+		ComputeTerminals(kLShapeCells[3]),
+	};
 }
 
 namespace BlockShape{
@@ -72,12 +147,17 @@ namespace BlockShape{
 	}
 
 	// 指定した種類・回転のブロックの各マスの端子ビットを返す。
-	// ブロック同士は向き・形に関係なく常に導通する仕様のため、
-	// 実際に置かれるマス数ぶん、全方向の端子ビットを返す。
-	std::vector<uint8_t> GetTerminals(Type type,int32_t rotation){
-		const size_t cellCount = GetCells(type,rotation).size();
-		constexpr uint8_t kAllDirections = Terminal::kUp | Terminal::kDown | Terminal::kLeft | Terminal::kRight;
+	const std::vector<uint8_t>& GetTerminals(Type type,int32_t rotation){
+		// GetCells()と同じ丸め方で回転indexを 0〜kRotationCount-1 の範囲に収める
+		const int32_t r = ((rotation % kRotationCount) + kRotationCount) % kRotationCount;
 
-		return std::vector<uint8_t>(cellCount,kAllDirections);
+		switch(type){
+		case Type::T:
+			return kTShapeTerminals[r];
+		case Type::L:
+			return kLShapeTerminals[r];
+		}
+
+		return kEmptyTerminals;
 	}
 }

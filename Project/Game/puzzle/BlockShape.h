@@ -33,6 +33,8 @@ namespace BlockShape{
 
 	// 追加：指定した種類・回転のブロックの各マスの端子ビット（Terminal::の値）を返す。
 	// 並び順は GetCells() と対応する（同じ添字が同じマスを指す）。
-	// ブロック同士は向き・形に関係なく常に導通する仕様のため、全方向の端子ビットを返す。
-	std::vector<uint8_t> GetTerminals(Type type,int32_t rotation);
+	// 配線パターンは形ごとに固定（ランダムな割り当てはしない）。同じブロック内で
+	// 隣接するマス同士の繋がりから計算し、先端のマスは反対側の辺も露出させることで
+	// 別のブロックの先端と向きが合えば繋がるようにする。
+	const std::vector<uint8_t>& GetTerminals(Type type,int32_t rotation);
 }

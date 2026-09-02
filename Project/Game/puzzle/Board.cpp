@@ -27,10 +27,12 @@ namespace{
 	// 「あと1マスで届く」が見えるよう、通常のマスとはっきり違う明るさにする。
 	const Vector4 kPoweredCellColor = {0.4f, 0.95f, 0.9f, 1.0f};
 
-	// 通電判定で使う4方向の隣接オフセット。
-	// ブロック同士は向きに関係なく常に導通する仕様のため、
-	// 実際に隣接している（触れている）マスかどうかだけを見る。
-	constexpr GridPos kDirs[4] = { {0,-1}, {0,1}, {-1,0}, {1,0} };
+	// 通電判定で使う4方向の隣接オフセットと、向き合う辺の端子ビットの対応表。
+	// kSelfBits[i] は自分がその方向を向くための端子、kOtherBits[i] は隣のマスが
+	// こちら側を向くために必要な端子（互いに両方立っていて初めて繋がる）。
+	constexpr GridPos kDirs[4]      = { {0,-1}, {0,1}, {-1,0}, {1,0} };
+	constexpr uint8_t kSelfBits[4]  = { Terminal::kUp,   Terminal::kDown, Terminal::kLeft,  Terminal::kRight };
+	constexpr uint8_t kOtherBits[4] = { Terminal::kDown, Terminal::kUp,   Terminal::kRight, Terminal::kLeft };
 }
 
 // コンストラクタ・デストラクタ
@@ -139,12 +141,17 @@ std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHei
 		const GridPos current = queue[queueHead];
 		++queueHead;
 
-		// 4方向を調べ、隣接している（触れている）マスへ探索を広げる
+		const Cell& currentCell = cells_[current.y][current.x];
+
+		// 4方向を調べ、互いに向き合う端子ビットが両方立っているマスへ探索を広げる
 		for(int32_t dir = 0; dir < 4; ++dir){
 			const int32_t nx = current.x + kDirs[dir].x;
 			const int32_t ny = current.y + kDirs[dir].y;
 
 			if(!IsInside(nx,ny) || powered[ny][nx] || cells_[ny][nx].IsEmpty()){
+				continue;
+			}
+			if(!(currentCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
 				continue;
 			}
 
@@ -310,17 +317,22 @@ void Board::ResolveConduction(){
 			++queueHead;
 			component.push_back(current);
 
+			const Cell& currentCell = cells_[current.y][current.x];
+
 			// ゴール判定：電源（最下段）と同様、左右端のマスに到達した時点でゴールとする。
 			if(current.x == 0 || current.x == width_ - 1){
 				reachedGoal = true;
 			}
 
-			// 4方向を調べ、隣接している（触れている）マスへ探索を広げる
+			// 4方向を調べ、互いに向き合う端子ビットが両方立っているマスへ探索を広げる
 			for(int32_t dir = 0; dir < 4; ++dir){
 				const int32_t nx = current.x + kDirs[dir].x;
 				const int32_t ny = current.y + kDirs[dir].y;
 
 				if(!IsInside(nx,ny) || visited[ny][nx] || cells_[ny][nx].IsEmpty()){
+					continue;
+				}
+				if(!(currentCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
 					continue;
 				}
 
@@ -343,13 +355,20 @@ void Board::ResolveConduction(){
 			inSet[pos.y][pos.x] = true;
 		}
 		for(const GridPos& pos : component){
+			const Cell& posCell = cells_[pos.y][pos.x];
 			int32_t d = 0;
 			for(int32_t dir = 0; dir < 4; ++dir){
 				const int32_t nx = pos.x + kDirs[dir].x;
 				const int32_t ny = pos.y + kDirs[dir].y;
-				if(IsInside(nx,ny) && inSet[ny][nx]){
-					++d;
+				if(!IsInside(nx,ny) || !inSet[ny][nx]){
+					continue;
 				}
+				// 位置が隣り合っていても、互いに向き合う端子ビットが両方立っていなければ
+				// 繋がっているとは数えない（別ルート経由で同じ一かたまりに入っているだけの場合がある）
+				if(!(posCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
+					continue;
+				}
+				++d;
 			}
 			// 電源（最下段）・ゴール（左右端）は、外部と繋がっている仮想の1本があるものとして数える
 			if(pos.y == bottomY){
@@ -380,12 +399,18 @@ void Board::ResolveConduction(){
 			}
 			inSet[current.y][current.x] = false;
 
-			// 取り除いた分、隣のマスの繋がり本数を減らし、1本以下になったら追加で取り除く
+			const Cell& currentCell = cells_[current.y][current.x];
+
+			// 取り除いた分、端子ビットで実際に繋がっていた隣のマスだけ繋がり本数を減らし、
+			// 1本以下になったら追加で取り除く
 			for(int32_t dir = 0; dir < 4; ++dir){
 				const int32_t nx = current.x + kDirs[dir].x;
 				const int32_t ny = current.y + kDirs[dir].y;
 
 				if(!IsInside(nx,ny) || !inSet[ny][nx]){
+					continue;
+				}
+				if(!(currentCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
 					continue;
 				}
 
