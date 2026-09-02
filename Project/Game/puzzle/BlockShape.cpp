@@ -2,6 +2,8 @@
 
 #include <array>
 
+#include "Cell.h"
+
 // このファイル内だけで使う定数・データ
 namespace{
 
@@ -67,5 +69,15 @@ namespace BlockShape{
 		}
 
 		return kEmptyCells;
+	}
+
+	// 指定した種類・回転のブロックの各マスの端子ビットを返す。
+	// ブロック同士は向き・形に関係なく常に導通する仕様のため、
+	// 実際に置かれるマス数ぶん、全方向の端子ビットを返す。
+	std::vector<uint8_t> GetTerminals(Type type,int32_t rotation){
+		const size_t cellCount = GetCells(type,rotation).size();
+		constexpr uint8_t kAllDirections = Terminal::kUp | Terminal::kDown | Terminal::kLeft | Terminal::kRight;
+
+		return std::vector<uint8_t>(cellCount,kAllDirections);
 	}
 }
