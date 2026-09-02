@@ -47,8 +47,16 @@ public:
 	// Board::CanPlace / Board::Place にそのまま渡せる形にする。
 	std::vector<GridPos> GetOccupiedCells() const;
 
+	// 追加：いまこの瞬間に真下までまっすぐ落とした場合に着地する位置の占有マスを返す。
+	// 「ここに落とすとこうなる」を見せるゴースト表示に使う。盤面自体は変更しない。
+	std::vector<GridPos> GetLandingCells(const Board& board) const;
+
 	// 追加：描画の色分けなどに使うブロックの種類。
 	BlockShape::Type GetType() const{ return type_; }
+
+	// 追加：直前の Update() で、天井より上（y < 0）にマスを残したまま固定されたかどうか。
+	// Update() が true を返した直後に参照する。true ならゲームオーバー。
+	bool IsLockedAboveCeiling() const{ return lockedAboveCeiling_; }
 
 	// このブロックの元ブロックID。盤面に固定するときに各マスへ書き込む。
 	int32_t GetBlockId() const;
@@ -78,4 +86,7 @@ private:
 
 	// 追加：下キーによる加速落下中かどうか
 	bool isSoftDrop_ = false;
+
+	// 追加：天井より上にマスを残したまま固定されたかどうか
+	bool lockedAboveCeiling_ = false;
 };

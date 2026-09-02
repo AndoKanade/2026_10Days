@@ -20,6 +20,12 @@ namespace{
 
 	// 追加：落下中ブロックの色（壁・固定マスと区別できる暖色にする）
 	const Vector4 kFallingBlockColor = {0.95f, 0.75f, 0.25f, 1.0f};
+
+	// 追加：着地予測（ゴースト）の色（落下中ブロックを暗く落とした色。影のように見せる）
+	const Vector4 kGhostBlockColor = {0.45f, 0.35f, 0.15f, 1.0f};
+
+	// 追加：ゴーストの拡大率（落下中ブロックのマス拡大率に対する倍率）
+	constexpr float kGhostScaleRate = 0.7f;
 }
 
 GameScene::GameScene() = default;
@@ -43,25 +49,40 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	// 追加：パズルの盤面を初期化する（盤面は3Dオブジェクトで描画する）
 	board_.Initialize(object3dCommon_);
 
-	// 追加：最初の落下ブロック（T字）を出現させる
-	if(!fallingBlock_.Spawn(board_,BlockShape::Type::T,nextBlockId_)){
+	// 追加：次ブロック抽選用の乱数エンジンをシードする
+	std::random_device seedGenerator;
+	randomEngine_.seed(seedGenerator());
+
+	// 追加：ネクストを抽選してから、最初の落下ブロックを出現させる
+	nextType_ = PickNextBlockType();
+	if(!SpawnNextBlock()){
 		isGameOver_ = true;
 	}
 
-	// 追加：落下中ブロックの描画オブジェクトを、ブロックのマス数だけ用意する
+	// 追加：落下中ブロックとゴースト（着地予測）の描画オブジェクトを、ブロックのマス数だけ用意する
 	const size_t cellCount = fallingBlock_.GetOccupiedCells().size();
 	for(size_t i = 0; i < cellCount; ++i){
+		// 落下中ブロック本体
 		auto obj = std::make_unique<Obj3D>();
 		obj->Initialize(object3dCommon_);
 		obj->SetModel(kBlockModel);
 		obj->SetScale({PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale});
-
 		if(Model::Material* material = obj->GetMaterial()){
 			material->color = kFallingBlockColor;
 			material->enableLighting = 0; // 2D的な見た目にするため陰影を切る
 		}
-
 		fallingObjs_.push_back(std::move(obj));
+
+		// ゴースト（着地予測）。本体より少し小さくして影のように見せる
+		auto ghost = std::make_unique<Obj3D>();
+		ghost->Initialize(object3dCommon_);
+		ghost->SetModel(kBlockModel);
+		ghost->SetScale({PuzzleConfig::kCellModelScale * kGhostScaleRate, PuzzleConfig::kCellModelScale * kGhostScaleRate, PuzzleConfig::kCellModelScale * kGhostScaleRate});
+		if(Model::Material* material = ghost->GetMaterial()){
+			material->color = kGhostBlockColor;
+			material->enableLighting = 0;
+		}
+		ghostObjs_.push_back(std::move(ghost));
 	}
 	SyncFallingObjs();
 
@@ -70,12 +91,97 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	RebuildLevelObjects();
 }
 
-// 追加：落下中ブロックの描画オブジェクトの位置を、現在の占有マスに合わせる
+// 追加：落下中ブロックとゴーストの描画オブジェクトの位置を、現在の占有マス／着地予測マスに合わせる
 void GameScene::SyncFallingObjs(){
+	// 落下中ブロック本体
 	const std::vector<GridPos> cells = fallingBlock_.GetOccupiedCells();
 	for(size_t i = 0; i < fallingObjs_.size() && i < cells.size(); ++i){
 		fallingObjs_[i]->SetTranslate(board_.GridToWorld(cells[i].x,cells[i].y));
 	}
+
+	// ゴースト（いま真下に落とした場合の着地位置）
+	const std::vector<GridPos> ghostCells = fallingBlock_.GetLandingCells(board_);
+	for(size_t i = 0; i < ghostObjs_.size() && i < ghostCells.size(); ++i){
+		ghostObjs_[i]->SetTranslate(board_.GridToWorld(ghostCells[i].x,ghostCells[i].y));
+	}
+}
+
+// 追加：nextType_ のブロックを出現させ、次の nextType_ を抽選する。
+bool GameScene::SpawnNextBlock(){
+	// いま決まっているネクストを実際に出現させる
+	const bool spawned = fallingBlock_.Spawn(board_,nextType_,nextBlockId_);
+
+	// 次に出現するブロックへ振る元ブロックIDを1つ進める
+	++nextBlockId_;
+
+	// 次のネクストを抽選しておく（表示は次の出現まで固定される）
+	nextType_ = PickNextBlockType();
+
+	return spawned;
+}
+
+// 追加：次に落ちてくるブロックの種類をひとつ抽選して返す。
+BlockShape::Type GameScene::PickNextBlockType(){
+	// T字とL字を等確率で選ぶ（0 = T字、1 = L字）
+	std::uniform_int_distribution<int32_t> dist(0,1);
+	return (dist(randomEngine_) == 0) ? BlockShape::Type::T : BlockShape::Type::L;
+}
+
+// 追加：ImGui にネクスト（次に落ちてくるブロック）を表示する。
+void GameScene::ShowNextBlockGui() const{
+#ifdef USE_IMGUI
+	if(!ImGui::CollapsingHeader("Next Block")){
+		return;
+	}
+
+	// ブロックの種類名を表示する
+	const char* typeName = "?";
+	switch(nextType_){
+	case BlockShape::Type::T:
+		typeName = "T";
+		break;
+	case BlockShape::Type::L:
+		typeName = "L";
+		break;
+	}
+	ImGui::Text("Type: %s",typeName);
+
+	// 形テーブル（回転0）を小さなグリッドとして描く
+	const std::vector<GridPos>& shape = BlockShape::GetCells(nextType_,0);
+	if(shape.empty()){
+		ImGui::Text("(no shape data)");
+		return;
+	}
+
+	// 形が収まる範囲（外接矩形）を求める
+	int32_t minX = shape.front().x;
+	int32_t maxX = shape.front().x;
+	int32_t minY = shape.front().y;
+	int32_t maxY = shape.front().y;
+	for(const GridPos& cell : shape){
+		if(cell.x < minX){ minX = cell.x; }
+		if(cell.x > maxX){ maxX = cell.x; }
+		if(cell.y < minY){ minY = cell.y; }
+		if(cell.y > maxY){ maxY = cell.y; }
+	}
+
+	// 範囲内を1行ずつ文字列にして表示する（マスあり = [] 、マスなし = 空白）
+	// ImGui の既定フォントは等幅なので、この方法で形が揃って見える
+	for(int32_t y = minY; y <= maxY; ++y){
+		std::string row;
+		for(int32_t x = minX; x <= maxX; ++x){
+			bool filled = false;
+			for(const GridPos& cell : shape){
+				if(cell.x == x && cell.y == y){
+					filled = true;
+					break;
+				}
+			}
+			row += filled ? "[]" : "  ";
+		}
+		ImGui::Text("%s",row.c_str());
+	}
+#endif
 }
 
 // レベル配置データからオブジェクトを再構築する処理
@@ -150,15 +256,25 @@ void GameScene::Update(){
 
 		// 時間経過を進め、盤面に固定されたら次のブロックを出す
 		if(fallingBlock_.Update(board_)){
-			++nextBlockId_;
-			if(!fallingBlock_.Spawn(board_,BlockShape::Type::T,nextBlockId_)){
+			// 天井より上にはみ出したまま固定された ＝ 積み上がりすぎでゲームオーバー
+			const bool lockedAboveCeiling = fallingBlock_.IsLockedAboveCeiling();
+
+			// 次のブロック（ネクスト）を出現させる。出現位置が塞がっていても同様にゲームオーバー
+			const bool spawned = SpawnNextBlock();
+
+			if(lockedAboveCeiling || !spawned){
 				isGameOver_ = true;
+				SceneManager::GetInstance()->ChangeScene("GAMEOVER");
+				return;
 			}
 		}
 
-		// 描画オブジェクトを現在の占有マスに合わせて動かす
+		// 描画オブジェクトを現在の占有マス／着地予測マスに合わせて動かす
 		SyncFallingObjs();
 		for(auto& obj : fallingObjs_){
+			obj->Update();
+		}
+		for(auto& obj : ghostObjs_){
 			obj->Update();
 		}
 	}
@@ -167,16 +283,14 @@ void GameScene::Update(){
 		obj->Update();
 	}
 
-	// スペースキーでゲームクリア画面へ遷移
-	if(input_->TriggerKey(DIK_SPACE)){
-		SceneManager::GetInstance()->ChangeScene("GAMECLEAR");
-	}
-
 	// --- デバッグUIの表示 ---
 #ifdef USE_IMGUI
 	if(Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera()){
 		// メインデバッグウィンドウ
 		ImGui::Begin("GameScene Debug");
+
+		// 追加：次に落ちてくるブロック（ネクスト）の表示
+		ShowNextBlockGui();
 
 		// カメラ設定
 		if(ImGui::CollapsingHeader("Camera Settings")){
@@ -239,8 +353,11 @@ void GameScene::Draw(){
 	// 追加：パズルの盤面（壁とマス）を描画する
 	board_.Draw();
 
-	// 追加：落下中のブロックを描画する
+	// 追加：着地予測（ゴースト）→ 落下中のブロックの順に描画する
 	if(!isGameOver_){
+		for(const auto& obj : ghostObjs_){
+			obj->Draw();
+		}
 		for(const auto& obj : fallingObjs_){
 			obj->Draw();
 		}

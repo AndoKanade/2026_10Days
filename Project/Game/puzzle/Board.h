@@ -58,6 +58,10 @@ public:
 	// 現状はスタブ。担当Aが実装するまで何もしない。
 	void Place(const std::vector<GridPos>& cells,int32_t blockId);
 
+	// 追加：落下中ブロック用の配置可否判定。
+	// 天井より上（y < 0）は空中とみなして通す。左右の壁・床・既存ブロックとの重なりのみ不可とする。
+	bool CanFall(const std::vector<GridPos>& cells) const;
+
 	// --- 判定・座標変換 ---
 
 	// 指定マス座標が現在の盤面の範囲内かどうか

@@ -61,6 +61,11 @@ namespace PuzzleConfig{
 	// ブロックが出現する列（盤面上端。左端を0とした列インデックス）
 	constexpr int32_t kSpawnColumn = kBoardWidth / 2 - 1;
 
+	// ブロックが出現するときの基準マスの行。
+	// 負の値は盤面上端（y=0）より上の空中を表す。落下してくる様子を見せるための余白で、
+	// この範囲には盤面データを持たない。天井より上にはみ出したまま固定されるとゲームオーバー。
+	constexpr int32_t kSpawnRow = -2;
+
 	// マスが空であることを表す元ブロックID
 	constexpr int32_t kEmptyBlockId = -1;
 

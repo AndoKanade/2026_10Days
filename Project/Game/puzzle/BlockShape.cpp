@@ -29,6 +29,27 @@ namespace{
 		//        .X
 		{ {0, -1}, {0, 0}, {0, 1}, {-1, 0} },
 	}};
+
+	// 追加：L字ブロック（Lテトロミノ・4マス）の4回転分のマス相対座標テーブル。
+	// 基準(0,0)は縦棒／横棒の中央マス。rot0 から時計回りに回転する。
+	//   rot0：縦棒＋右下の足   rot1：横棒＋左下の足
+	//   rot2：縦棒＋左上の足   rot3：横棒＋右上の足
+	const std::array<std::vector<GridPos>,BlockShape::kRotationCount> kLShapeCells = {{
+		// rot0： X.
+		//        X.
+		//        XX
+		{ {0, -1}, {0, 0}, {0, 1}, {1, 1} },
+		// rot1： XXX
+		//        X..
+		{ {-1, 0}, {0, 0}, {1, 0}, {-1, 1} },
+		// rot2： XX
+		//        .X
+		//        .X
+		{ {0, -1}, {0, 0}, {0, 1}, {-1, -1} },
+		// rot3： ..X
+		//        XXX
+		{ {-1, 0}, {0, 0}, {1, 0}, {1, -1} },
+	}};
 }
 
 namespace BlockShape{
@@ -42,8 +63,7 @@ namespace BlockShape{
 		case Type::T:
 			return kTShapeCells[r];
 		case Type::L:
-			// 担当BがL字の形テーブルを実装予定。現状は空を返す。
-			return kEmptyCells;
+			return kLShapeCells[r];
 		}
 
 		return kEmptyCells;
