@@ -7,6 +7,7 @@
 
 #include "MyMath.h"
 #include "Cell.h"
+#include "GridPos.h" // 追加：マス座標の共通型
 #include "PuzzleConfig.h"
 
 // 前方宣言
@@ -46,6 +47,16 @@ public:
 
 	// 指定マスのデータを取得する（範囲チェックは呼び出し側の責任）
 	const Cell& GetCell(int32_t x,int32_t y) const{ return cells_[y][x]; }
+
+	// --- ブロック配置（3人分担の境界インターフェース。担当Aが中身を実装する）---
+
+	// 追加：指定したマス群すべてが盤面内かつ空きなら配置可能とみなす。
+	// 現状はスタブ。担当Aが実装するまで常に false を返す。
+	bool CanPlace(const std::vector<GridPos>& cells) const;
+
+	// 追加：指定したマス群へ blockId を書き込んで盤面に固定する。
+	// 現状はスタブ。担当Aが実装するまで何もしない。
+	void Place(const std::vector<GridPos>& cells,int32_t blockId);
 
 	// --- 判定・座標変換 ---
 

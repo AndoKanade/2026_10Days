@@ -71,6 +71,22 @@ void Board::Draw(){
 	}
 }
 
+// 追加：指定したマス群すべてが盤面内かつ空きなら配置可能とみなす。
+// 現状はスタブ。担当Aが実装するまで常に false を返す。
+bool Board::CanPlace(const std::vector<GridPos>& cells) const{
+	// 担当A実装予定：各マスについて IsInside かつ GetCell().IsEmpty() を確認する
+	(void)cells;
+	return false;
+}
+
+// 追加：指定したマス群へ blockId を書き込んで盤面に固定する。
+// 現状はスタブ。担当Aが実装するまで何もしない。
+void Board::Place(const std::vector<GridPos>& cells,int32_t blockId){
+	// 担当A実装予定：各マスの cells_[y][x].blockId に blockId を書き込む
+	(void)cells;
+	(void)blockId;
+}
+
 // 指定マス座標が現在の盤面の範囲内かどうか
 bool Board::IsInside(int32_t x,int32_t y) const{
 	return x >= 0 && x < width_ && y >= 0 && y < PuzzleConfig::kBoardHeight;
