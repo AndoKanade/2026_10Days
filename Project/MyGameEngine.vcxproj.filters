@@ -222,6 +222,12 @@
     <ClCompile Include="Engine\Manager\LevelManager.cpp">
       <Filter>ソース ファイル\Engine\Manager</Filter>
     </ClCompile>
+    <ClCompile Include="Game\puzzle\BlockShape.cpp">
+      <Filter>ソース ファイル\Game\Puzzle</Filter>
+    </ClCompile>
+    <ClCompile Include="Game\puzzle\FallingBlock.cpp">
+      <Filter>ソース ファイル\Game\Puzzle</Filter>
+    </ClCompile>
     <ClCompile Include="Game\puzzle\Board.cpp">
       <Filter>ソース ファイル\Game\Puzzle</Filter>
     </ClCompile>
@@ -351,6 +357,15 @@
       <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
     </ClInclude>
     <ClInclude Include="Game\puzzle\Cell.h">
+      <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\puzzle\GridPos.h">
+      <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\puzzle\BlockShape.h">
+      <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\puzzle\FallingBlock.h">
       <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
     </ClInclude>
     <ClInclude Include="Game\puzzle\Board.h">

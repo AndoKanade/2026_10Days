@@ -400,6 +400,9 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClInclude Include="Game\scenes\TitleScene.h" />
     <ClInclude Include="Game\puzzle\PuzzleConfig.h" />
     <ClInclude Include="Game\puzzle\Cell.h" />
+    <ClInclude Include="Game\puzzle\GridPos.h" />
+    <ClInclude Include="Game\puzzle\BlockShape.h" />
+    <ClInclude Include="Game\puzzle\FallingBlock.h" />
     <ClInclude Include="Game\puzzle\Board.h" />
     <ClInclude Include="resource\resource.h" />
   </ItemGroup>
@@ -442,6 +445,8 @@ if not defined GITHUB_ACTIONS if exist "$(WindowsSdkDir)bin\$(TargetPlatformVers
     <ClCompile Include="Game\systems\SceneFactory.cpp" />
     <ClCompile Include="Game\systems\SceneManager.cpp" />
     <ClCompile Include="Game\scenes\TitleScene.cpp" />
+    <ClCompile Include="Game\puzzle\BlockShape.cpp" />
+    <ClCompile Include="Game\puzzle\FallingBlock.cpp" />
     <ClCompile Include="Game\puzzle\Board.cpp" />
   </ItemGroup>
   <ItemGroup>

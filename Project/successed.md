@@ -30,7 +30,10 @@
 | --- | --- |
 | `Game/puzzle/PuzzleConfig.h` | 調整用定数の集約ヘッダ。実装ロジックは持たない。 |
 | `Game/puzzle/Cell.h` | マス構造体。`blockId`（空 = -1）＋端子4bit（未使用）＋ `IsEmpty()`。 |
-| `Game/puzzle/Board.h` / `Board.cpp` | 10×10 のマスデータ配列＋U字の壁の描画。 |
+| `Game/puzzle/GridPos.h` | マス座標の共通型 `struct GridPos { int32_t x; int32_t y; };`。境界インターフェースの受け渡しに使う。 |
+| `Game/puzzle/BlockShape.h` / `BlockShape.cpp` | 形テーブル。`enum class Type { L, T }` ＋ `GetCells(Type, int rotation)`。**中身はスタブ（空配列を返す）。担当B実装予定。** |
+| `Game/puzzle/FallingBlock.h` / `FallingBlock.cpp` | 落下中ブロック。`GetOccupiedCells()` ＋ `GetBlockId()`。**中身はスタブ。担当B実装予定。** |
+| `Game/puzzle/Board.h` / `Board.cpp` | 10×10 のマスデータ配列＋U字の壁の描画。`CanPlace()` / `Place()` の宣言を追加（**中身はスタブ。担当A実装予定**）。 |
 | `Game/scenes/GameScene` | `Board board_;` をメンバに持ち、Initialize / Update / Draw から呼び出す。変更箇所は「追加：」コメントで明示。 |
 
 `.vcxproj` / `.vcxproj.filters` に登録済み。`Game\puzzle` をインクルードディレクトリに追加（3構成すべて）、フィルタ「ヘッダー ファイル\Game\Puzzle」を新設。
@@ -65,17 +68,19 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 
 ### 「配置まで」に残っている作業
 
-1. `Game/puzzle/GridPos.h`：盤面のマス座標を表す構造体（`struct GridPos { int x; int y; };`）。
-2. `Game/puzzle/BlockShape.h/.cpp`：L字・T字の形。4回転分のマス相対座標テーブル（固定データ）。
-3. `Game/puzzle/FallingBlock.h/.cpp`：落下中ブロック。基準座標＋回転index、自動落下、左右移動、回転（衝突時は拒否）、次ブロック出現。
-4. 落下中ブロック・盤面に置かれたブロックの3D描画（`defaultBlock` キューブ、種類ごとに色分け）。
-5. `Board` にロジック追加：`CanPlace(cells)` / `Place(cells, blockId)`、着地して盤面に固定、天井到達（ゲームオーバー）判定。
-6. `GameScene` に `FallingBlock` を組み込み、キー入力（左右・回転・下加速）を接続。
-7. デバッグUI：盤面幅 6/10 の切り替え。
+**共通の土台（役割分担の前提）は用意済み。** `GridPos.h`、`BlockShape` / `FallingBlock` のヘッダ雛形、`Board::CanPlace` / `Place` の宣言を作り、スタブ実装でビルドが通る状態にした。3人が並行して中身を埋められる。
+
+1. ~~`Game/puzzle/GridPos.h`~~ **完了。**
+2. `Game/puzzle/BlockShape.h/.cpp`：L字・T字の形。4回転分のマス相対座標テーブル（固定データ）。**ヘッダ雛形とスタブのみ。担当Bが中身を実装。**
+3. `Game/puzzle/FallingBlock.h/.cpp`：落下中ブロック。基準座標＋回転index、自動落下、左右移動、回転（衝突時は拒否）、次ブロック出現。**ヘッダ雛形とスタブのみ。担当Bが中身を実装。**
+4. 落下中ブロック・盤面に置かれたブロックの3D描画（`defaultBlock` キューブ、種類ごとに色分け）。担当C。
+5. `Board` にロジック追加：`CanPlace(cells)` / `Place(cells, blockId)`（**宣言・スタブ済み。中身は未実装**）、着地して盤面に固定、天井到達（ゲームオーバー）判定。担当A。
+6. `GameScene` に `FallingBlock` を組み込み、キー入力（左右・回転・下加速）を接続。担当C。
+7. デバッグUI：盤面幅 6/10 の切り替え。担当C。
 
 ### 次にやるステップ
 
-`GridPos.h` → `BlockShape.h/.cpp` の順で着手予定。
+3人分担へ移行。各担当が上記2〜7のスタブ／宣言を埋める。
 
 ### 「配置まで」に含めないもの（Day2以降）
 
@@ -91,15 +96,15 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 | B | `BlockShape`（形テーブル）＋ `FallingBlock`（入力・回転・自動落下・出現） |
 | C | `PuzzleConfig`（定数管理）＋ `GameScene` 統合 ＋ 描画 ＋ デバッグUI |
 
-境界インターフェース（合意済み）：
+境界インターフェース（合意済み・**ヘッダとスタブ実装をコードに反映済み。ビルド通過**）：
 
-- `struct GridPos { int x; int y; };`
-- `Board::CanPlace(const std::vector<GridPos>&)`
-- `Board::Place(const std::vector<GridPos>&, int blockId)`
-- `Board::GetCell(int, int)`
-- `FallingBlock::GetOccupiedCells()`
-- `FallingBlock::GetBlockId()`
-- `BlockShape::GetCells(Type, int rotation)`
+- `struct GridPos { int32_t x; int32_t y; };`（`GridPos.h`。プロジェクトの他コードに合わせ `int32_t`）
+- `Board::CanPlace(const std::vector<GridPos>&) const` → スタブは常に `false`
+- `Board::Place(const std::vector<GridPos>&, int32_t blockId)` → スタブは何もしない
+- `Board::GetCell(int32_t, int32_t)` → 実装済み
+- `FallingBlock::GetOccupiedCells() const` → スタブは空配列
+- `FallingBlock::GetBlockId() const` → スタブは初期値（空ID）
+- `BlockShape::GetCells(BlockShape::Type, int32_t rotation)` → スタブは空配列（`BlockShape` は名前空間）
 
 ---
 
@@ -116,6 +121,20 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 ---
 
 ## 作業ログ
+
+### 2026-09-02
+
+**作成：共通の土台（役割分担の前提）**
+3人分担に入る前の共通部分だけを実装。`Game/puzzle/` に以下を追加した。
+
+- `GridPos.h`：マス座標の共通型。合意インターフェースは `int` だが、プロジェクトの他コード（`Board::GetCell` など）が `int32_t` なので合わせた。
+- `BlockShape.h` / `BlockShape.cpp`：名前空間 `BlockShape` に `enum class Type { L, T }`、`kRotationCount`、`GetCells(Type, int32_t rotation)`。中身はスタブで、`.cpp` 内の空配列を const 参照で返すだけ。担当Bが形テーブルを実装する。
+- `FallingBlock.h` / `FallingBlock.cpp`：`FallingBlock` クラス。private に `type_` / `rotation_` / `origin_` / `blockId_`。public は合意済みの `GetOccupiedCells()`（空配列を返す）と `GetBlockId()`（`blockId_` をそのまま返す）のみ。落下・移動・回転・出現は担当Bが追加する。
+- `Board.h` / `Board.cpp`：`CanPlace(const std::vector<GridPos>&) const` と `Place(const std::vector<GridPos>&, int32_t)` の宣言を追加。変更箇所は「追加：」コメントで明示。スタブは `CanPlace` が常に `false`、`Place` が空実装。担当Aが中身を実装する。
+
+`.vcxproj` / `.vcxproj.filters` に3ヘッダ＋2ソースを登録（フィルタは既存の「Game\Puzzle」）。Debug/x64 でビルド成功（0 エラー、警告は既存分のみ）。実機動作は未確認（描画に関わる変更はないため見た目の変化なし）。
+
+これで A/B/C が同じインターフェースに対して並行着手でき、常にビルドが通る状態になった。
 
 ### 2026-08-31
 
