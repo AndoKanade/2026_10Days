@@ -8,11 +8,14 @@
 // このファイル内だけで使う定数
 namespace{
 
-	// 壁ブロックに使うモデル（当面は defaultBlock のキューブで代用する）
+	// 盤面に固定されたマスに使うモデル（当面は defaultBlock のキューブで代用する）
 	const std::string kBlockModel = "defaultBlock/defaultBlock.obj";
 
-	// U字の壁ブロックの色
-	const Vector4 kWallColor = {0.35f, 0.38f, 0.48f, 1.0f};
+	// 左右の壁（ゴール）に使うモデル
+	const std::string kGoalBlockModel = "goalBlock/goalBlock.obj";
+
+	// 下の壁（電源）に使うモデル
+	const std::string kSupplyBlockModel = "supplyBlock/supplyBlock.obj";
 
 	// 追加：盤面に固定されたマスの色
 	const Vector4 kFilledCellColor = {0.55f, 0.65f, 0.85f, 1.0f};
@@ -27,33 +30,35 @@ Board::~Board() = default;
 void Board::Initialize(Obj3dCommon* object3dCommon){
 	object3dCommon_ = object3dCommon;
 
-	// 共通モデルを読み込む
+	// 使用するモデルを読み込む
 	ModelManager::GetInstance()->LoadModel(kBlockModel);
+	ModelManager::GetInstance()->LoadModel(kGoalBlockModel);
+	ModelManager::GetInstance()->LoadModel(kSupplyBlockModel);
 
 	// --- U字の壁ブロックの生成 ---
 	// 盤面のマス領域のすぐ外側を、左・下・右の順に囲む。上辺は開けておく（U字）。
+	// 左右の壁はゴール（goalBlock）、下の壁は電源（supplyBlock）で描画する。
 	for(int32_t y = 0; y < PuzzleConfig::kBoardHeight; ++y){
-		CreateWallBlock(-1,y);           // 左の壁
+		CreateWallBlock(-1,y,kGoalBlockModel);           // 左の壁（ゴール）
 	}
 	for(int32_t y = 0; y < PuzzleConfig::kBoardHeight; ++y){
-		CreateWallBlock(width_,y);       // 右の壁
+		CreateWallBlock(width_,y,kGoalBlockModel);       // 右の壁（ゴール）
 	}
 	for(int32_t x = -1; x <= width_; ++x){
-		CreateWallBlock(x,PuzzleConfig::kBoardHeight); // 下の壁（左右の角を含む）
+		CreateWallBlock(x,PuzzleConfig::kBoardHeight,kSupplyBlockModel); // 下の壁（電源。左右の角を含む）
 	}
 }
 
 // U字の壁ブロックを1個生成して wallObjs_ に追加する
-void Board::CreateWallBlock(int32_t x,int32_t y){
+void Board::CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath){
 	auto obj = std::make_unique<Obj3D>();
 	obj->Initialize(object3dCommon_);
-	obj->SetModel(kBlockModel);
+	obj->SetModel(modelPath);
 	obj->SetScale({PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale});
 	obj->SetTranslate(GridToWorld(x,y));
 
 	if(Model::Material* wallMaterial = obj->GetMaterial()){
-		wallMaterial->color = kWallColor;
-		wallMaterial->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+		wallMaterial->enableLighting = 0; // 2D的な見た目にするため陰影を切る（色はモデルのテクスチャそのまま）
 	}
 
 	wallObjs_.push_back(std::move(obj));
