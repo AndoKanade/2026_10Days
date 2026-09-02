@@ -33,6 +33,17 @@ namespace{
 	constexpr GridPos kDirs[4]      = { {0,-1}, {0,1}, {-1,0}, {1,0} };
 	constexpr uint8_t kSelfBits[4]  = { Terminal::kUp,   Terminal::kDown, Terminal::kLeft,  Terminal::kRight };
 	constexpr uint8_t kOtherBits[4] = { Terminal::kDown, Terminal::kUp,   Terminal::kRight, Terminal::kLeft };
+
+	// 追加：配線描画（2.6の可視化）用の定数。
+	// マス中心から辺へ向かって伸びる細い棒として、端子が立っている方向だけ描画する。
+	constexpr float kWireThicknessScale = 0.08f; // 配線の太さ
+	constexpr float kWireLengthScale = 0.3f;     // 配線の長さ（＝マス中心からのずらし量）
+
+	// 追加：通電中の配線の色（明るく光らせる）
+	const Vector4 kWireLitColor = {1.0f, 0.95f, 0.3f, 1.0f};
+
+	// 追加：非通電の配線の色（暗く表示する）
+	const Vector4 kWireUnlitColor = {0.2f, 0.22f, 0.28f, 1.0f};
 }
 
 // コンストラクタ・デストラクタ
@@ -115,6 +126,40 @@ void Board::RebuildCellObjects(){
 			}
 
 			cellObjs_.push_back(std::move(obj));
+
+			// 追加：このマスの配線を、端子が立っている方向だけ中心から辺へ伸びる細い棒で描画する。
+			// 通電中（このマスが光っている）なら明るく、そうでなければ暗く表示する。
+			const Vector4 wireColor = (isClearingCell || powered[y][x]) ? kWireLitColor : kWireUnlitColor;
+
+			for(int32_t dir = 0; dir < 4; ++dir){
+				if(!(cells_[y][x].terminals & kSelfBits[dir])){
+					continue;
+				}
+
+				auto wireObj = std::make_unique<Obj3D>();
+				wireObj->Initialize(object3dCommon_);
+				wireObj->SetModel(kBlockModel);
+
+				// 上下方向（dir 0,1）は縦長、左右方向（dir 2,3）は横長のスケールにする
+				const bool isVertical = (dir == 0 || dir == 1);
+				wireObj->SetScale(isVertical
+					? Vector3{kWireThicknessScale, kWireLengthScale, kWireThicknessScale}
+					: Vector3{kWireLengthScale, kWireThicknessScale, kWireThicknessScale});
+
+				// マス中心から、その方向へ配線の長さぶんだけずらした位置に置く
+				// （グリッドのy方向とワールドのY軸は向きが逆なので符号を反転する）
+				Vector3 wirePos = GridToWorld(x,y);
+				wirePos.x += static_cast<float>(kDirs[dir].x) * kWireLengthScale;
+				wirePos.y -= static_cast<float>(kDirs[dir].y) * kWireLengthScale;
+				wireObj->SetTranslate(wirePos);
+
+				if(Model::Material* wireMaterial = wireObj->GetMaterial()){
+					wireMaterial->color = wireColor;
+					wireMaterial->enableLighting = 0;
+				}
+
+				cellObjs_.push_back(std::move(wireObj));
+			}
 		}
 	}
 }
@@ -253,8 +298,8 @@ bool Board::CanFall(const std::vector<GridPos>& cells) const{
 	return true;
 }
 
-// 指定したマス群へ blockId と端子ビットを書き込んで盤面に固定する。
-void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals){
+// 指定したマス群へ blockId・端子ビット・壁の先端ビットを書き込んで盤面に固定する。
+void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals,const std::vector<uint8_t>& wallTerminals){
 	for(size_t i = 0; i < cells.size(); ++i){
 		const GridPos& pos = cells[i];
 
@@ -268,6 +313,10 @@ void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::v
 		// 対応する端子ビットがあれば書き込む（無ければ0のまま）
 		if(i < terminals.size()){
 			cells_[pos.y][pos.x].terminals = terminals[i];
+		}
+		// 対応する壁の先端ビットがあれば書き込む（無ければ0のまま）
+		if(i < wallTerminals.size()){
+			cells_[pos.y][pos.x].wallTerminals = wallTerminals[i];
 		}
 	}
 
@@ -319,8 +368,11 @@ void Board::ResolveConduction(){
 
 			const Cell& currentCell = cells_[current.y][current.x];
 
-			// ゴール判定：電源（最下段）と同様、左右端のマスに到達した時点でゴールとする。
-			if(current.x == 0 || current.x == width_ - 1){
+			// ゴール判定：左右端のマスに位置しているだけでなく、そのマスの「壁の先端」
+			// ビット（wallTerminals）が実際に壁側を向いていて初めてゴールとする。
+			// 形ごとに決めた本来の先端（T字は出っ張りのみ）以外は、壁際に置いても届かない。
+			if((current.x == 0 && (currentCell.wallTerminals & Terminal::kLeft)) ||
+				(current.x == width_ - 1 && (currentCell.wallTerminals & Terminal::kRight))){
 				reachedGoal = true;
 			}
 
