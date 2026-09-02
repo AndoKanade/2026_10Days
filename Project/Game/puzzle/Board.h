@@ -2,6 +2,7 @@
 
 #include <array>
 #include <memory>
+#include <string>
 #include <vector>
 #include <cstdint>
 
@@ -59,6 +60,10 @@ public:
 	// 固定と同時に通電判定を行い、ゴールまで繋がっていれば対象マスを消す。
 	void Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals);
 
+	// 追加：落下中ブロック用の配置可否判定。
+	// 天井より上（y < 0）は空中とみなして通す。左右の壁・床・既存ブロックとの重なりのみ不可とする。
+	bool CanFall(const std::vector<GridPos>& cells) const;
+
 	// --- 判定・座標変換 ---
 
 	// 指定マス座標が現在の盤面の範囲内かどうか
@@ -100,10 +105,9 @@ private:
 
 	// 追加：消去演出の経過フレーム数
 	int32_t clearTimer_ = 0;
-
-	// U字の壁ブロックを1個生成して wallObjs_ に追加する
-	void CreateWallBlock(int32_t x,int32_t y);
-
+  
+	// U字の壁ブロックを1個生成して wallObjs_ に追加する（modelPath で使うモデルを指定する）
+	void CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath);
 	// 追加：cells_ の埋まっているマスから cellObjs_ を作り直す
 	void RebuildCellObjects();
 
