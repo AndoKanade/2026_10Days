@@ -4,6 +4,8 @@
 #include "MyMath.h"
 #include "LevelManager.h"
 #include "Board.h" // 追加：パズルの盤面クラス
+#include "FallingBlock.h" // 追加：落下中のブロック
+#include <cstdint>
 #include "SpecialGauge.h"
 #include <memory>
 #include <string>
@@ -47,6 +49,18 @@ private:
 	// 追加：パズルの盤面（10×10の壁とマスを描画する）
 	Board board_;
 
+	// 追加：落下中のブロック（現状はT字のみ出現する）
+	FallingBlock fallingBlock_;
+
+	// 追加：落下中ブロックの各マスを描画する3Dオブジェクト
+	std::vector<std::unique_ptr<Obj3D>> fallingObjs_;
+
+	// 追加：次に出現するブロックへ振る元ブロックID。出現のたびに増やす。
+	int32_t nextBlockId_ = 0;
+
+	// 追加：天井到達などでこれ以上ブロックを出せない状態かどうか
+	bool isGameOver_ = false;
+
 	// スペシャル発動に使用するゲージ
 	SpecialGauge specialGauge_;
 
@@ -56,6 +70,9 @@ private:
 
 	// レベル配置データからオブジェクトを再構築する
 	void RebuildLevelObjects();
+
+	// 追加：落下中ブロックの描画オブジェクトの位置を、現在の占有マスに合わせる
+	void SyncFallingObjs();
 
 	// レベル配置オブジェクトを描画するかどうか（ImGuiで切り替え）
 	bool isLevelObjectsVisible_ = false;

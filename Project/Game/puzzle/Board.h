@@ -85,6 +85,12 @@ private:
 	// 盤面の外周をU字（左・下・右、上は開き）に囲む壁ブロックのオブジェクト
 	std::vector<std::unique_ptr<Obj3D>> wallObjs_;
 
+	// 追加：盤面に固定されたマスの見た目を表す3Dオブジェクト
+	std::vector<std::unique_ptr<Obj3D>> cellObjs_;
+
 	// U字の壁ブロックを1個生成して wallObjs_ に追加する
 	void CreateWallBlock(int32_t x,int32_t y);
+
+	// 追加：cells_ の埋まっているマスから cellObjs_ を作り直す
+	void RebuildCellObjects();
 };
