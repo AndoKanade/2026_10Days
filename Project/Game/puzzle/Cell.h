@@ -26,8 +26,15 @@ struct Cell{
 	int32_t blockId = PuzzleConfig::kEmptyBlockId;
 
 	// 変更：上下左右の端子の有無を表す4bit（Terminal::の値をORして持つ）。
-	// ブロック配置時に BlockShape::GetTerminals() の値を書き込む。通電判定で使用する。
+	// ブロック配置時に BlockShape::GetTerminals() の値を書き込む。
+	// ブロック同士（マス同士）の通電判定で使用する。先端は反対側も露出しているため、
+	// 別ブロックの先端同士が向き合えば繋がる。
 	uint8_t terminals = 0;
+
+	// 追加：壁（ゴール）・床（電源）に実際に届くかどうかの判定専用の端子ビット。
+	// BlockShape::GetWallTerminals() の値を書き込む。ブロック同士の接続には使わない
+	// （先端露出を含まない、形ごとに定めた「本来の先端」だけのビット）。
+	uint8_t wallTerminals = 0;
 
 	// このマスが空かどうか
 	bool IsEmpty() const{

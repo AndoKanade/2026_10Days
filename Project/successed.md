@@ -11,8 +11,10 @@
 
 ## 現在の状態
 
-当面のゴール：**「配置まで」＝ 10×10 盤面にブロックが落ちて積める状態**
+現在の到達点：**10×10 盤面にブロックが落ちて積め、配線が描画され、電源からゴールまで繋がると通電マスがまとめて消え、落下して連鎖する**ところまで実装済み。
 （全体の開発ロードマップは `CLAUDE.md` の「4. 開発ロードマップ」を参照）
+
+未実装の主な項目：最強マス変換、明示的な状態機械への整理、スコア計算・表示、天井警告や消去エフェクトなどの演出、盤面幅 6/10 の切り替えUI。
 
 ### 描画方針
 
@@ -29,11 +31,11 @@
 | ファイル | 内容 |
 | --- | --- |
 | `Game/puzzle/PuzzleConfig.h` | 調整用定数の集約ヘッダ。実装ロジックは持たない。 |
-| `Game/puzzle/Cell.h` | マス構造体。`blockId`（空 = -1）＋端子4bit（未使用）＋ `IsEmpty()`。 |
+| `Game/puzzle/Cell.h` | マス構造体。`blockId`（空 = -1）＋端子4bit `terminals`（マス同士の通電判定に使用）＋壁判定専用の `wallTerminals` ＋ `IsEmpty()`。 |
 | `Game/puzzle/GridPos.h` | マス座標の共通型 `struct GridPos { int32_t x; int32_t y; };`。境界インターフェースの受け渡しに使う。 |
-| `Game/puzzle/BlockShape.h` / `BlockShape.cpp` | 形テーブル。`enum class Type { L, T }` ＋ `GetCells(Type, int rotation)`。**中身はスタブ（空配列を返す）。担当B実装予定。** |
-| `Game/puzzle/FallingBlock.h` / `FallingBlock.cpp` | 落下中ブロック。`GetOccupiedCells()` ＋ `GetBlockId()`。**中身はスタブ。担当B実装予定。** |
-| `Game/puzzle/Board.h` / `Board.cpp` | 10×10 のマスデータ配列＋U字の壁の描画。`CanPlace()` / `Place()` の宣言を追加（**中身はスタブ。担当A実装予定**）。 |
+| `Game/puzzle/BlockShape.h` / `BlockShape.cpp` | 形テーブル。`enum class Type { L, T }` ＋ `GetCells()` / `GetTerminals()` / `GetWallTerminals()`。**T字・L字とも4回転分を実装済み。** |
+| `Game/puzzle/FallingBlock.h` / `FallingBlock.cpp` | 落下中ブロック。出現・自動落下・左右移動・回転（拒否方式）・ハードドロップ・着地予測を実装済み。 |
+| `Game/puzzle/Board.h` / `Board.cpp` | 10×10 のマスデータ配列＋U字の壁の描画＋配線描画。`CanPlace()` / `CanFall()` / `Place()` ＋ 通電判定BFS・消去演出・マス単位落下・連鎖ループを実装済み。 |
 | `Game/scenes/GameScene` | `Board board_;` をメンバに持ち、Initialize / Update / Draw から呼び出す。変更箇所は「追加：」コメントで明示。 |
 
 `.vcxproj` / `.vcxproj.filters` に登録済み。`Game\puzzle` をインクルードディレクトリに追加（3構成すべて）、フィルタ「ヘッダー ファイル\Game\Puzzle」を新設。
@@ -49,51 +51,57 @@
 
 ### `Board` の現状
 
-- **持っているデータ**：`cells_`（10×10 のマス配列）。論理データとして保持し、`GetCell()` で参照する。
-- **描画しているもの**：U字の壁ブロック（`wallObjs_` ＋ `CreateWallBlock(x, y, modelPath)`）と、盤面に固定されたマス（`cellObjs_` ＋ `RebuildCellObjects()`、モデル `defaultBlock`、色 `kFilledCellColor`）。`RebuildCellObjects()` は `Place()` のたびに `cells_` から作り直す。
-  - 壁のモデル：左右の壁＝ゴールなので `goalBlock/goalBlock.obj`、下の壁＝電源なので `supplyBlock/supplyBlock.obj`（角は下扱い）。どちらも `enableLighting=0` でテクスチャそのまま表示（色の乗算はしない）。
-- **API**：`Initialize(Obj3dCommon*)` / `Update()` / `Draw()` / `GridToWorld()` / `IsInside()` / `SetWidth()` / `CanPlace()` / `CanFall()` / `Place()`
+- **持っているデータ**：`cells_`（10×10 のマス配列。`blockId` ＋ `terminals` ＋ `wallTerminals`）。論理データとして保持し、`GetCell()` で参照する。消去演出用に `clearingCells_` / `isClearing_` / `clearTimer_` も持つ。
+- **描画しているもの**：
+  - U字の壁ブロック（`wallObjs_` ＋ `CreateWallBlock(x, y, modelPath)`）。左右の壁＝ゴールなので `goalBlock/goalBlock.obj`、下の壁＝電源なので `supplyBlock/supplyBlock.obj`（角は下扱い）。どちらも `enableLighting=0` でテクスチャそのまま表示（色の乗算はしない）。
+  - 盤面に固定されたマスと、その配線（`cellObjs_` ＋ `RebuildCellObjects()`、モデル `defaultBlock`）。`RebuildCellObjects()` は `Place()` と消去・落下のたびに `cells_` から作り直す。マスの色は 消去演出中（`kClearingCellColor`）＞通電中（`kPoweredCellColor`）＞通常（`kFilledCellColor`）の優先順。配線は端子が立っている方向だけ中心から辺へ細い棒で描き、通電中は `kWireLitColor`、非通電は `kWireUnlitColor`。
+- **API**：`Initialize(Obj3dCommon*)` / `Update()` / `Draw()` / `GridToWorld()` / `IsInside()` / `SetWidth()` / `CanPlace()` / `CanFall()` / `Place()` / `IsBusy()`
   - `CanPlace(cells)`：全マスが範囲内かつ空きなら true。現状は未使用（一般用途の判定として保持）。
   - `CanFall(cells)`：落下中ブロック専用。天井より上（y<0）は空中として通し、左右の壁・床・既存ブロックの重なりだけ不可。`FallingBlock` はこちらを使う。
-  - `Place(cells, blockId)`：各マスに blockId を書き込み、`RebuildCellObjects()` を呼ぶ（範囲外マスはスキップ）。
+  - `Place(cells, blockId, terminals, wallTerminals)`：各マスに blockId・端子ビット・壁の先端ビットを書き込み（範囲外マスはスキップ）、`ResolveConduction()` で通電判定を行ってから `RebuildCellObjects()` を呼ぶ。
   - `GridToWorld()`：マス座標 → ワールド座標（`Vector3`、y=0 が上）。負座標・範囲外座標もそのまま計算できるので、壁は grid 座標 x=-1 / x=width / y=height に配置している。
   - `SetWidth()`：6/10 切り替え用。口だけ実装済みで UI 連携は未実装。
+  - `IsBusy()`：消去演出中かどうか。`GameScene` はこれが true の間ブロックの操作・落下・出現を止める。
+- **通電・消去・落下（内部処理）**：
+  - `ComputePoweredMask()`：電源（最下段）から幅優先探索で、いまどこまで通電が届いているかを調べる（ゴール到達は問わない）。配線・マスの光らせ表示に使う。
+  - `ResolveConduction()`：電源から幅優先探索で一かたまりを集め、ゴール（左右端の `wallTerminals`）まで届いていれば、行き止まりの枝を取り除いた残りのマスを消去対象にする。枝分かれ・ループは残す。即座には消さず消去演出状態に入る。
+  - `ApplyGravity(clearedColumns)`：消去が起きた列だけを対象に、マス単位で下詰めする（ブロックの形は保持しない）。
+  - `Update()` は消去演出タイマーが満了したら 実際の消去 → `ApplyGravity` → `ResolveConduction`（再判定）→ `RebuildCellObjects` を行い、通電がなくなるまで連鎖する。
 - 前方宣言した `Obj3D` を `unique_ptr` で持つため、コンストラクタ／デストラクタは cpp 側で `= default` 定義。
 
 ### `BlockShape` / `FallingBlock` の現状
 
-- `BlockShape::GetCells(Type, rotation)`：T字・L字とも4回転テーブルを実装済み（どちらも4マスのテトロミノ）。基準(0,0)は棒の中央マス。
-- `FallingBlock`：`Spawn` / `Update` / `MoveLeft` / `MoveRight` / `Rotate` / `SetSoftDrop` / `GetOccupiedCells` / `GetLandingCells` / `GetType` / `GetBlockId` / `IsLockedAboveCeiling`。自動落下・固定猶予・衝突時拒否の回転を実装。出現は `kSpawnRow`（= -2、天井より上の空中）から。衝突判定は `Board::CanFall`。固定時に y<0 のマスが残れば `IsLockedAboveCeiling()` が true。`GetLandingCells()` はいま真下に落とした場合の着地マス（ゴースト表示用）。壁蹴り（押し戻し）は未実装。
-- `GameScene`：`fallingBlock_` を持ち、WASD（A/D=左右、W=回転、S=加速落下）で操作。`nextType_` でネクストを管理し、`SpawnNextBlock()` が「ネクストを出現 → 次のネクストを抽選」を行う。`PickNextBlockType()` は T字・L字を等確率抽選（`randomEngine_`）。固定されたら自動で次を出現。固定時に `IsLockedAboveCeiling()` が true（または出現不可）なら `SceneManager::ChangeScene("GAMEOVER")` へ遷移。落下中ブロック（`fallingObjs_`）と着地予測ゴースト（`ghostObjs_`、暗色・少し小さめ）を描画。ネクストは ImGui「GameScene Debug」→「Next Block」に等幅テキストのグリッドで表示。天井警告演出は未実装。
+- `BlockShape`：`GetCells()` / `GetTerminals()` / `GetWallTerminals()` を T字・L字とも4回転分実装済み（どちらも4マスのテトロミノ）。基準(0,0)は棒の中央マス。端子ビットは形テーブルの隣接関係から計算し、先端のマスは反対側の辺も露出させて別ブロックの先端と繋がれるようにする。`GetWallTerminals()` は「本来の先端」だけを残した壁（ゴール）・床（電源）到達判定専用のビット（T字は出っ張りのみ、L字は両端）。
+- `FallingBlock`：`Spawn` / `Update` / `HardDrop` / `MoveLeft` / `MoveRight` / `Rotate` / `SetSoftDrop` / `GetOccupiedCells` / `GetLandingCells` / `GetType` / `GetBlockId` / `IsLockedAboveCeiling`。自動落下・固定猶予・衝突時拒否の回転・ハードドロップを実装。固定時は `Board::Place` に端子ビット・壁の先端ビットも渡す。出現は `kSpawnRow`（= -2、天井より上の空中）から。衝突判定は `Board::CanFall`。固定時に y<0 のマスが残れば `IsLockedAboveCeiling()` が true。`GetLandingCells()` はいま真下に落とした場合の着地マス（ゴースト表示用）。壁蹴り（押し戻し）は未実装。
+- `GameScene`：`fallingBlock_` を持ち、WASD（A/D=左右、W=回転、S=加速落下）＋ Enter でハードドロップ。消去演出中（`board_.IsBusy()`）は操作・落下・出現を止める。`nextType_` でネクストを管理し、`SpawnNextBlock()` が「ネクストを出現 → 次のネクストを抽選」を行う。`PickNextBlockType()` は T字・L字を等確率抽選（`randomEngine_`）。固定されたら自動で次を出現。固定時に `IsLockedAboveCeiling()` が true（または出現不可）なら `SceneManager::ChangeScene("GAMEOVER")` へ遷移。落下中ブロック（`fallingObjs_`）と着地予測ゴースト（`ghostObjs_`、暗色・少し小さめ）を描画。通電・消去の可視化は `Board` 側が担当する。ネクストは ImGui「GameScene Debug」→「Next Block」に等幅テキストのグリッドで表示。天井警告演出は未実装。
 
 ### ビルド・動作確認
 
-Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル画面でスペースキーを押すと GAME シーンに入り、盤面とT字ブロックが見える想定。
-**実機での見た目・操作確認はまだ。**
+Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル画面でスペースキーを押すと GAME シーンに入り、盤面・落下ブロック・配線・通電と消去が見える想定。
+**実機での見た目・操作・当たり判定バランスの確認はまだ。**
 
 ---
 
 ## 今後の予定
 
-### 「配置まで」に残っている作業
-
-**共通の土台（役割分担の前提）は用意済み。** `GridPos.h`、`BlockShape` / `FallingBlock` のヘッダ雛形、`Board::CanPlace` / `Place` の宣言を作り、スタブ実装でビルドが通る状態にした。3人が並行して中身を埋められる。
+### 完了済み
 
 1. ~~`Game/puzzle/GridPos.h`~~ **完了。**
-2. `Game/puzzle/BlockShape.h/.cpp`：**T字・L字とも完了**（各4回転テーブル。どちらも4マスのテトロミノ）。
-3. `Game/puzzle/FallingBlock.h/.cpp`：**自動落下・左右移動・回転（拒否方式）・次ブロック出現＋ネクスト抽選は完了**。壁蹴りは未実装。
-4. 落下中ブロック・盤面に置かれたブロックの3D描画：**単色で完了**。種類ごとの色分けは未対応（`Cell` が種類を持たないため）。
-5. `Board` の `CanPlace` / `Place` ＋ 着地固定：**完了**。天井到達（ゲームオーバー）判定も**完了**（次ブロックが出現位置に置けなければ GAMEOVER シーンへ遷移）。
-6. `GameScene` に `FallingBlock` を組み込み、キー入力（WASD）を接続：**完了**。
-7. デバッグUI：盤面幅 6/10 の切り替え。担当C。**未着手。**
+2. `Game/puzzle/BlockShape.h/.cpp`：**T字・L字とも完了**（各4回転テーブル＋端子ビット＋壁の先端ビット。どちらも4マスのテトロミノ）。
+3. `Game/puzzle/FallingBlock.h/.cpp`：**自動落下・左右移動・回転（拒否方式）・ハードドロップ・次ブロック出現＋ネクスト抽選は完了**。壁蹴りは未実装。
+4. 落下中ブロック・盤面に置かれたブロックの3D描画＋配線描画：**完了**。種類ごとの色分けは未対応（`Cell` が種類を持たないため）。
+5. `Board` の `CanPlace` / `CanFall` / `Place` ＋ 着地固定：**完了**。天井到達（ゲームオーバー）判定も**完了**（天井より上に残って固定、または次ブロックが出現位置に置けなければ GAMEOVER シーンへ遷移）。
+6. `GameScene` に `FallingBlock` を組み込み、キー入力（WASD＋Enter）を接続：**完了**。
+7. 通電判定BFS・配線の光らせ表示・通電成立時の消去演出・マス単位の落下・連鎖ループ：**完了**。
 
-### 次にやるステップ
+### 残っている作業
 
-3人分担へ移行。各担当が上記2〜7のスタブ／宣言を埋める。
-
-### 「配置まで」に含めないもの（Day2以降）
-
-配線描画、通電BFS、消去、最強マス、連鎖、状態機械、スコア、タイトル/リザルト。
+- デバッグUI：盤面幅 6/10 の切り替え。**未着手。**
+- 最強マス変換（消去後に同じ元ブロックIDが1マスだけ残ったら全方向端子のマスにする。判定は落下前）。**未着手。**
+- 即時処理で書いている進行を、明示的な状態機械へ整理する。**未着手。**
+- スコア計算（通電マス数に応じた倍率テーブル）・連鎖倍率・スコア表示。**未着手。**
+- 演出：通電が経路を走るアニメーション、消去エフェクト、天井接近時の警告。**未着手。**
+- タイトル／リザルト画面の体裁と、タイトルへの復帰・リスタート。**未着手。**
 
 ---
 
@@ -105,15 +113,16 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 | B | `BlockShape`（形テーブル）＋ `FallingBlock`（入力・回転・自動落下・出現） |
 | C | `PuzzleConfig`（定数管理）＋ `GameScene` 統合 ＋ 描画 ＋ デバッグUI |
 
-境界インターフェース（合意済み・**ヘッダとスタブ実装をコードに反映済み。ビルド通過**）：
+境界インターフェース（合意済み・**すべて本実装済み。ビルド通過**）：
 
 - `struct GridPos { int32_t x; int32_t y; };`（`GridPos.h`。プロジェクトの他コードに合わせ `int32_t`）
-- `Board::CanPlace(const std::vector<GridPos>&) const` → スタブは常に `false`
-- `Board::Place(const std::vector<GridPos>&, int32_t blockId)` → スタブは何もしない
+- `Board::CanPlace(const std::vector<GridPos>&) const` → 実装済み（現状は未使用）
+- `Board::CanFall(const std::vector<GridPos>&) const` → 実装済み（落下中ブロックの衝突判定はこちらを使う）
+- `Board::Place(const std::vector<GridPos>&, int32_t blockId, const std::vector<uint8_t>& terminals, const std::vector<uint8_t>& wallTerminals)` → 実装済み（固定と同時に通電判定を行う）
 - `Board::GetCell(int32_t, int32_t)` → 実装済み
-- `FallingBlock::GetOccupiedCells() const` → スタブは空配列
-- `FallingBlock::GetBlockId() const` → スタブは初期値（空ID）
-- `BlockShape::GetCells(BlockShape::Type, int32_t rotation)` → スタブは空配列（`BlockShape` は名前空間）
+- `FallingBlock::GetOccupiedCells() const` → 実装済み
+- `FallingBlock::GetBlockId() const` → 実装済み
+- `BlockShape::GetCells / GetTerminals / GetWallTerminals(BlockShape::Type, int32_t rotation)` → 実装済み（`BlockShape` は名前空間）
 
 ---
 
@@ -130,6 +139,21 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 ---
 
 ## 作業ログ
+
+### 2026-09-03
+
+**まとめ：通電・消去・連鎖・配線描画をコードに反映（ログ未記載分）＋ドキュメント更新**
+
+（8）以降、ログに残さないまま以下が実装されていた。コードを正としてこの日付でまとめ、「現在の状態」「今後の予定」「3人分担とインターフェース」を実装に合わせて上書きした。
+
+- `Cell` に壁（ゴール）・床（電源）到達判定専用の `wallTerminals` を追加。`terminals`（マス同士の通電判定用）と役割を分けた。
+- `BlockShape` に `GetTerminals()` / `GetWallTerminals()` を追加。端子ビットは形テーブルの隣接から計算し、先端のマスは反対側の辺も露出させる。壁の先端は形ごとに固定（T字は出っ張りのみ、L字は両端）。
+- `Board::Place` の引数に `terminals` / `wallTerminals` を追加。固定と同時に `ResolveConduction()` を呼ぶ。
+- `Board` に通電判定BFS（`ResolveConduction` ＝ 電源→ゴールの一かたまりから行き止まりの枝を除いた残りを消去対象に、`ComputePoweredMask` ＝ 光らせ表示用）、消去演出（`clearingCells_` / `isClearing_` / `clearTimer_` ＋ `kClearEffectFrames`）、マス単位の落下（`ApplyGravity`、消去が起きた列のみ）、通電がなくなるまでの連鎖ループ（`Update` 内）を実装。
+- `RebuildCellObjects()` が配線（端子方向の細い棒）も生成するようにした。色は 消去演出中＞通電中＞通常 の優先順、配線は通電中のみ明るい色。
+- `Board::IsBusy()` を追加。`GameScene` は消去演出中はブロックの操作・落下・出現を止める。
+- `FallingBlock::HardDrop()` を追加。`GameScene` で Enter に割り当て。
+- ゲームオーバー判定に「天井より上に残って固定（`IsLockedAboveCeiling`）」を追加。
 
 ### 2026-09-02（8）
 
