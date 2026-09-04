@@ -48,6 +48,5 @@ struct Cell{
 		}
 		blockId = PuzzleConfig::kStrongestBlockId;
 		terminals = Terminal::kAll;
-		wallTerminals = Terminal::kAll;
 	}
 };
