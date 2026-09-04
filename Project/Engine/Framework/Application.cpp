@@ -39,21 +39,23 @@ void Application::Initialize(){
 	renderTexture_ = std::make_unique<RenderTexture>();
 
 	// RTV/SRVハンドルの取得
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = dxCommon_->AllocateRtvDescriptor();
+	// 変更 リサイズ時に使い回すためメンバに保持する（毎回確保するとディスクリプタが枯渇する）
 	uint32_t srvIndex = SrvManager::GetInstance()->Allocate();
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCpu = SrvManager::GetInstance()->GetCPUDescriptorHandle(srvIndex);
-	D3D12_GPU_DESCRIPTOR_HANDLE srvHandleGpu = SrvManager::GetInstance()->GetGPUDescriptorHandle(srvIndex);
+	renderTextureRtvHandle_ = dxCommon_->AllocateRtvDescriptor();
+	renderTextureSrvHandleCpu_ = SrvManager::GetInstance()->GetCPUDescriptorHandle(srvIndex);
+	renderTextureSrvHandleGpu_ = SrvManager::GetInstance()->GetGPUDescriptorHandle(srvIndex);
 
 	// オフスクリーン用テクスチャの生成
+	// 変更 固定値ではなく実際のシーン描画解像度で生成する
 	renderTexture_->Create(
 		dxCommon_->GetDevice(),
-		WinAPI::kClientWidth,
-		WinAPI::kClientHeight,
+		dxCommon_->GetSceneWidth(),
+		dxCommon_->GetSceneHeight(),
 		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
 		{0.1f, 0.25f, 0.5f, 1.0f},
-		rtvHandle,
-		srvHandleCpu,
-		srvHandleGpu
+		renderTextureRtvHandle_,
+		renderTextureSrvHandleCpu_,
+		renderTextureSrvHandleGpu_
 	);
 
 	// 3. シーン工場の生成
@@ -100,6 +102,9 @@ void Application::Update(){
 	// 1. 基底クラスの更新
 	Framework::Update();
 
+	// 追加 ウィンドウメッセージ処理の直後にリサイズを反映する
+	HandleResize();
+
 	// 2. Dissolveアニメーション処理
 	if(isDissolving_){
 		dissolveTimer_ += 1.0f / 60.0f;
@@ -125,6 +130,38 @@ void Application::Update(){
 	static float time = 0.0f;
 	time += 1.0f / 60.0f;
 	postProcess_->SetRandomTime(time);
+}
+
+// -------------------------------------------------
+// 追加 リサイズ処理
+// -------------------------------------------------
+void Application::HandleResize(){
+	// リサイズ要求が来ていなければ何もしない
+	int32_t newWidth = 0;
+	int32_t newHeight = 0;
+
+	if(!winApi_->ConsumeResizeRequest(newWidth,newHeight)){
+		return;
+	}
+
+	// スワップチェーンと深度バッファを新しい解像度で作り直す
+	// サイズが変わっていなければ作り直しは不要なのでここで抜ける
+	if(!dxCommon_->Resize(static_cast<uint32_t>(newWidth),static_cast<uint32_t>(newHeight))){
+		return;
+	}
+
+	// オフスクリーン用テクスチャも同じ解像度で作り直す
+	// ディスクリプタは初期化時のものを使い回すため、ここで再確保はしない
+	renderTexture_->Create(
+		dxCommon_->GetDevice(),
+		dxCommon_->GetSceneWidth(),
+		dxCommon_->GetSceneHeight(),
+		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+		{0.1f, 0.25f, 0.5f, 1.0f},
+		renderTextureRtvHandle_,
+		renderTextureSrvHandleCpu_,
+		renderTextureSrvHandleGpu_
+	);
 }
 
 // -------------------------------------------------

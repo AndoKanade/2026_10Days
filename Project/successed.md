@@ -288,3 +288,8 @@ L字追加の前段として、次ブロックの仕組みと表示を用意。
 
 **調査：resource フォルダの未使用リソース洗い出し**
 削除候補を特定（詳細は「未使用リソースの整理」）。削除作業自体は未実施。
+**追加：フルスクリーン対応（ボーダーレスウィンドウ方式）**
+`WinAPI` に `SetFullscreen()` / `ToggleFullscreen()` / `IsFullscreen()` を追加。フルスクリーン時は `WINDOWPLACEMENT` とウィンドウスタイルを保存してから `WS_POPUP` に変更し、`MonitorFromWindow()` で取得したモニタ全体に広げる。復帰時は保存した値を戻す。`WindowProc` は静的関数なので `static WinAPI* instance` を持たせ、`WM_KEYDOWN` の F11 と `WM_SYSKEYDOWN` の Alt+Enter で切り替える。`DXCommon::CreateSwapChain()` に `MakeWindowAssociation(DXGI_MWA_NO_ALT_ENTER)` を追加し、DXGI 側の自動フルスクリーン切り替えを無効化。スワップチェーンは 1280x720 のままで、`DXGI_SCALING_STRETCH` により画面サイズへ引き伸ばされるため描画側の変更は不要。Debug/x64 でビルド成功。
+
+**追加：フルスクリーン時の画質低下を解消（描画解像度の動的リサイズ）**
+描画が常に 1280x720 で行われ、DXGI が画面サイズへ引き伸ばしていたのが画質低下の原因。論理解像度と物理解像度を分離して解決した。論理解像度 1280x720（`WinAPI::kClientWidth/kClientHeight`）は据え置きで、Sprite の正射影行列と Camera のアスペクト比はこれを使い続けるため、Sprite・Camera・Game 配下のシーンコードは無変更。`WinAPI` に `WM_SIZE` の受け取りと `ConsumeResizeRequest()` を追加（1フレーム1回だけ拾うことでドラッグ中の連続 WM_SIZE を1回にまとめる）。`DXCommon` に `CalcResolution()`・`WaitForGPU()`・`Resize()` を追加し、スワップチェーンはウィンドウ全体、深度バッファと RenderTexture は「ウィンドウに収まる最大の16対9矩形」で作り直す。`PreDraw()` はオフスクリーン用とスワップチェーン用でビューポートを切り替え、後者は中央寄せのレターボックス矩形にしてクリア色を黒にした（余白が黒帯になる）。ディスクリプタは初回確保分を使い回す（深度SRVは `depthSrvIndex_`、RenderTexture は `Application` がハンドルを保持）。リサイズのたびに確保するとディスクリプタが枯渇するため。`Application::HandleResize()` を `Framework::Update()` 直後に呼ぶ。副次的に、フルスクリーンで ImGui の表示位置がずれる問題も解消。Debug/x64 でビルド成功。

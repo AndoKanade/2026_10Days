@@ -92,4 +92,19 @@ namespace PuzzleConfig{
 	constexpr int32_t kSpecialGaugeDrainIntervalFrames =
 		kSpecialReadyDurationFrames / kSpecialGaugeMax;
 
+	// --- ネクスト・ホールド関連 ---
+
+	// 追加：ネクストとして先読み表示するブロックの個数
+	constexpr int32_t kNextQueueSize = 3;
+
+	// 追加：盤面の壁からプレビュー（ネクスト・ホールド）表示までの余白マス数
+	constexpr int32_t kPreviewMarginCols = 2;
+
+	// 追加：ブロックの形が基準マスから四方に張り出しうる最大マス数（I字縦置き基準）。
+	// ホールド表示を左の壁と重ねないための余白計算に使う。
+	constexpr int32_t kPreviewShapeMaxExtent = 2;
+
+	// 追加：ネクストの各枠に確保する縦方向のマス数（I字が縦向きでも収まる高さ）
+	constexpr int32_t kNextPreviewRowSpan = 4;
+
 }
