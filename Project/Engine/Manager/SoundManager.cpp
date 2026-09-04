@@ -6,6 +6,34 @@
 #include <propvarutil.h> 
 #pragma comment(lib, "propsys.lib")
 
+// --- ImGui (デバッグUI用) ---
+#ifdef USE_IMGUI
+#include <imgui.h>
+#endif
+
+// 追加：音量調整用の定数
+namespace{
+	// 音量の下限 (無音)
+	constexpr float kMinVolume = 0.0f;
+	// 音量の上限 (原音のまま)
+	constexpr float kMaxVolume = 1.0f;
+	// 音量スライダーの初期値・未設定時のデフォルト値
+	constexpr float kDefaultVolume = 1.0f;
+	// ImGuiのスライダー幅を自動で広げるための指定値
+	constexpr float kGuiFullWidth = -1.0f;
+}
+
+// 追加：値を上下限の内側に収める (音量のクランプ用)
+static float ClampVolume(float volume){
+	if(volume < kMinVolume){
+		return kMinVolume;
+	}
+	if(volume > kMaxVolume){
+		return kMaxVolume;
+	}
+	return volume;
+}
+
 // ==========================================================================
 // シングルトンインスタンス取得
 // ==========================================================================
@@ -191,7 +219,9 @@ void SoundManager::PlayAudio(const std::string& filename,float volume,bool loop)
 	result = xAudio2_->CreateSourceVoice(&pSourceVoice,&soundData.wfex);
 	assert(SUCCEEDED(result));
 
-	pSourceVoice->SetVolume(volume);
+	// 追加：指定音量を記録し、マスター音量を掛けた値を実際に適用する
+	volumes_[filename] = ClampVolume(volume);
+	pSourceVoice->SetVolume(volumes_[filename] * masterVolume_);
 
 	XAUDIO2_BUFFER buf{};
 	buf.pAudioData = soundData.pBuffer.data();
@@ -246,4 +276,110 @@ void SoundManager::ResumeAudio(const std::string& filename){
 // ==========================================================================
 bool SoundManager::IsPlaying(const std::string& filename){
 	return activeVoices_.find(filename) != activeVoices_.end();
+}
+
+// ==========================================================================
+// 個別の音量設定 (追加)
+// ==========================================================================
+void SoundManager::SetVolume(const std::string& filename,float volume){
+	// 停止中でも値だけは保持しておき、次の再生に反映されるようにする
+	const float clamped = ClampVolume(volume);
+	volumes_[filename] = clamped;
+
+	// 再生中ならその場で反映する
+	auto it = activeVoices_.find(filename);
+	if(it != activeVoices_.end()){
+		it->second->SetVolume(clamped * masterVolume_);
+	}
+}
+
+// ==========================================================================
+// 個別の音量取得 (追加)
+// ==========================================================================
+float SoundManager::GetVolume(const std::string& filename) const{
+	auto it = volumes_.find(filename);
+	if(it == volumes_.end()){
+		return kDefaultVolume;
+	}
+	return it->second;
+}
+
+// ==========================================================================
+// マスター音量設定 (追加)
+// ==========================================================================
+void SoundManager::SetMasterVolume(float volume){
+	masterVolume_ = ClampVolume(volume);
+
+	// 再生中のボイスすべてに反映する
+	for(auto& pair : activeVoices_){
+		if(pair.second){
+			pair.second->SetVolume(GetVolume(pair.first) * masterVolume_);
+		}
+	}
+}
+
+// ==========================================================================
+// マスター音量取得 (追加)
+// ==========================================================================
+float SoundManager::GetMasterVolume() const{
+	return masterVolume_;
+}
+
+// ==========================================================================
+// 音量調整用デバッグUI (追加)
+// ==========================================================================
+void SoundManager::ShowVolumeGui(){
+#ifdef USE_IMGUI
+	ImGui::Begin("Sound");
+
+	// --- マスター音量 ---
+	float master = masterVolume_;
+	ImGui::PushItemWidth(kGuiFullWidth);
+	if(ImGui::SliderFloat("Master Volume",&master,kMinVolume,kMaxVolume)){
+		SetMasterVolume(master);
+	}
+	ImGui::PopItemWidth();
+
+	ImGui::Separator();
+
+	// --- ロード済み音声ごとの音量・再生制御 ---
+	for(const auto& pair : soundDatas_){
+		const std::string& filename = pair.first;
+
+		// 同名ラベルの衝突を避けるため、ファイル名をIDとして積む
+		ImGui::PushID(filename.c_str());
+
+		const bool isPlaying = IsPlaying(filename);
+		ImGui::Text("%s [%s]",filename.c_str(),isPlaying ? "Playing" : "Stopped");
+
+		float volume = GetVolume(filename);
+		ImGui::PushItemWidth(kGuiFullWidth);
+		if(ImGui::SliderFloat("Volume",&volume,kMinVolume,kMaxVolume)){
+			SetVolume(filename,volume);
+		}
+		ImGui::PopItemWidth();
+
+		// 試聴用の再生・停止ボタン (BGM確認のためループ再生する)
+		if(ImGui::Button("Play")){
+			PlayAudio(filename,GetVolume(filename),true);
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Stop")){
+			StopAudio(filename);
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Pause")){
+			PauseAudio(filename);
+		}
+		ImGui::SameLine();
+		if(ImGui::Button("Resume")){
+			ResumeAudio(filename);
+		}
+
+		ImGui::PopID();
+		ImGui::Separator();
+	}
+
+	ImGui::End();
+#endif
 }

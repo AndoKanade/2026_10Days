@@ -39,7 +39,8 @@ private:
 	Application* app_ = nullptr;
 
 	// 設定・状態
-	const std::string kBgmPath_ = "resource/You_and_Me.mp3";
+	// 変更：ゲーム画面のBGMをサクラカゼに差し替え
+	const std::string kBgmPath_ = "resource/music/bgm/サクラカゼ.mp3";
 	bool isPaused_ = false;
 
 	// レベル配置オブジェクト
