@@ -27,6 +27,32 @@ namespace{
 	// ネクスト・ホールドのプレビューの拡大率（落下中ブロックのマス拡大率に対する倍率）
 	constexpr float kPreviewScaleRate = 0.55f;
 
+	// 追加：NEXT/HOLDの見出しラベルに使うモデル（Blenderで作成したテキスト形状のメッシュ）
+	const std::string kNextLabelModel = "character/next.obj";
+	const std::string kHoldLabelModel = "character/hold.obj";
+
+	// 追加：ラベルの拡大率。文字メッシュは1マス幅程度の大きさなので、少し拡大して見やすくする。
+	constexpr float kLabelScale = 1.3f;
+
+	// 変更：ラベル下端の、プレビュー基準マス（row 0）からのワールド座標での高さ。
+	// マス単位（整数行）だと1マス刻みでしか調整できず余白が広くなりすぎるため、
+	// 「プレビューの形が最大で張り出す1マス上（row -1）のマス上端」+「わずかな余白」
+	// をワールド単位で計算する。
+	constexpr float kLabelClearanceMargin = 0.15f; // 追加の余白
+	constexpr float kLabelWorldYOffset =
+		1.0f * PuzzleConfig::kCellWorldSize +                      // row -1 の中心まで
+		PuzzleConfig::kCellModelScale * kPreviewScaleRate +        // そのマスの半径ぶん（上端まで）
+		kLabelClearanceMargin;
+
+	// 追加：ネクストの枠と枠の間に、行の詰め幅（kNextPreviewRowSpan）だけでは
+	// 足りない追加の余白（ワールド単位）。これが無いと、隣の枠との隙間が
+	// 形の内部の隙間と同じ幅になり、3個の形が1本に繋がって見えてしまう。
+	// 枠が進むごとに積み重なるので、n番目の枠はこの値のn倍だけ余分に下がる。
+	constexpr float kNextPreviewExtraGapPerSlot = 0.6f;
+
+	// 追加：ラベルの色（陰影なしの白っぽい色で光らせ、視認性を確保する）
+	const Vector4 kLabelColor = {0.9f, 0.9f, 0.95f, 1.0f};
+
 	// ブロックの種類名（ImGui表示用）
 	const char* BlockTypeName(BlockShape::Type type){
 		switch(type){
@@ -151,6 +177,30 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 
 	// 追加：ネクスト・ホールドのプレビューを初期状態で構築する
 	RebuildPreviewObjs();
+
+	// 追加：NEXT/HOLDの見出しラベルを生成する（位置はSyncPreviewLabelsで設定する）
+	ModelManager::GetInstance()->LoadModel(kNextLabelModel);
+	ModelManager::GetInstance()->LoadModel(kHoldLabelModel);
+
+	nextLabelObj_ = std::make_unique<Obj3D>();
+	nextLabelObj_->Initialize(object3dCommon_);
+	nextLabelObj_->SetModel(kNextLabelModel);
+	nextLabelObj_->SetScale({kLabelScale, kLabelScale, kLabelScale});
+	if(Model::Material* material = nextLabelObj_->GetMaterial()){
+		material->color = kLabelColor;
+		material->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+	}
+
+	holdLabelObj_ = std::make_unique<Obj3D>();
+	holdLabelObj_->Initialize(object3dCommon_);
+	holdLabelObj_->SetModel(kHoldLabelModel);
+	holdLabelObj_->SetScale({kLabelScale, kLabelScale, kLabelScale});
+	if(Model::Material* material = holdLabelObj_->GetMaterial()){
+		material->color = kLabelColor;
+		material->enableLighting = 0;
+	}
+
+	SyncPreviewLabels();
 
 	// スペシャルの対象選択カーソルを用意する
 	specialCursorObj_ = std::make_unique<Obj3D>();
@@ -288,7 +338,9 @@ void GameScene::RebuildPreviewObjs(){
 		// 変更：プレビューもブロックの種類の色で表示する（何が来るか色でも分かるようにする）
 		std::vector<std::unique_ptr<Obj3D>> slotObjs;
 		const Vector4 nextColor = PuzzleConfig::ApplyLitGain(PuzzleConfig::GetBlockColor(nextQueue_[i]));
-		BuildPreviewShape(slotObjs,nextQueue_[i],anchorX,anchorY,nextColor);
+		// 枠ごとに追加の余白を積み重ね、隣の枠との境目が分かるようにする
+		const float extraGapY = kNextPreviewExtraGapPerSlot * static_cast<float>(i);
+		BuildPreviewShape(slotObjs,nextQueue_[i],anchorX,anchorY,nextColor,extraGapY);
 		nextPreviewObjs_.push_back(std::move(slotObjs));
 	}
 
@@ -302,10 +354,34 @@ void GameScene::RebuildPreviewObjs(){
 		const Vector4 holdColor = canHold_ ? litColor : PuzzleConfig::MakeDimColor(litColor);
 		BuildPreviewShape(holdPreviewObjs_,holdType_,anchorX,anchorY,holdColor);
 	}
+
+	// プレビューの配置（盤面幅）に合わせてラベルの位置も更新する
+	SyncPreviewLabels();
+}
+
+// 追加：NEXT/HOLDラベルの位置を、現在の盤面幅に合わせたプレビューの配置に合わせて更新する。
+void GameScene::SyncPreviewLabels(){
+	if(!nextLabelObj_ || !holdLabelObj_){
+		return;
+	}
+
+	// ネクストキュー先頭枠の基準マスの真上にラベルを置く
+	const int32_t nextAnchorX = board_.GetWidth() + PuzzleConfig::kPreviewMarginCols;
+	Vector3 nextLabelPos = board_.GridToWorld(nextAnchorX,0);
+	nextLabelPos.y += kLabelWorldYOffset;
+	nextLabelObj_->SetTranslate(nextLabelPos);
+
+	// ホールド枠の基準マスの真上にラベルを置く
+	const int32_t holdAnchorX = -(1 + PuzzleConfig::kPreviewMarginCols + PuzzleConfig::kPreviewShapeMaxExtent);
+	Vector3 holdLabelPos = board_.GridToWorld(holdAnchorX,0);
+	holdLabelPos.y += kLabelWorldYOffset;
+	holdLabelObj_->SetTranslate(holdLabelPos);
 }
 
 // 追加：1個ぶんのブロックのプレビューを、指定した配列に構築する。
-void GameScene::BuildPreviewShape(std::vector<std::unique_ptr<Obj3D>>& objs,BlockShape::Type type,int32_t anchorX,int32_t anchorY,const Vector4& color){
+// extraYOffsetWorld は、マス目盛りでは表せない微調整用のワールド単位の下方向オフセット
+// （下げる量。ネクストの枠を1個ずつさらに間隔を空けるのに使う）。
+void GameScene::BuildPreviewShape(std::vector<std::unique_ptr<Obj3D>>& objs,BlockShape::Type type,int32_t anchorX,int32_t anchorY,const Vector4& color,float extraYOffsetWorld){
 	// 回転0の形をそのままプレビューとして使う
 	const std::vector<GridPos>& shape = BlockShape::GetCells(type,0);
 
@@ -318,7 +394,9 @@ void GameScene::BuildPreviewShape(std::vector<std::unique_ptr<Obj3D>>& objs,Bloc
 			PuzzleConfig::kCellModelScale * kPreviewScaleRate,
 			PuzzleConfig::kCellModelScale * kPreviewScaleRate
 		});
-		obj->SetTranslate(board_.GridToWorld(anchorX + relative.x,anchorY + relative.y));
+		Vector3 pos = board_.GridToWorld(anchorX + relative.x,anchorY + relative.y);
+		pos.y -= extraYOffsetWorld;
+		obj->SetTranslate(pos);
 
 		// 変更：盤面のブロックと同じ質感にそろえる
 		if(Model::Material* material = obj->GetMaterial()){
@@ -518,6 +596,13 @@ void GameScene::Update() {
 			for (auto& obj : holdPreviewObjs_) {
 				obj->Update();
 			}
+			// 追加：NEXT/HOLDラベルも毎フレーム行列を更新する
+			if(nextLabelObj_){
+				nextLabelObj_->Update();
+			}
+			if(holdLabelObj_){
+				holdLabelObj_->Update();
+			}
 		}
 
 		for (auto& obj : levelObjects_) {
@@ -678,6 +763,13 @@ void GameScene::Draw(){
 	}
 	for(const auto& obj : holdPreviewObjs_){
 		obj->Draw();
+	}
+	// 追加：NEXT/HOLDラベルを描画する
+	if(nextLabelObj_){
+		nextLabelObj_->Draw();
+	}
+	if(holdLabelObj_){
+		holdLabelObj_->Draw();
 	}
 
 	// スペシャルの対象選択カーソルを最後に重ねて描画する
