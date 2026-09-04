@@ -125,6 +125,8 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	SceneManager::GetInstance()->SetFinalScore(0);
 	SceneManager::GetInstance()->SetFinalClearedCells(0);
 	activePlayFrames_ = 0;
+	debugManualFallSpeed_ = false;
+	debugFallIntervalFrames_ = PuzzleConfig::kFallIntervalFrames;
 
 	// カメラの生成・設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
@@ -548,7 +550,8 @@ void GameScene::Update() {
 	} else if (!isGameOver_) {
 			// 追加：消去演出中（Board::IsBusy）はブロックの操作・落下・出現を止める
 			if (!board_.IsBusy()) {
-				++activePlayFrames_;
+				// 手動調整中は自動加速の時計を止める。
+				if(!debugManualFallSpeed_){ ++activePlayFrames_; }
 				// 左右移動・回転はトリガー（押した瞬間）で1回ずつ
 				if (input_->TriggerKey(DIK_A)) {
 					fallingBlock_.MoveLeft(board_);
@@ -576,7 +579,7 @@ void GameScene::Update() {
 				// 時間経過を進め、盤面に固定されたら次のブロックを出す
 				const bool blockLocked = input_->TriggerKey(DIK_RETURN)
 					? fallingBlock_.HardDrop(board_)
-					: fallingBlock_.Update(board_,PuzzleConfig::GetFallIntervalFrames(activePlayFrames_));
+					: fallingBlock_.Update(board_,GetCurrentFallInterval());
 
 				if (blockLocked) {
 					// 天井より上にはみ出したまま固定された ＝ 積み上がりすぎでゲームオーバー
@@ -639,9 +642,25 @@ void GameScene::Update() {
 				score_.GetLastChain(),ScoreSystem::ChainMultiplierTenths(score_.GetLastChain()) / 10.0);
 
 			if(ImGui::CollapsingHeader("Fall Speed")){
+				if(ImGui::Checkbox("Manual fall speed",&debugManualFallSpeed_) && debugManualFallSpeed_){
+					debugFallIntervalFrames_ = PuzzleConfig::GetFallIntervalFrames(activePlayFrames_);
+				}
+				if(debugManualFallSpeed_){
+					ImGui::SliderInt("Frames per cell",&debugFallIntervalFrames_,1,180);
+					// キーボードで範囲外の値を入力しても安全な範囲へ戻す。
+					if(debugFallIntervalFrames_ < 1){ debugFallIntervalFrames_ = 1; }
+					if(debugFallIntervalFrames_ > 180){ debugFallIntervalFrames_ = 180; }
+					ImGui::Text("Lower = faster. 60 frames = 1 second.");
+					ImGui::Text("Auto speed timer is paused while manual mode is on.");
+				}
+				if(ImGui::Button("Reset to initial auto speed")){
+					debugManualFallSpeed_ = false;
+					debugFallIntervalFrames_ = PuzzleConfig::kFallIntervalFrames;
+					activePlayFrames_ = 0;
+				}
 				ImGui::Text("Active time: %.1f sec",static_cast<double>(activePlayFrames_) / PuzzleConfig::kFrameRate);
 				ImGui::Text("Fall interval: %.3f sec / cell",
-					PuzzleConfig::GetFallIntervalFrames(activePlayFrames_) / PuzzleConfig::kFrameRate);
+					GetCurrentFallInterval() / PuzzleConfig::kFrameRate);
 			}
 
 			// 追加：次に落ちてくるブロック（ネクスト）の表示
