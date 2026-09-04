@@ -106,6 +106,10 @@ private:
 	// ホールド枠のプレビュー用3Dオブジェクト（未ホールド時は空）
 	std::vector<std::unique_ptr<Obj3D>> holdPreviewObjs_;
 
+	// 追加：NEXT/HOLDの見出しラベル（character/next.obj, character/hold.obj）
+	std::unique_ptr<Obj3D> nextLabelObj_;
+	std::unique_ptr<Obj3D> holdLabelObj_;
+
 	// レベル配置データからオブジェクトを再構築する
 	void RebuildLevelObjects();
 
@@ -136,7 +140,11 @@ private:
 	// 1個ぶんのブロックのプレビュー（形なりに並べた3Dオブジェクト）を
 	// 指定した配列に構築する。anchorX・anchorYは形の基準マス(0,0)を置く盤面マス座標
 	// （盤面範囲外の値を渡してよい。Board::GridToWorldは範囲外でも計算できる）。
-	void BuildPreviewShape(std::vector<std::unique_ptr<Obj3D>>& objs,BlockShape::Type type,int32_t anchorX,int32_t anchorY,const Vector4& color);
+	// extraYOffsetWorldは、マス目盛りでは表せない微調整用のワールド単位の下方向オフセット。
+	void BuildPreviewShape(std::vector<std::unique_ptr<Obj3D>>& objs,BlockShape::Type type,int32_t anchorX,int32_t anchorY,const Vector4& color,float extraYOffsetWorld = 0.0f);
+
+	// 追加：NEXT/HOLDラベルの位置を、現在の盤面幅に合わせたプレビューの配置に合わせて更新する。
+	void SyncPreviewLabels();
 
 	// ImGui にネクストキュー・ホールドを表示する。
 	void ShowNextBlockGui() const;

@@ -122,6 +122,9 @@ private:
   
 	// U字の壁ブロックを1個生成して wallObjs_ に追加する（modelPath で使うモデルを指定する）
 	void CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath);
+	// 追加：現在の width_ に合わせて、U字の壁ブロックを作り直す。
+	// 右の壁・下の壁は幅に応じて位置・範囲が変わるため、幅切り替え時にも呼び直す必要がある。
+	void RebuildWalls();
 	// 追加：cells_ の埋まっているマスから cellObjs_ を作り直す
 	void RebuildCellObjects();
 
