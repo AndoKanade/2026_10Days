@@ -235,24 +235,16 @@ void Board::Update(){
 	if(isClearing_){
 		++clearTimer_;
 		if(clearTimer_ >= PuzzleConfig::kClearEffectFrames){
-			// 消えた元ブロックを記録し、その残存マスだけを変換する。
-			std::unordered_set<int32_t> affectedBlockIds;
+			// マスを消す前に控えておく。あわせて、消えるマスが元々属していた
+			// ブロックID（同じ元ブロックの残骸を後で見つけるため）も控えておく。
+			const std::vector<GridPos> clearedCells = clearingCells_;
+			std::vector<int32_t> clearedBlockIds;
 			for(const GridPos& pos : clearingCells_){
-				const Cell& cell = cells_[pos.y][pos.x];
-				if(!cell.IsEmpty() && !cell.IsStrongest()){
-					affectedBlockIds.insert(cell.blockId);
+				const int32_t id = cells_[pos.y][pos.x].blockId;
+				if(id != PuzzleConfig::kEmptyBlockId){
+					clearedBlockIds.push_back(id);
 				}
 			}
-			clearResults_.push_back({static_cast<int32_t>(clearingCells_.size()),chainCount_});
-			// 変更ここから：消去で空いた列だけを後で下詰めするため、
-			// 実際にマスを消す前に「消去が起きた列」を記録しておく。
-			std::array<bool,PuzzleConfig::kBoardWidthMax> clearedColumns{};
-			for(const GridPos& pos : clearingCells_){
-				if(pos.x >= 0 && pos.x < width_){
-					clearedColumns[pos.x] = true;
-				}
-			}
-			// 変更ここまで
 
 			for(const GridPos& pos : clearingCells_){
 				cells_[pos.y][pos.x] = Cell{};
@@ -272,9 +264,11 @@ void Board::Update(){
 			}
 
 			// マス単位で下に詰める（ブロックの形は保持しない）。
-			// 消去が起きた列と、残存マスを十字化した列を対象にする。
-			// それ以外の列にある、無関係なブロックは落下に巻き込まない。
-			ApplyGravity(clearedColumns);
+			// 残骸（別の列に残っている出っ張り部分など）が乗っている列も対象にする。
+			// 支えにしていたマスが消えて構造的に浮いた状態のため、自分の列自体には
+			// 消去が起きていなくても落とす必要がある。それ以外の、本当に無関係な列は
+			// 従来通り触らない。
+			ApplyGravity(clearedCells,clearedBlockIds);
 
 			// 落下後に再度通電判定を行う。まだ繋がっていれば連鎖してまた消去演出に入る
 			// （isClearing_ は直前で false にしてあるため、ここで判定が素通りされることはない）
@@ -332,8 +326,8 @@ bool Board::CanFall(const std::vector<GridPos>& cells) const{
 	return true;
 }
 
-// 指定したマス群へ blockId・端子ビット・壁の先端ビットを書き込んで盤面に固定する。
-void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals,const std::vector<uint8_t>& wallTerminals){
+// 指定したマス群へ blockId・端子ビットを書き込んで盤面に固定する。
+void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals){
 	for(size_t i = 0; i < cells.size(); ++i){
 		const GridPos& pos = cells[i];
 
@@ -347,10 +341,6 @@ void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::v
 		// 対応する端子ビットがあれば書き込む（無ければ0のまま）
 		if(i < terminals.size()){
 			cells_[pos.y][pos.x].terminals = terminals[i];
-		}
-		// 対応する壁の先端ビットがあれば書き込む（無ければ0のまま）
-		if(i < wallTerminals.size()){
-			cells_[pos.y][pos.x].wallTerminals = wallTerminals[i];
 		}
 	}
 
@@ -402,11 +392,10 @@ void Board::ResolveConduction(){
 
 			const Cell& currentCell = cells_[current.y][current.x];
 
-			// ゴール判定：左右端のマスに位置しているだけでなく、そのマスの「壁の先端」
-			// ビット（wallTerminals）が実際に壁側を向いていて初めてゴールとする。
-			// 形ごとに決めた本来の先端（T字は出っ張りのみ）以外は、壁際に置いても届かない。
-			if((current.x == 0 && (currentCell.wallTerminals & Terminal::kLeft)) ||
-				(current.x == width_ - 1 && (currentCell.wallTerminals & Terminal::kRight))){
+			// ゴール判定：左右端のマスに位置していて、かつそのマスの配線が外側
+			// （壁側）を向いていればゴールとする。
+			if((current.x == 0 && (currentCell.terminals & Terminal::kLeft)) ||
+				(current.x == width_ - 1 && (currentCell.terminals & Terminal::kRight))){
 				reachedGoal = true;
 			}
 
@@ -550,11 +539,45 @@ std::vector<Board::ClearResult> Board::TakeClearResults(){
 
 // 空きマスを詰めるように、各列のマスをマス単位で下へ落とす。
 // ブロックの形は保持しない（欠片ごとにバラバラに落ちる）。
-// 変更：clearedColumns が true の列（今回の消去でマスが空いた列）だけを処理する。
-void Board::ApplyGravity(const std::array<bool,PuzzleConfig::kBoardWidthMax>& clearedColumns){
+// 対象にする列は次の2種類。
+//   1. clearedCells に1マスでも含まれる列（今回の消去でマスが空いた列）
+//   2. clearedBlockIds と同じ元ブロックIDの残骸が残っている列
+//      （消去で同じ元ブロックの一部が失われ、支えを失って構造的に浮いた
+//      可能性があるマス。自分の列自体には消去が起きていなくても対象にする）
+// これ以外の、本当に無関係な列は触らない。もともと宙に浮いていた
+// 出っ張りマスを巻き込んで落とさないようにするため。
+// 対象になった列は、その列全体を空きマスが無くなるまで下に詰め直す
+// （落下はマス単位で行い、ブロックの形は保持しない仕様のため）。
+void Board::ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds){
+	// どの列を対象にするかを、列単位のフラグに変換しておく
+	std::array<bool,PuzzleConfig::kBoardWidthMax> clearedColumns{};
+
+	// 1. 今回の消去でマスが空いた列
+	for(const GridPos& pos : clearedCells){
+		if(pos.x >= 0 && pos.x < width_){
+			clearedColumns[pos.x] = true;
+		}
+	}
+
+	// 2. 消えたマスと同じ元ブロックIDの残骸が残っている列
+	if(!clearedBlockIds.empty()){
+		for(int32_t y = 0; y < PuzzleConfig::kBoardHeight; ++y){
+			for(int32_t x = 0; x < width_; ++x){
+				if(cells_[y][x].IsEmpty()){
+					continue;
+				}
+				for(int32_t id : clearedBlockIds){
+					if(cells_[y][x].blockId == id){
+						clearedColumns[x] = true;
+						break;
+					}
+				}
+			}
+		}
+	}
+
 	for(int32_t x = 0; x < width_; ++x){
-		// 変更：消去が起きていない列は触らない。
-		// もともと宙に浮いていた出っ張りマスを落とさないようにするため。
+		// 消去が起きていない列は触らない
 		if(!clearedColumns[x]){
 			continue;
 		}

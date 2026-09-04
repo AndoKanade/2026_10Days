@@ -44,11 +44,4 @@ namespace BlockShape{
 	// 隣接するマス同士の繋がりから計算し、先端のマスは反対側の辺も露出させることで
 	// 別のブロックの先端と向きが合えば繋がるようにする。
 	const std::vector<uint8_t>& GetTerminals(Type type,int32_t rotation);
-
-	// 追加：指定した種類・回転のブロックの各マスの「壁（ゴール）・床（電源）に
-	// 実際に届いてよい」端子ビットを返す。並び順は GetCells() と対応する。
-	// GetTerminals() と違い、ブロック同士の接続用に露出させた先端のうち、
-	// 形ごとに定めた「本来の先端」だけを残した値になる（T字は出っ張りのみ、
-	// L字・I字・J字は1本道なので両端とも）。それ以外のマスは0を返す。
-	const std::vector<uint8_t>& GetWallTerminals(Type type,int32_t rotation);
 }
