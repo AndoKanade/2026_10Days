@@ -237,7 +237,7 @@ void Board::Update(){
 		if(clearTimer_ >= PuzzleConfig::kClearEffectFrames){
 			// マスを消す前に控えておく。あわせて、消えるマスが元々属していた
 			// ブロックID（同じ元ブロックの残骸を後で見つけるため）も控えておく。
-			const std::vector<GridPos> clearedCells = clearingCells_;
+			std::vector<GridPos> clearedCells = clearingCells_;
 			std::vector<int32_t> clearedBlockIds;
 			for(const GridPos& pos : clearingCells_){
 				const int32_t id = cells_[pos.y][pos.x].blockId;
@@ -246,6 +246,9 @@ void Board::Update(){
 				}
 			}
 
+			// 消去数と連鎖数を記録し、GameSceneからゲージへ一度だけ渡す。
+			clearResults_.push_back({static_cast<int32_t>(clearingCells_.size()),chainCount_});
+
 			for(const GridPos& pos : clearingCells_){
 				cells_[pos.y][pos.x] = Cell{};
 			}
@@ -253,12 +256,14 @@ void Board::Update(){
 			isClearing_ = false;
 
 			// 個数に関係なく残存マスを十字にする。IDの照合は落下前に行う。
+			const std::unordered_set<int32_t> affectedBlockIds(clearedBlockIds.begin(),clearedBlockIds.end());
 			for(int32_t y = 0; y < GetHeight(); ++y){
 				for(int32_t x = 0; x < width_; ++x){
 					Cell& cell = cells_[y][x];
 					if(!cell.IsEmpty() && affectedBlockIds.contains(cell.blockId)){
 						cell.MakeStrongest();
-						clearedColumns[x] = true;
+						// 十字化した列も、新しい落下処理に渡す対象へ含める。
+						clearedCells.push_back({x,y});
 					}
 				}
 			}
