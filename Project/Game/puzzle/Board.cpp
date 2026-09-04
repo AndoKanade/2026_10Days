@@ -404,7 +404,7 @@ void Board::ResolveConduction(){
 
 			// ゴール判定：左右端のマスに位置しているだけでなく、そのマスの「壁の先端」
 			// ビット（wallTerminals）が実際に壁側を向いていて初めてゴールとする。
-			// 形ごとに決めた本来の先端（T字は出っ張りのみ）以外は、壁際に置いても届かない。
+			// 壁際に置くだけでは届かず、壁側を向いた配線が必要。
 			if((current.x == 0 && (currentCell.wallTerminals & Terminal::kLeft)) ||
 				(current.x == width_ - 1 && (currentCell.wallTerminals & Terminal::kRight))){
 				reachedGoal = true;
@@ -456,11 +456,14 @@ void Board::ResolveConduction(){
 				}
 				++d;
 			}
-			// 電源（最下段）・ゴール（左右端）は、外部と繋がっている仮想の1本があるものとして数える
+			// 電源・ゴールとの接続を仮想の1本として数える。
+			// ゴールは上の到達判定と同じく壁側の端子が必要。
+			// 壁際というだけで加算すると、行き止まりの上下の枝まで消えてしまう。
 			if(pos.y == bottomY){
 				++d;
 			}
-			if(pos.x == 0 || pos.x == width_ - 1){
+			if((pos.x == 0 && (posCell.wallTerminals & Terminal::kLeft)) ||
+				(pos.x == width_ - 1 && (posCell.wallTerminals & Terminal::kRight))){
 				++d;
 			}
 			degree[pos.y][pos.x] = d;

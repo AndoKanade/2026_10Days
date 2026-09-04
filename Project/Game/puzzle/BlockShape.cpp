@@ -185,13 +185,8 @@ namespace{
 		ComputeTerminals(kJShapeCells[3]),
 	};
 
-	// 追加：壁（ゴール）・床（電源）に実際に届いてよい「本来の先端」だけを残した
-	// 端子ビットを計算する。ブロック同士の接続用に先端露出させたビットのうち、
-	// 形ごとに決めた先端のマスだけそのまま残し、それ以外は0にする。
-	// T字は出っ張り（配列の添字3。kTShapeCellsのコメント通り、どの回転でも
-	// 添字3が出っ張りになるよう並べてある）だけを壁の先端として扱う。
-	// L字・I字・J字は途中で枝分かれしない1本道の形なので、両端（先端）ならどちらも
-	// 正規の壁の先端として扱う。
+	// 壁への接続も、ブロック同士と同じ配線の向きで判定する。
+	// T字も出っ張りだけに制限せず、横棒の両端からゴールへ接続できる。
 	std::vector<uint8_t> ComputeWallTerminals(BlockShape::Type type,const std::vector<uint8_t>& exposedTerminals){
 		std::vector<uint8_t> wallTerminals(exposedTerminals.size(),0);
 
@@ -200,7 +195,7 @@ namespace{
 
 			switch(type){
 			case BlockShape::Type::T:
-				isWallTip = (i == 3);
+				isWallTip = true;
 				break;
 			case BlockShape::Type::L:
 				isWallTip = true;

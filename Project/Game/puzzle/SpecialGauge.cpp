@@ -4,7 +4,7 @@
 
 #include "PuzzleConfig.h"
 
-// 追加：消去結果からスペシャルゲージを加算する。
+// 消去結果からスペシャルゲージを加算する。
 void SpecialGauge::AddFromClear(int32_t clearedCellCount,int32_t chainCount){
 	// スペシャル発動中は追加チャージを行わない
 	if(clearedCellCount <= 0 || isActivationActive_){
