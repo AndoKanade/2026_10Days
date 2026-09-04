@@ -1,5 +1,6 @@
 #include "Board.h"
 #include <unordered_set>
+#include <unordered_map>
 
 #include "Obj3D.h"
 #include "Obj3dCommon.h"
@@ -290,17 +291,31 @@ void Board::Update(){
 			clearingCells_.clear();
 			isClearing_ = false;
 
-			// 個数に関係なく残存マスを十字にする。IDの照合は落下前に行う。
+			// 変更：仕様2.8通り、消去後に同じ元ブロックIDのマスが盤面に1マスだけ
+			// 残ったときだけ最強マスへ変換する。判定は必ず落下前に行う
+			// （落下後だと別ブロックの断片が隣接し、正しく数えられなくなるため）。
 			const std::unordered_set<int32_t> affectedBlockIds(clearedBlockIds.begin(),clearedBlockIds.end());
+
+			// 今回の消去に関係した元ブロックIDごとに、残っているマスの位置を集める
+			std::unordered_map<int32_t,std::vector<GridPos>> remainingCellsByBlockId;
 			for(int32_t y = 0; y < GetHeight(); ++y){
 				for(int32_t x = 0; x < width_; ++x){
-					Cell& cell = cells_[y][x];
+					const Cell& cell = cells_[y][x];
 					if(!cell.IsEmpty() && affectedBlockIds.contains(cell.blockId)){
-						cell.MakeStrongest();
-						// 十字化した列も、新しい落下処理に渡す対象へ含める。
-						clearedCells.push_back({x,y});
+						remainingCellsByBlockId[cell.blockId].push_back({x,y});
 					}
 				}
+			}
+
+			// 残りがちょうど1マスだった元ブロックIDだけ、そのマスを最強マスに変換する
+			for(const auto& [blockId,remainingCells] : remainingCellsByBlockId){
+				if(remainingCells.size() != 1){
+					continue;
+				}
+				const GridPos& pos = remainingCells.front();
+				cells_[pos.y][pos.x].MakeStrongest();
+				// 十字化した列も、新しい落下処理に渡す対象へ含める。
+				clearedCells.push_back(pos);
 			}
 
 			// マス単位で下に詰める（ブロックの形は保持しない）。
