@@ -26,6 +26,66 @@ namespace{
 
 	// 追加：ゴーストの拡大率（落下中ブロックのマス拡大率に対する倍率）
 	constexpr float kGhostScaleRate = 0.7f;
+
+	// ネクスト・ホールドのプレビューの拡大率（落下中ブロックのマス拡大率に対する倍率）
+	constexpr float kPreviewScaleRate = 0.55f;
+
+	// ネクストプレビューの色（落下中ブロックより落ち着いた色にして区別する）
+	const Vector4 kNextPreviewColor = {0.55f, 0.75f, 0.95f, 1.0f};
+
+	// ホールドプレビューの色（ホールド済みで再利用不可の間は少し暗くする）
+	const Vector4 kHoldPreviewColor = {0.55f, 0.75f, 0.95f, 1.0f};
+	const Vector4 kHoldPreviewUsedColor = {0.35f, 0.4f, 0.45f, 1.0f};
+
+	// ブロックの種類名（ImGui表示用）
+	const char* BlockTypeName(BlockShape::Type type){
+		switch(type){
+		case BlockShape::Type::T: return "T";
+		case BlockShape::Type::L: return "L";
+		case BlockShape::Type::I: return "I";
+		case BlockShape::Type::J: return "J";
+		}
+		return "?";
+	}
+
+	// ImGuiに1個ぶんのブロックの形を、回転0の状態で簡易表示する。
+	void ShowShapeGuiRows(BlockShape::Type type){
+#ifdef USE_IMGUI
+		const std::vector<GridPos>& shape = BlockShape::GetCells(type,0);
+		if(shape.empty()){
+			ImGui::Text("(no shape data)");
+			return;
+		}
+
+		// 形が収まる範囲（外接矩形）を求める
+		int32_t minX = shape.front().x;
+		int32_t maxX = shape.front().x;
+		int32_t minY = shape.front().y;
+		int32_t maxY = shape.front().y;
+		for(const GridPos& cell : shape){
+			if(cell.x < minX){ minX = cell.x; }
+			if(cell.x > maxX){ maxX = cell.x; }
+			if(cell.y < minY){ minY = cell.y; }
+			if(cell.y > maxY){ maxY = cell.y; }
+		}
+
+		// 範囲内を1行ずつ文字列にして表示する（マスあり = [] 、マスなし = 空白）
+		for(int32_t y = minY; y <= maxY; ++y){
+			std::string row;
+			for(int32_t x = minX; x <= maxX; ++x){
+				bool filled = false;
+				for(const GridPos& cell : shape){
+					if(cell.x == x && cell.y == y){
+						filled = true;
+						break;
+					}
+				}
+				row += filled ? "[]" : "  ";
+			}
+			ImGui::Text("%s",row.c_str());
+		}
+#endif
+	}
 }
 
 GameScene::GameScene() = default;
@@ -53,8 +113,8 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	std::random_device seedGenerator;
 	randomEngine_.seed(seedGenerator());
 
-	// 追加：ネクストを抽選してから、最初の落下ブロックを出現させる
-	nextType_ = PickNextBlockType();
+	// 追加：ネクストキューを満たしてから、最初の落下ブロックを出現させる
+	FillNextQueue();
 	if(!SpawnNextBlock()){
 		isGameOver_ = true;
 	}
@@ -86,6 +146,9 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	}
 	SyncFallingObjs();
 
+	// 追加：ネクスト・ホールドのプレビューを初期状態で構築する
+	RebuildPreviewObjs();
+
 	// LevelManagerを初期化し、レベル配置オブジェクトを構築
 	levelManager_.LoadJSON(kLevelJsonFile);
 	RebuildLevelObjects();
@@ -106,18 +169,34 @@ void GameScene::SyncFallingObjs(){
 	}
 }
 
-// 追加：nextType_ のブロックを出現させ、次の nextType_ を抽選する。
+// 変更：ネクストキューの先頭のブロックを出現させ、キューの末尾に新しい種類を補充する。
 bool GameScene::SpawnNextBlock(){
-	// いま決まっているネクストを実際に出現させる
-	const bool spawned = fallingBlock_.Spawn(board_,nextType_,nextBlockId_);
+	// キューの先頭（いちばん次に来る種類）を実際に出現させる
+	const BlockShape::Type typeToSpawn = nextQueue_.front();
+	const bool spawned = fallingBlock_.Spawn(board_,typeToSpawn,nextBlockId_);
 
 	// 次に出現するブロックへ振る元ブロックIDを1つ進める
 	++nextBlockId_;
 
-	// 次のネクストを抽選しておく（表示は次の出現まで固定される）
-	nextType_ = PickNextBlockType();
+	// キューを1つ進め、末尾に新しい抽選結果を補充する（表示は常に規定個数を保つ）
+	nextQueue_.erase(nextQueue_.begin());
+	nextQueue_.push_back(PickNextBlockType());
+
+	// 新しいブロックが出現したので、このブロックに対するホールドを再び使えるようにする
+	canHold_ = true;
+
+	// ネクストの中身が変わったのでプレビューを作り直す
+	RebuildPreviewObjs();
 
 	return spawned;
+}
+
+// 追加：ネクストキューを規定個数ぶん抽選して満たす。
+void GameScene::FillNextQueue(){
+	nextQueue_.clear();
+	for(int32_t i = 0; i < PuzzleConfig::kNextQueueSize; ++i){
+		nextQueue_.push_back(PickNextBlockType());
+	}
 }
 
 // 追加：次に落ちてくるブロックの種類をひとつ抽選して返す。
@@ -129,67 +208,116 @@ BlockShape::Type GameScene::PickNextBlockType(){
 	return static_cast<BlockShape::Type>(dist(randomEngine_));
 }
 
-// 追加：ImGui にネクスト（次に落ちてくるブロック）を表示する。
+// 追加：ホールド操作。今のブロックをホールドへ預け、代わりにホールド済みの
+// ブロック（未ホールドならネクスト先頭のブロック）を出現させる。
+bool GameScene::SwapHold(){
+	// 1個のブロックにつきホールドは1回まで。既に使っていたら何もしない。
+	if(!canHold_){
+		return true;
+	}
+
+	// 今出現しているブロックの種類を控えておく（ホールドへ入れる分）
+	const BlockShape::Type currentType = fallingBlock_.GetType();
+
+	// 代わりに出現させる種類。既にホールド中ならその種類、まだなら
+	// ネクストキューの先頭を使う（先頭を使った場合はキューを補充する）。
+	BlockShape::Type typeToSpawn;
+	if(hasHeldBlock_){
+		typeToSpawn = holdType_;
+	} else{
+		typeToSpawn = nextQueue_.front();
+		nextQueue_.erase(nextQueue_.begin());
+		nextQueue_.push_back(PickNextBlockType());
+	}
+
+	holdType_ = currentType;
+	hasHeldBlock_ = true;
+
+	const bool spawned = fallingBlock_.Spawn(board_,typeToSpawn,nextBlockId_);
+	++nextBlockId_;
+
+	// 固定されるまで再びホールドは使えない
+	canHold_ = false;
+
+	// ネクスト・ホールドの中身が変わったのでプレビューを作り直す
+	RebuildPreviewObjs();
+
+	return spawned;
+}
+
+// 追加：ネクストキュー・ホールドのプレビュー用3Dオブジェクトを、現在の中身に合わせて作り直す。
+void GameScene::RebuildPreviewObjs(){
+	nextPreviewObjs_.clear();
+	holdPreviewObjs_.clear();
+
+	// ネクストキュー：右の壁の外側に、上から順に縦に並べる
+	for(size_t i = 0; i < nextQueue_.size(); ++i){
+		const int32_t anchorX = board_.GetWidth() + PuzzleConfig::kPreviewMarginCols;
+		const int32_t anchorY = static_cast<int32_t>(i) * PuzzleConfig::kNextPreviewRowSpan;
+
+		std::vector<std::unique_ptr<Obj3D>> slotObjs;
+		BuildPreviewShape(slotObjs,nextQueue_[i],anchorX,anchorY,kNextPreviewColor);
+		nextPreviewObjs_.push_back(std::move(slotObjs));
+	}
+
+	// ホールド：左の壁の外側に1枠だけ並べる（未ホールドの間は表示しない）
+	if(hasHeldBlock_){
+		const int32_t anchorX = -(1 + PuzzleConfig::kPreviewMarginCols + PuzzleConfig::kPreviewShapeMaxExtent);
+		const int32_t anchorY = 0;
+		// このブロックで既にホールドを使い切っている間は、色を暗くして再使用不可を示す
+		const Vector4& holdColor = canHold_ ? kHoldPreviewColor : kHoldPreviewUsedColor;
+		BuildPreviewShape(holdPreviewObjs_,holdType_,anchorX,anchorY,holdColor);
+	}
+}
+
+// 追加：1個ぶんのブロックのプレビューを、指定した配列に構築する。
+void GameScene::BuildPreviewShape(std::vector<std::unique_ptr<Obj3D>>& objs,BlockShape::Type type,int32_t anchorX,int32_t anchorY,const Vector4& color){
+	// 回転0の形をそのままプレビューとして使う
+	const std::vector<GridPos>& shape = BlockShape::GetCells(type,0);
+
+	for(const GridPos& relative : shape){
+		auto obj = std::make_unique<Obj3D>();
+		obj->Initialize(object3dCommon_);
+		obj->SetModel(kBlockModel);
+		obj->SetScale({
+			PuzzleConfig::kCellModelScale * kPreviewScaleRate,
+			PuzzleConfig::kCellModelScale * kPreviewScaleRate,
+			PuzzleConfig::kCellModelScale * kPreviewScaleRate
+		});
+		obj->SetTranslate(board_.GridToWorld(anchorX + relative.x,anchorY + relative.y));
+
+		if(Model::Material* material = obj->GetMaterial()){
+			material->color = color;
+			material->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+		}
+
+		objs.push_back(std::move(obj));
+	}
+}
+
+// 変更：ImGui にネクストキュー・ホールドを表示する。
 void GameScene::ShowNextBlockGui() const{
 #ifdef USE_IMGUI
-	if(!ImGui::CollapsingHeader("Next Block")){
+	if(!ImGui::CollapsingHeader("Next / Hold")){
 		return;
 	}
 
-	// ブロックの種類名を表示する
-	const char* typeName = "?";
-	switch(nextType_){
-	case BlockShape::Type::T:
-		typeName = "T";
-		break;
-	case BlockShape::Type::L:
-		typeName = "L";
-		break;
-	// 追加：I字
-	case BlockShape::Type::I:
-		typeName = "I";
-		break;
-	// 追加：J字
-	case BlockShape::Type::J:
-		typeName = "J";
-		break;
-	}
-	ImGui::Text("Type: %s",typeName);
-
-	// 形テーブル（回転0）を小さなグリッドとして描く
-	const std::vector<GridPos>& shape = BlockShape::GetCells(nextType_,0);
-	if(shape.empty()){
-		ImGui::Text("(no shape data)");
-		return;
+	// ネクストキューを先頭から順に表示する
+	ImGui::Text("Next Queue");
+	for(size_t i = 0; i < nextQueue_.size(); ++i){
+		ImGui::Text("[%zu] Type: %s",i,BlockTypeName(nextQueue_[i]));
+		ShowShapeGuiRows(nextQueue_[i]);
 	}
 
-	// 形が収まる範囲（外接矩形）を求める
-	int32_t minX = shape.front().x;
-	int32_t maxX = shape.front().x;
-	int32_t minY = shape.front().y;
-	int32_t maxY = shape.front().y;
-	for(const GridPos& cell : shape){
-		if(cell.x < minX){ minX = cell.x; }
-		if(cell.x > maxX){ maxX = cell.x; }
-		if(cell.y < minY){ minY = cell.y; }
-		if(cell.y > maxY){ maxY = cell.y; }
-	}
+	ImGui::Separator();
 
-	// 範囲内を1行ずつ文字列にして表示する（マスあり = [] 、マスなし = 空白）
-	// ImGui の既定フォントは等幅なので、この方法で形が揃って見える
-	for(int32_t y = minY; y <= maxY; ++y){
-		std::string row;
-		for(int32_t x = minX; x <= maxX; ++x){
-			bool filled = false;
-			for(const GridPos& cell : shape){
-				if(cell.x == x && cell.y == y){
-					filled = true;
-					break;
-				}
-			}
-			row += filled ? "[]" : "  ";
-		}
-		ImGui::Text("%s",row.c_str());
+	// ホールドの中身とホールド可否を表示する
+	ImGui::Text("Hold (%s)",canHold_ ? "usable" : "used");
+	if(hasHeldBlock_){
+		ImGui::Text("Type: %s",BlockTypeName(holdType_));
+		ShowShapeGuiRows(holdType_);
+	} else{
+		ImGui::Text("(empty)");
 	}
 #endif
 }
@@ -263,6 +391,15 @@ void GameScene::Update(){
 			if(input_->TriggerKey(DIK_W)){
 				fallingBlock_.Rotate(board_);
 			}
+			// 追加：ホールド操作（1個のブロックにつき1回まで）
+			if(input_->TriggerKey(DIK_C) && canHold_){
+				if(!SwapHold()){
+					// 差し替えたブロックの出現位置が塞がっていた＝ゲームオーバー
+					isGameOver_ = true;
+					SceneManager::GetInstance()->ChangeScene("GAMEOVER");
+					return;
+				}
+			}
 			// 下キーは押しっぱなしで加速落下
 			fallingBlock_.SetSoftDrop(input_->PushKey(DIK_S));
 
@@ -293,6 +430,15 @@ void GameScene::Update(){
 			obj->Update();
 		}
 		for(auto& obj : ghostObjs_){
+			obj->Update();
+		}
+		// 追加：ネクスト・ホールドのプレビューも毎フレーム行列を更新する
+		for(auto& slot : nextPreviewObjs_){
+			for(auto& obj : slot){
+				obj->Update();
+			}
+		}
+		for(auto& obj : holdPreviewObjs_){
 			obj->Update();
 		}
 	}
@@ -377,6 +523,15 @@ void GameScene::Draw(){
 			obj->Draw();
 		}
 		for(const auto& obj : fallingObjs_){
+			obj->Draw();
+		}
+		// 追加：ネクスト・ホールドのプレビューを描画する
+		for(const auto& slot : nextPreviewObjs_){
+			for(const auto& obj : slot){
+				obj->Draw();
+			}
+		}
+		for(const auto& obj : holdPreviewObjs_){
 			obj->Draw();
 		}
 	}
