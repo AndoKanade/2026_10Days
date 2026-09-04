@@ -88,6 +88,36 @@ public: // --- 音声ロード・再生制御 ---
 	/// </summary>
 	bool IsPlaying(const std::string& filename);
 
+public: // --- 音量制御 (追加) ---
+
+	/// <summary>
+	/// 個別の音量を設定 (再生中なら即座に反映される)
+	/// </summary>
+	/// <param name="filename">ファイルパス</param>
+	/// <param name="volume">音量 (0.0=無音, 1.0=最大)</param>
+	void SetVolume(const std::string& filename,float volume);
+
+	/// <summary>
+	/// 個別の音量を取得 (未設定の場合は最大音量を返す)
+	/// </summary>
+	float GetVolume(const std::string& filename) const;
+
+	/// <summary>
+	/// マスター音量を設定 (すべての音声にまとめて掛かる)
+	/// </summary>
+	void SetMasterVolume(float volume);
+
+	/// <summary>
+	/// マスター音量を取得
+	/// </summary>
+	float GetMasterVolume() const;
+
+	/// <summary>
+	/// ImGuiで音量を調整するデバッグUIを表示する
+	/// マスター音量と、ロード済み音声ごとの音量・再生状態を操作できる
+	/// </summary>
+	void ShowVolumeGui();
+
 private: // --- コンストラクタ・デストラクタ (外部からの生成禁止) ---
 	SoundManager() = default;
 	~SoundManager() = default;
@@ -111,4 +141,10 @@ private: // --- メンバ変数 ---
 
 	// 再生中のソースボイス管理コンテナ [キー:ファイル名]
 	std::map<std::string,IXAudio2SourceVoice*> activeVoices_;
+
+	// 追加：音声ごとの音量 [キー:ファイル名]。停止中でも値を保持する
+	std::map<std::string,float> volumes_;
+
+	// 追加：マスター音量 (すべての音声に掛かる係数)
+	float masterVolume_ = 1.0f;
 };
