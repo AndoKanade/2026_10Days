@@ -1,4 +1,5 @@
 #include "Board.h"
+#include <unordered_set>
 
 #include "Obj3D.h"
 #include "Obj3dCommon.h"
@@ -19,6 +20,7 @@ namespace{
 
 	// 追加：盤面に固定されたマスの色
 	const Vector4 kFilledCellColor = {0.55f, 0.65f, 0.85f, 1.0f};
+	const Vector4 kStrongestCellColor = {0.9f, 0.45f, 1.0f, 1.0f};
 
 	// 消去演出中のマスの色（通電したことが分かるよう明るい色で光らせる）
 	const Vector4 kClearingCellColor = {1.0f, 0.95f, 0.4f, 1.0f};
@@ -110,13 +112,13 @@ void Board::RebuildCellObjects(){
 			obj->SetScale({PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale});
 			obj->SetTranslate(GridToWorld(x,y));
 
-			// 追加：消去演出中＞通電中＞通常、の優先順で色を決める
+			// 消去色を優先し、十字マスは紫色を保つ。通電は配線の発光でも示す。
 			const bool isClearingCell = IsClearingCell(x,y);
 
-			Vector4 color = kFilledCellColor;
+			Vector4 color = cells_[y][x].IsStrongest() ? kStrongestCellColor : kFilledCellColor;
 			if(isClearingCell){
 				color = kClearingCellColor;
-			} else if(powered[y][x]){
+			} else if(powered[y][x] && !cells_[y][x].IsStrongest()){
 				color = kPoweredCellColor;
 			}
 
@@ -233,6 +235,15 @@ void Board::Update(){
 	if(isClearing_){
 		++clearTimer_;
 		if(clearTimer_ >= PuzzleConfig::kClearEffectFrames){
+			// 消えた元ブロックを記録し、その残存マスだけを変換する。
+			std::unordered_set<int32_t> affectedBlockIds;
+			for(const GridPos& pos : clearingCells_){
+				const Cell& cell = cells_[pos.y][pos.x];
+				if(!cell.IsEmpty() && !cell.IsStrongest()){
+					affectedBlockIds.insert(cell.blockId);
+				}
+			}
+			clearResults_.push_back({static_cast<int32_t>(clearingCells_.size()),chainCount_});
 			// 変更ここから：消去で空いた列だけを後で下詰めするため、
 			// 実際にマスを消す前に「消去が起きた列」を記録しておく。
 			std::array<bool,PuzzleConfig::kBoardWidthMax> clearedColumns{};
@@ -249,9 +260,20 @@ void Board::Update(){
 			clearingCells_.clear();
 			isClearing_ = false;
 
+			// 個数に関係なく残存マスを十字にする。IDの照合は落下前に行う。
+			for(int32_t y = 0; y < GetHeight(); ++y){
+				for(int32_t x = 0; x < width_; ++x){
+					Cell& cell = cells_[y][x];
+					if(!cell.IsEmpty() && affectedBlockIds.contains(cell.blockId)){
+						cell.MakeStrongest();
+						clearedColumns[x] = true;
+					}
+				}
+			}
+
 			// マス単位で下に詰める（ブロックの形は保持しない）。
-			// 変更：消去が起きた列だけを対象にする。消去の影響で真下のマスが
-			// 無くなったマスだけが落ち、消去と無関係な列の浮いた出っ張りマスは残る。
+			// 消去が起きた列と、残存マスを十字化した列を対象にする。
+			// それ以外の列にある、無関係なブロックは落下に巻き込まない。
 			ApplyGravity(clearedColumns);
 
 			// 落下後に再度通電判定を行う。まだ繋がっていれば連鎖してまた消去演出に入る
@@ -496,10 +518,34 @@ void Board::ResolveConduction(){
 	// 消去対象があれば、即座には消さず消去演出の状態に入る。
 	// 実際にマスを消す処理は Update() 側でタイマーが満了したときに行う。
 	if(!cellsToClear.empty()){
+		++chainCount_;
 		clearingCells_ = std::move(cellsToClear);
 		isClearing_ = true;
 		clearTimer_ = 0;
+	}else{
+		chainCount_ = 0;
 	}
+}
+
+bool Board::ConvertToStrongest(int32_t x,int32_t y){
+	if(IsBusy() || !IsInside(x,y)){
+		return false;
+	}
+	Cell& cell = cells_[y][x];
+	if(cell.IsEmpty() || cell.IsStrongest()){
+		return false;
+	}
+	cell.MakeStrongest();
+	chainCount_ = 0;
+	ResolveConduction();
+	RebuildCellObjects();
+	return true;
+}
+
+std::vector<Board::ClearResult> Board::TakeClearResults(){
+	std::vector<ClearResult> results;
+	results.swap(clearResults_);
+	return results;
 }
 
 // 空きマスを詰めるように、各列のマスをマス単位で下へ落とす。

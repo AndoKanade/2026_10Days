@@ -253,6 +253,9 @@ void GameScene::Update(){
 
 	// 追加：盤面の更新
 	board_.Update();
+	for(const Board::ClearResult& result : board_.TakeClearResults()){
+		specialGauge_.AddFromClear(result.cellCount,result.chainCount);
+	}
 
 	// スペシャル発動後は、対象選択中もゲージを減少させる
 	if(!isGameOver_){
@@ -264,7 +267,7 @@ void GameScene::Update(){
 	}
 
 	// Qキーでスペシャルの対象選択を開始する
-	if(!isGameOver_ && !specialSelector_.IsSelecting() &&
+	if(!isGameOver_ && !board_.IsBusy() && !specialSelector_.IsSelecting() &&
 		specialGauge_.CanActivate() && input_->TriggerKey(DIK_Q)){
 		if(specialSelector_.Begin(board_)){
 			specialGauge_.StartActivation();
@@ -286,6 +289,9 @@ void GameScene::Update(){
 		}
 		if(input_->TriggerKey(DIK_DOWN)){
 			specialSelector_.Move(0,1,board_);
+		}
+		if(input_->TriggerKey(DIK_RETURN)){
+			ConfirmSpecialTarget();
 		}
 		SyncSpecialCursor();
 	}else 	if (!isGameOver_) {
@@ -427,7 +433,7 @@ void GameScene::Update(){
 
 			if(!specialSelector_.IsSelecting()){
 				if(ImGui::Button("Start Selection")){
-					if(specialGauge_.CanActivate()){
+					if(!isGameOver_ && !board_.IsBusy() && specialGauge_.CanActivate()){
 						if(specialSelector_.Begin(board_)){
 							specialGauge_.StartActivation();
 						}
@@ -436,8 +442,11 @@ void GameScene::Update(){
 			}else{
 				const GridPos target = specialSelector_.GetTarget();
 				ImGui::Text("Target: (%d, %d)",target.x,target.y);
-				ImGui::Text("Target Cell: %s",specialSelector_.CanConfirm(board_) ? "VALID" : "EMPTY");
-				ImGui::Text("Arrow Keys: Move");
+				ImGui::Text("Target Cell: %s",specialSelector_.CanConfirm(board_) ? "VALID" : "INVALID");
+				ImGui::Text("Arrow Keys: Move / Enter: Confirm");
+				if(ImGui::Button("Confirm Target")){
+					ConfirmSpecialTarget();
+				}
 				if(ImGui::Button("Force Cancel (Debug)")){
 					specialSelector_.Cancel();
 					specialGauge_.Reset();
@@ -498,4 +507,17 @@ void GameScene::SyncSpecialCursor(){
 	}
 
 	specialCursorObj_->Update();
+}
+
+void GameScene::ConfirmSpecialTarget(){
+	if(isGameOver_ || !specialGauge_.IsActivationActive() ||
+		!specialSelector_.CanConfirm(board_)){
+		return;
+	}
+	const GridPos target = specialSelector_.GetTarget();
+	if(board_.ConvertToStrongest(target.x,target.y)){
+		// 通電しなくても変換自体が成功すれば使用済み。十字マスは盤面に残る。
+		specialGauge_.Consume();
+		specialSelector_.Cancel();
+	}
 }

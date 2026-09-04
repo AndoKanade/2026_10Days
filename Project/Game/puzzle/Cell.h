@@ -14,6 +14,7 @@ namespace Terminal{
 	constexpr uint8_t kDown  = 1 << 1; // 下辺の端子
 	constexpr uint8_t kLeft  = 1 << 2; // 左辺の端子
 	constexpr uint8_t kRight = 1 << 3; // 右辺の端子
+	constexpr uint8_t kAll = kUp | kDown | kLeft | kRight;
 }
 
 // =============================================================================
@@ -39,5 +40,19 @@ struct Cell{
 	// このマスが空かどうか
 	bool IsEmpty() const{
 		return blockId == PuzzleConfig::kEmptyBlockId;
+	}
+
+	bool IsStrongest() const{
+		return blockId == PuzzleConfig::kStrongestBlockId;
+	}
+
+	// 空マスは変換せず、通常接続と壁接続を両方全方向にする。
+	void MakeStrongest(){
+		if(IsEmpty()){
+			return;
+		}
+		blockId = PuzzleConfig::kStrongestBlockId;
+		terminals = Terminal::kAll;
+		wallTerminals = Terminal::kAll;
 	}
 };

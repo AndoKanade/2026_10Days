@@ -4,6 +4,7 @@
 
 #include "PuzzleConfig.h"
 
+// 追加：消去結果からスペシャルゲージを加算する。
 void SpecialGauge::AddFromClear(int32_t clearedCellCount,int32_t chainCount){
 	// スペシャル発動中は追加チャージを行わない
 	if(clearedCellCount <= 0 || isActivationActive_){
@@ -18,6 +19,7 @@ void SpecialGauge::AddFromClear(int32_t clearedCellCount,int32_t chainCount){
 	value_ = std::min(value_ + gainedValue,PuzzleConfig::kSpecialGaugeMax);
 }
 
+// スペシャル発動後の制限時間を1フレーム分進める
 void SpecialGauge::Update(){
 	if(!isActivationActive_){
 		return;
@@ -35,10 +37,12 @@ void SpecialGauge::Update(){
 	}
 }
 
+//	ゲージが満タンでスペシャルを開始可能か
 bool SpecialGauge::CanActivate() const{
 	return !isActivationActive_ && value_ >= PuzzleConfig::kSpecialGaugeMax;
 }
 
+//	満タンのゲージでスペシャルを開始し、減少を始める
 bool SpecialGauge::StartActivation(){
 	if(!CanActivate()){
 		return false;
@@ -49,6 +53,7 @@ bool SpecialGauge::StartActivation(){
 	return true;
 }
 
+//	発動可能ならゲージを消費して true を返す
 bool SpecialGauge::Consume(){
 	if(!isActivationActive_ || value_ <= 0){
 		return false;
@@ -58,12 +63,14 @@ bool SpecialGauge::Consume(){
 	return true;
 }
 
+//	デバッグ操作用
 void SpecialGauge::Fill(){
 	value_ = PuzzleConfig::kSpecialGaugeMax;
 	drainTimer_ = 0;
 	isActivationActive_ = false;
 }
 
+//	デバッグ操作用
 void SpecialGauge::Reset(){
 	value_ = 0;
 	drainTimer_ = 0;

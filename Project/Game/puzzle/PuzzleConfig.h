@@ -71,6 +71,8 @@ namespace PuzzleConfig{
 
 	// マスが空であることを表す元ブロックID
 	constexpr int32_t kEmptyBlockId = -1;
+	// 元ブロックに属さない、固定済みの十字マス。
+	constexpr int32_t kStrongestBlockId = -2;
 
 	// --- スペシャルゲージ関連 ---
 

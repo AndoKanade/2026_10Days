@@ -103,6 +103,8 @@ private:
 
 	// スペシャル選択カーソルの位置と色を現在の対象に合わせる
 	void SyncSpecialCursor();
+	// EnterまたはデバッグUIから共通の決定処理を呼ぶ。
+	void ConfirmSpecialTarget();
 
 	// レベル配置オブジェクトを描画するかどうか（ImGuiで切り替え）
 	bool isLevelObjectsVisible_ = false;

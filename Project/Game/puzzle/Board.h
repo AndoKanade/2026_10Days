@@ -81,6 +81,16 @@ public:
 	// 追加：消去演出中かどうか。true の間は呼び出し側でブロックの操作・落下を止める想定。
 	bool IsBusy() const{ return isClearing_; }
 
+	// 変換できた場合だけtrueを返し、直後に通電再判定する。
+	bool ConvertToStrongest(int32_t x,int32_t y);
+
+	struct ClearResult{
+		int32_t cellCount;
+		int32_t chainCount;
+	};
+	// 実際に消去が完了した結果を一度だけ受け取る。
+	std::vector<ClearResult> TakeClearResults();
+
 private:
 
 	// 借りてくるポインタ（このクラスでは生成・解放しない）
@@ -106,6 +116,8 @@ private:
 
 	// 追加：消去演出の経過フレーム数
 	int32_t clearTimer_ = 0;
+	int32_t chainCount_ = 0;
+	std::vector<ClearResult> clearResults_;
   
 	// U字の壁ブロックを1個生成して wallObjs_ に追加する（modelPath で使うモデルを指定する）
 	void CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath);
