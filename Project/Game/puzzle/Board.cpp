@@ -8,8 +8,12 @@
 // このファイル内だけで使う定数
 namespace{
 
-	// 盤面に固定されたマスに使うモデル（当面は defaultBlock のキューブで代用する）
-	const std::string kBlockModel = "defaultBlock/defaultBlock.obj";
+	// 変更：盤面に固定されたマスに使うモデル。辺と角を面取りしたキューブにして、
+	// 平行光源のハイライトが辺に乗るようにする。
+	const std::string kBlockModel = "blockBevel/blockBevel.obj";
+
+	// 追加：配線に使うモデル。細く引き伸ばして棒にするため、面取りのない素のキューブを使う。
+	const std::string kWireModel = "defaultBlock/defaultBlock.obj";
 
 	// 左右の壁（ゴール）に使うモデル
 	const std::string kGoalBlockModel = "goalBlock/goalBlock.obj";
@@ -17,8 +21,7 @@ namespace{
 	// 下の壁（電源）に使うモデル
 	const std::string kSupplyBlockModel = "supplyBlock/supplyBlock.obj";
 
-	// 追加：盤面に固定されたマスの色
-	const Vector4 kFilledCellColor = {0.55f, 0.65f, 0.85f, 1.0f};
+	// 削除：固定マスの色は PuzzleConfig::GetBlockColor() でブロックの種類ごとに引くようにした
 
 	// 消去演出中のマスの色（通電したことが分かるよう明るい色で光らせる）
 	const Vector4 kClearingCellColor = {1.0f, 0.95f, 0.4f, 1.0f};
@@ -110,19 +113,27 @@ void Board::RebuildCellObjects(){
 			obj->SetScale({PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale});
 			obj->SetTranslate(GridToWorld(x,y));
 
-			// 追加：消去演出中＞通電中＞通常、の優先順で色を決める
+			// 追加：消去演出中＞通電中＞ブロックの種類色、の優先順で色を決める。
+			// 通電状態はこのゲームの主情報なので、種類の色分けより必ず優先する。
 			const bool isClearingCell = IsClearingCell(x,y);
 
-			Vector4 color = kFilledCellColor;
+			Vector4 color = PuzzleConfig::GetBlockColor(cells_[y][x].type);
 			if(isClearingCell){
 				color = kClearingCellColor;
 			} else if(powered[y][x]){
 				color = kPoweredCellColor;
 			}
 
+			// 決めた色に、ライティングによる減衰ぶんの補正をまとめてかける
+			color = PuzzleConfig::ApplyLitGain(color);
+
 			if(Model::Material* cellMaterial = obj->GetMaterial()){
 				cellMaterial->color = color;
-				cellMaterial->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+
+				// 変更：面取り面が光を拾うようライティングを有効にし、光沢を乗せる
+				cellMaterial->enableLighting = 1;
+				cellMaterial->shininess = PuzzleConfig::kBlockShininess;
+				cellMaterial->environmentCoefficient = PuzzleConfig::kBlockEnvironmentCoefficient;
 			}
 
 			cellObjs_.push_back(std::move(obj));
@@ -138,7 +149,7 @@ void Board::RebuildCellObjects(){
 
 				auto wireObj = std::make_unique<Obj3D>();
 				wireObj->Initialize(object3dCommon_);
-				wireObj->SetModel(kBlockModel);
+				wireObj->SetModel(kWireModel);
 
 				// 上下方向（dir 0,1）は縦長、左右方向（dir 2,3）は横長のスケールにする
 				const bool isVertical = (dir == 0 || dir == 1);
@@ -314,7 +325,7 @@ bool Board::CanFall(const std::vector<GridPos>& cells) const{
 }
 
 // 指定したマス群へ blockId・端子ビットを書き込んで盤面に固定する。
-void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals){
+void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals,BlockShape::Type type){
 	for(size_t i = 0; i < cells.size(); ++i){
 		const GridPos& pos = cells[i];
 
@@ -324,6 +335,9 @@ void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::v
 		}
 
 		cells_[pos.y][pos.x].blockId = blockId;
+
+		// 変更：描画の色分けに使う元ブロックの種類を控えておく
+		cells_[pos.y][pos.x].type = type;
 
 		// 対応する端子ビットがあれば書き込む（無ければ0のまま）
 		if(i < terminals.size()){

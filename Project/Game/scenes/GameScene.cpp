@@ -15,27 +15,17 @@
 namespace{
 	const std::string kLevelJsonFile = "level.json"; // レベル配置情報のJSONファイル名
 
-	// 追加：落下ブロックの描画に使うモデル（盤面と同じキューブで代用する）
-	const std::string kBlockModel = "defaultBlock/defaultBlock.obj";
+	// 変更：落下ブロックの描画に使うモデル。盤面のマスと同じ面取りキューブを使う。
+	const std::string kBlockModel = "blockBevel/blockBevel.obj";
 
-	// 追加：落下中ブロックの色（壁・固定マスと区別できる暖色にする）
-	const Vector4 kFallingBlockColor = {0.95f, 0.75f, 0.25f, 1.0f};
-
-	// 追加：着地予測（ゴースト）の色（落下中ブロックを暗く落とした色。影のように見せる）
-	const Vector4 kGhostBlockColor = {0.45f, 0.35f, 0.15f, 1.0f};
+	// 削除：落下中ブロック・ゴースト・プレビューの色は
+	// PuzzleConfig::GetBlockColor() でブロックの種類ごとに引くようにした
 
 	// 追加：ゴーストの拡大率（落下中ブロックのマス拡大率に対する倍率）
 	constexpr float kGhostScaleRate = 0.7f;
 
 	// ネクスト・ホールドのプレビューの拡大率（落下中ブロックのマス拡大率に対する倍率）
 	constexpr float kPreviewScaleRate = 0.55f;
-
-	// ネクストプレビューの色（落下中ブロックより落ち着いた色にして区別する）
-	const Vector4 kNextPreviewColor = {0.55f, 0.75f, 0.95f, 1.0f};
-
-	// ホールドプレビューの色（ホールド済みで再利用不可の間は少し暗くする）
-	const Vector4 kHoldPreviewColor = {0.55f, 0.75f, 0.95f, 1.0f};
-	const Vector4 kHoldPreviewUsedColor = {0.35f, 0.4f, 0.45f, 1.0f};
 
 	// ブロックの種類名（ImGui表示用）
 	const char* BlockTypeName(BlockShape::Type type){
@@ -127,9 +117,13 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 		obj->Initialize(object3dCommon_);
 		obj->SetModel(kBlockModel);
 		obj->SetScale({PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale});
+
+		// 変更：面取り面が光を拾うようライティングを有効にし、光沢を乗せる。
+		// 色はブロックの種類ごとに変わるため SyncFallingObjs() で毎フレーム設定する。
 		if(Model::Material* material = obj->GetMaterial()){
-			material->color = kFallingBlockColor;
-			material->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+			material->enableLighting = 1;
+			material->shininess = PuzzleConfig::kBlockShininess;
+			material->environmentCoefficient = PuzzleConfig::kBlockEnvironmentCoefficient;
 		}
 		fallingObjs_.push_back(std::move(obj));
 
@@ -138,8 +132,10 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 		ghost->Initialize(object3dCommon_);
 		ghost->SetModel(kBlockModel);
 		ghost->SetScale({PuzzleConfig::kCellModelScale * kGhostScaleRate, PuzzleConfig::kCellModelScale * kGhostScaleRate, PuzzleConfig::kCellModelScale * kGhostScaleRate});
+
+		// ゴーストは着地位置を示すための影なので、陰影を切って平らな暗い色にする。
+		// 色はブロックの種類ごとに変わるため SyncFallingObjs() で毎フレーム設定する。
 		if(Model::Material* material = ghost->GetMaterial()){
-			material->color = kGhostBlockColor;
 			material->enableLighting = 0;
 		}
 		ghostObjs_.push_back(std::move(ghost));
@@ -156,16 +152,33 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 
 // 追加：落下中ブロックとゴーストの描画オブジェクトの位置を、現在の占有マス／着地予測マスに合わせる
 void GameScene::SyncFallingObjs(){
+	// 追加：いま落ちているブロックの種類に対応する色。
+	// ホールドやスポーンで種類が入れ替わるため、位置と一緒に毎フレーム反映する。
+	const Vector4 baseColor = PuzzleConfig::GetBlockColor(fallingBlock_.GetType());
+
+	// 本体はライティングありなので減衰ぶんを補正する。
+	// ゴーストはライティングを切っているので補正せず、そのまま暗くする。
+	const Vector4 blockColor = PuzzleConfig::ApplyLitGain(baseColor);
+	const Vector4 ghostColor = PuzzleConfig::MakeDimColor(baseColor);
+
 	// 落下中ブロック本体
 	const std::vector<GridPos> cells = fallingBlock_.GetOccupiedCells();
 	for(size_t i = 0; i < fallingObjs_.size() && i < cells.size(); ++i){
 		fallingObjs_[i]->SetTranslate(board_.GridToWorld(cells[i].x,cells[i].y));
+
+		if(Model::Material* material = fallingObjs_[i]->GetMaterial()){
+			material->color = blockColor;
+		}
 	}
 
 	// ゴースト（いま真下に落とした場合の着地位置）
 	const std::vector<GridPos> ghostCells = fallingBlock_.GetLandingCells(board_);
 	for(size_t i = 0; i < ghostObjs_.size() && i < ghostCells.size(); ++i){
 		ghostObjs_[i]->SetTranslate(board_.GridToWorld(ghostCells[i].x,ghostCells[i].y));
+
+		if(Model::Material* material = ghostObjs_[i]->GetMaterial()){
+			material->color = ghostColor;
+		}
 	}
 }
 
@@ -255,8 +268,10 @@ void GameScene::RebuildPreviewObjs(){
 		const int32_t anchorX = board_.GetWidth() + PuzzleConfig::kPreviewMarginCols;
 		const int32_t anchorY = static_cast<int32_t>(i) * PuzzleConfig::kNextPreviewRowSpan;
 
+		// 変更：プレビューもブロックの種類の色で表示する（何が来るか色でも分かるようにする）
 		std::vector<std::unique_ptr<Obj3D>> slotObjs;
-		BuildPreviewShape(slotObjs,nextQueue_[i],anchorX,anchorY,kNextPreviewColor);
+		const Vector4 nextColor = PuzzleConfig::ApplyLitGain(PuzzleConfig::GetBlockColor(nextQueue_[i]));
+		BuildPreviewShape(slotObjs,nextQueue_[i],anchorX,anchorY,nextColor);
 		nextPreviewObjs_.push_back(std::move(slotObjs));
 	}
 
@@ -264,8 +279,10 @@ void GameScene::RebuildPreviewObjs(){
 	if(hasHeldBlock_){
 		const int32_t anchorX = -(1 + PuzzleConfig::kPreviewMarginCols + PuzzleConfig::kPreviewShapeMaxExtent);
 		const int32_t anchorY = 0;
-		// このブロックで既にホールドを使い切っている間は、色を暗くして再使用不可を示す
-		const Vector4& holdColor = canHold_ ? kHoldPreviewColor : kHoldPreviewUsedColor;
+		// 変更：ホールドもブロックの種類の色で表示する。
+		// このブロックで既にホールドを使い切っている間は、その色を暗くして再使用不可を示す。
+		const Vector4 litColor = PuzzleConfig::ApplyLitGain(PuzzleConfig::GetBlockColor(holdType_));
+		const Vector4 holdColor = canHold_ ? litColor : PuzzleConfig::MakeDimColor(litColor);
 		BuildPreviewShape(holdPreviewObjs_,holdType_,anchorX,anchorY,holdColor);
 	}
 }
@@ -286,9 +303,12 @@ void GameScene::BuildPreviewShape(std::vector<std::unique_ptr<Obj3D>>& objs,Bloc
 		});
 		obj->SetTranslate(board_.GridToWorld(anchorX + relative.x,anchorY + relative.y));
 
+		// 変更：盤面のブロックと同じ質感にそろえる
 		if(Model::Material* material = obj->GetMaterial()){
 			material->color = color;
-			material->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+			material->enableLighting = 1;
+			material->shininess = PuzzleConfig::kBlockShininess;
+			material->environmentCoefficient = PuzzleConfig::kBlockEnvironmentCoefficient;
 		}
 
 		objs.push_back(std::move(obj));
