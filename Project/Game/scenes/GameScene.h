@@ -86,6 +86,12 @@ private:
 
 	// スペシャル選択・消去演出を除いた、落下速度上昇用の経過時間。
 	int64_t activePlayFrames_ = 0;
+	bool debugManualFallSpeed_ = false;
+	int debugFallIntervalFrames_ = PuzzleConfig::kFallIntervalFrames;
+	int32_t GetCurrentFallInterval() const{
+		return debugManualFallSpeed_ ? debugFallIntervalFrames_ :
+			PuzzleConfig::GetFallIntervalFrames(activePlayFrames_);
+	}
 
 	// スペシャル発動に使用するゲージ
 	SpecialGauge specialGauge_;
