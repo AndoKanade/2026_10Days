@@ -31,11 +31,6 @@ struct Cell{
 	// 別ブロックの先端同士が向き合えば繋がる。
 	uint8_t terminals = 0;
 
-	// 追加：壁（ゴール）・床（電源）に実際に届くかどうかの判定専用の端子ビット。
-	// BlockShape::GetWallTerminals() の値を書き込む。ブロック同士の接続には使わない
-	// （先端露出を含まない、形ごとに定めた「本来の先端」だけのビット）。
-	uint8_t wallTerminals = 0;
-
 	// このマスが空かどうか
 	bool IsEmpty() const{
 		return blockId == PuzzleConfig::kEmptyBlockId;
