@@ -13,6 +13,9 @@
 #include "SceneManager.h"
 
 namespace{
+	// 追加：ゲーム画面のBGMの初期音量
+	constexpr float kBgmVolume = 0.5f;
+
 	const std::string kLevelJsonFile = "level.json"; // レベル配置情報のJSONファイル名
 
 	// 変更：落下ブロックの描画に使うモデル。盤面のマスと同じ面取りキューブを使う。
@@ -128,6 +131,9 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	object3dCommon_->SetDefaultCamera(CameraManager::GetInstance()->GetActiveCamera());
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
+
+	// 追加：ゲームBGMをループ再生する
+	SoundManager::GetInstance()->PlayAudio(kBgmPath_,kBgmVolume,true);
 
 	// 追加：パズルの盤面を初期化する（盤面は3Dオブジェクトで描画する）
 	board_.Initialize(object3dCommon_);
@@ -479,7 +485,10 @@ void GameScene::RebuildLevelObjects(){
 	}
 }
 
-void GameScene::Finalize(){}
+void GameScene::Finalize(){
+	// 追加：シーンを抜けるときにゲームBGMを止める
+	SoundManager::GetInstance()->StopAudio(kBgmPath_);
+}
 
 // --- 更新処理 ---
 void GameScene::Update() {
@@ -725,6 +734,9 @@ void GameScene::Update() {
 
 			ModelManager::GetInstance()->UpdateLightGui();
 			ImGui::End();
+
+			// 追加：音量調整UI
+			SoundManager::GetInstance()->ShowVolumeGui();
 
 			Application::GetInstance()->ShowPostProcessUI();
 		}

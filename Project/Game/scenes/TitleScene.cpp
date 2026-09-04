@@ -13,6 +13,7 @@
 #include "CameraManager.h" 
 #include "Model.h"
 #include "Application.h"
+#include "SoundManager.h"
 
 // ImGui (マクロ定義がある場合のみ)
 #ifdef USE_IMGUI
@@ -25,6 +26,12 @@ namespace{
 	const std::string kTextureName = "resource/uvChecker.png";
 	const std::string kSkyboxTexture = "resource/Skybox/rostock_laage_airport_4k.dds";
 	const float kSpriteSize = 300.0f;
+
+	// 追加：タイトル画面で流すBGMのパス
+	const std::string kBgmPath = "resource/music/bgm/New_Breath.mp3";
+
+	// 追加：タイトルBGMの初期音量
+	constexpr float kBgmVolume = 0.5f;
 }
 
 // コンストラクタ
@@ -73,11 +80,18 @@ void TitleScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommo
 	if(material){
 		material->environmentCoefficient = 0.0f;
 	}
+
+	// 追加：タイトルBGMをロードしてループ再生する
+	SoundManager::GetInstance()->SoundLoadFile(kBgmPath);
+	SoundManager::GetInstance()->PlayAudio(kBgmPath,kBgmVolume,true);
 }
 
 // 終了処理
 void TitleScene::Finalize(){
-	// unique_ptrにより自動解放されるため処理なし
+	// 追加：シーンを抜けるときにタイトルBGMを止める
+	SoundManager::GetInstance()->StopAudio(kBgmPath);
+
+	// そのほかは unique_ptr により自動解放されるため処理なし
 }
 
 // 更新処理
@@ -88,6 +102,9 @@ void TitleScene::Update(){
 	ImGui::Begin("Sprite Settings");
 	ImGui::ColorEdit4("Color & Alpha",&spriteColor_.x); // 色と透明度の調整
 	ImGui::End();
+
+	// 追加：音量調整UI
+	SoundManager::GetInstance()->ShowVolumeGui();
 #endif
 
 	if(input_->TriggerKey(DIK_NUMPAD1) || input_->TriggerKey(DIK_1)){
