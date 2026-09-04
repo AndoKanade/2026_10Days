@@ -4,6 +4,7 @@
 #include "MyMath.h"
 #include <memory>
 #include <string>
+#include "ScoreHistory.h"
 
 // --- 前方宣言 ---
 class Input;
@@ -34,4 +35,9 @@ private:
 
 	// --- メンバ変数：内部リソース (所有するもの) ---
 	std::unique_ptr<Sprite> background_;
+	ScoreHistory history_;
+	bool resultRecorded_ = false;
+	bool isNewRecord_ = false;
+	bool historyLoaded_ = true;
+	bool historySaved_ = false;
 };

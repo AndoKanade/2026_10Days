@@ -3,6 +3,7 @@
 // --- 標準ライブラリ ---
 #include <string>
 #include <memory>
+#include <cstdint>
 
 // --- エンジン内ヘッダー ---
 #include "BaseScene.h"
@@ -62,6 +63,12 @@ public:
 	/// <param name="sceneName">遷移先のシーン名</param>
 	void ChangeScene(const std::string& sceneName);
 
+	// GameScene破棄後もゲームオーバー画面へ最終スコアを引き継ぐ。
+	void SetFinalScore(int64_t score){ finalScore_ = score; }
+	int64_t GetFinalScore() const{ return finalScore_; }
+	void SetFinalClearedCells(int64_t cells){ finalClearedCells_ = cells; }
+	int64_t GetFinalClearedCells() const{ return finalClearedCells_; }
+
 	// -------------------------------------------------
 	// セットアップ (初期化時に使用)
 	// -------------------------------------------------
@@ -97,6 +104,8 @@ private:
 
 	// 次に遷移するシーンの名前 (空文字列でない場合、遷移リクエストありと判断)
 	std::string nextSceneName_ = "";
+	int64_t finalScore_ = 0;
+	int64_t finalClearedCells_ = 0;
 
 	// --- 共通リソース (借用ポインタ) ---
 	Obj3dCommon* object3dCommon_ = nullptr;

@@ -389,6 +389,12 @@
     <ClInclude Include="Game\puzzle\SpecialSelector.h">
       <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
     </ClInclude>
+    <ClInclude Include="Game\puzzle\ScoreSystem.h">
+      <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
+    </ClInclude>
+    <ClInclude Include="Game\puzzle\ScoreHistory.h">
+      <Filter>ヘッダー ファイル\Game\Puzzle</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Engine\Graphics\Shaders\Obj3D\Object3d.hlsli">

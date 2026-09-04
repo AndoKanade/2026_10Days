@@ -8,6 +8,7 @@
 #include <cstdint>
 #include "SpecialGauge.h"
 #include "SpecialSelector.h"
+#include "ScoreSystem.h"
 #include <memory>
 #include <random>
 #include <string>
@@ -87,6 +88,7 @@ private:
 
 	// スペシャル発動に使用するゲージ
 	SpecialGauge specialGauge_;
+	ScoreSystem score_;
 
 	// スペシャルで最強マスにする対象の選択状態
 	SpecialSelector specialSelector_;

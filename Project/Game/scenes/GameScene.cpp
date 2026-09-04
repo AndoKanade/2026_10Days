@@ -92,6 +92,9 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	object3dCommon_ = object3dCommon;
 	input_ = input;
 	spriteCommon_ = spriteCommon;
+	score_.Reset();
+	SceneManager::GetInstance()->SetFinalScore(0);
+	SceneManager::GetInstance()->SetFinalClearedCells(0);
 	activePlayFrames_ = 0;
 
 	// カメラの生成・設定
@@ -415,6 +418,7 @@ void GameScene::Update() {
 	board_.Update();
 	for (const Board::ClearResult& result : board_.TakeClearResults()) {
 		specialGauge_.AddFromClear(result.cellCount, result.chainCount);
+		score_.AddFromClear(result.cellCount,result.chainCount);
 	}
 
 	// スペシャル発動後は、対象選択中もゲージを減少させる
@@ -473,6 +477,8 @@ void GameScene::Update() {
 					if (!SwapHold()) {
 						// 差し替えたブロックの出現位置が塞がっていた＝ゲームオーバー
 						isGameOver_ = true;
+						SceneManager::GetInstance()->SetFinalScore(score_.GetTotal());
+						SceneManager::GetInstance()->SetFinalClearedCells(score_.GetTotalCells());
 						SceneManager::GetInstance()->ChangeScene("GAMEOVER");
 						return;
 					}
@@ -494,6 +500,8 @@ void GameScene::Update() {
 
 					if (lockedAboveCeiling || !spawned) {
 						isGameOver_ = true;
+						SceneManager::GetInstance()->SetFinalScore(score_.GetTotal());
+						SceneManager::GetInstance()->SetFinalClearedCells(score_.GetTotalCells());
 						SceneManager::GetInstance()->ChangeScene("GAMEOVER");
 						return;
 					}
@@ -534,6 +542,12 @@ void GameScene::Update() {
 		if (Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera()) {
 			// メインデバッグウィンドウ
 			ImGui::Begin("GameScene Debug");
+			ImGui::Text("Score: %lld",static_cast<long long>(score_.GetTotal()));
+			ImGui::Text("Total cleared cells: %lld",static_cast<long long>(score_.GetTotalCells()));
+			ImGui::Text("Last gain: +%lld",static_cast<long long>(score_.GetLastGain()));
+			ImGui::Text("Cells: %d (x%.1f) / Combo: %d (x%.1f)",
+				score_.GetLastCells(),ScoreSystem::CellMultiplierTenths(score_.GetLastCells()) / 10.0,
+				score_.GetLastChain(),ScoreSystem::ChainMultiplierTenths(score_.GetLastChain()) / 10.0);
 
 			if(ImGui::CollapsingHeader("Fall Speed")){
 				ImGui::Text("Active time: %.1f sec",static_cast<double>(activePlayFrames_) / PuzzleConfig::kFrameRate);
