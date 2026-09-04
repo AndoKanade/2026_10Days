@@ -626,11 +626,6 @@ void GameScene::Update() {
 			obj->Update();
 		}
 
-		// スペースキーでゲームクリア画面へ遷移
-		if (!specialSelector_.IsSelecting() && input_->TriggerKey(DIK_SPACE)) {
-			SceneManager::GetInstance()->ChangeScene("GAMECLEAR");
-		}
-
 		// --- デバッグUIの表示 ---
 #ifdef USE_IMGUI
 		if (Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera()) {
