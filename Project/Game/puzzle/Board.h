@@ -58,8 +58,9 @@ public:
 	// 追加：指定したマス群へ blockId・端子ビットを書き込んで盤面に固定する。
 	// terminals は cells と同じ並び・同じ要素数を想定する
 	// （対応する要素が無いマスは0のまま）。
+	// 変更：type は描画の色分けに使う元ブロックの種類。通電判定には影響しない。
 	// 固定と同時に通電判定を行い、ゴールまで繋がっていれば対象マスを消す。
-	void Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals);
+	void Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals,BlockShape::Type type);
 
 	// 追加：落下中ブロック用の配置可否判定。
 	// 天井より上（y < 0）は空中とみなして通す。左右の壁・床・既存ブロックとの重なりのみ不可とする。
