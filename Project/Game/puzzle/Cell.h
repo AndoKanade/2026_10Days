@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "BlockShape.h"
 #include "PuzzleConfig.h"
 
 // =============================================================================
@@ -31,6 +32,10 @@ struct Cell{
 	// ブロック同士（マス同士）の通電判定で使用する。先端は反対側も露出しているため、
 	// 別ブロックの先端同士が向き合えば繋がる。
 	uint8_t terminals = 0;
+
+	// 追加：このマスを埋めた元ブロックの種類。描画の色分けにだけ使う。
+	// 通電判定には関係しない。空きマスのときの値は参照しない。
+	BlockShape::Type type = BlockShape::Type::L;
 
 	// このマスが空かどうか
 	bool IsEmpty() const{
