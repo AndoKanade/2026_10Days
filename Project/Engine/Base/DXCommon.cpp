@@ -1,4 +1,4 @@
-#include "DXCommon.h"
+﻿#include "DXCommon.h"
 #include "Logger.h"
 #include "StringUtility.h"
 #include "RenderTexture.h"
@@ -24,9 +24,23 @@ using namespace StringUtility;
 // 初期化処理
 //=============================================================================
 
+// 追加 バックバッファの枚数
+static constexpr uint32_t kNumBackBuffers = 2;
+
+// 追加 オフスクリーン描画のクリア色（背景色）
+static constexpr float kSceneClearColor[4] = {0.1f, 0.25f, 0.5f, 1.0f};
+
+// 追加 スワップチェーンのクリア色（レターボックスの余白になるため黒）
+static constexpr float kBackBufferClearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+
 void DXCommon::Initialize(WinAPI* winApi){
 	assert(winApi);
 	this->winApi_ = winApi;
+
+	// 追加 起動時のクライアントサイズから解像度を算出する
+	RECT clientRect{};
+	GetClientRect(winApi_->GetHwnd(),&clientRect);
+	CalcResolution(clientRect.right - clientRect.left,clientRect.bottom - clientRect.top);
 
 	// 各種初期化関数の呼び出し
 	InitDevice();
@@ -126,24 +140,30 @@ void DXCommon::InitCommand(){
 
 void DXCommon::CreateSwapChain(){
 	HRESULT hr;
-	swapChainDesc.Width = winApi_->kClientWidth;
-	swapChainDesc.Height = winApi_->kClientHeight;
+	// 変更 固定値ではなく実際のウィンドウサイズで生成する
+	swapChainDesc.Width = backBufferWidth_;
+	swapChainDesc.Height = backBufferHeight_;
 	swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	swapChainDesc.SampleDesc.Count = 1;
 	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swapChainDesc.BufferCount = 2;
+	swapChainDesc.BufferCount = kNumBackBuffers;
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
 	hr = dxgiFactory->CreateSwapChainForHwnd(
 		commandQueue.Get(),winApi_->GetHwnd(),&swapChainDesc,nullptr,nullptr,
 		reinterpret_cast<IDXGISwapChain1**>(swapChain.GetAddressOf()));
 	assert(SUCCEEDED(hr));
+
+	// 追加 DXGI による Alt + Enter の自動フルスクリーン切り替えを無効化する
+	// 切り替えは WinAPI のボーダーレスフルスクリーンで行うため
+	dxgiFactory->MakeWindowAssociation(winApi_->GetHwnd(),DXGI_MWA_NO_ALT_ENTER);
 }
 
 void DXCommon::CreateDepthBuffer(){
 	D3D12_RESOURCE_DESC resourceDesc{};
-	resourceDesc.Width = winApi_->kClientWidth;
-	resourceDesc.Height = winApi_->kClientHeight;
+	// 変更 オフスクリーン描画のサイズに合わせる
+	resourceDesc.Width = sceneWidth_;
+	resourceDesc.Height = sceneHeight_;
 	resourceDesc.MipLevels = 1;
 	resourceDesc.DepthOrArraySize = 1;
 	resourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -175,12 +195,13 @@ void DXCommon::CreateDescriptorHeaps(){
 
 void DXCommon::InitRenderTargetView(){
 	HRESULT hr;
-	const UINT kNumBackBuffers = 2;
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
 	rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
+	// ヒープの先頭からバックバッファの枚数分のスロットを使う
+	// リサイズ時も同じスロットへ上書きするので、ディスクリプタは増えない
 	for(uint32_t i = 0; i < kNumBackBuffers; ++i){
 		hr = swapChain->GetBuffer(i,IID_PPV_ARGS(&swapChainResources[i]));
 		assert(SUCCEEDED(hr));
@@ -190,7 +211,10 @@ void DXCommon::InitRenderTargetView(){
 		rtvHandle.ptr += descriptorSizeRTV;
 	}
 
-	currentRtvIndex_ = kNumBackBuffers;
+	// 変更 リサイズ時に呼び直しても払い出し済みのインデックスを巻き戻さない
+	if(currentRtvIndex_ < kNumBackBuffers){
+		currentRtvIndex_ = kNumBackBuffers;
+	}
 }
 
 void DXCommon::InitDepthStancilView(){
@@ -205,10 +229,15 @@ void DXCommon::InitDepthStancilView(){
 }
 
 void DXCommon::InitDepthShaderResourceView(){
-	uint32_t index = SrvManager::GetInstance()->Allocate();
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCpu = SrvManager::GetInstance()->GetCPUDescriptorHandle(index);
+	// 変更 ディスクリプタは初回だけ確保し、リサイズ時は同じ位置へビューを上書きする
+	// 毎回確保するとリサイズのたびにディスクリプタを消費してしまう
+	if(depthSrvIndex_ == kInvalidDescriptorIndex){
+		depthSrvIndex_ = SrvManager::GetInstance()->Allocate();
+	}
 
-	depthSrvHandleGpu_ = SrvManager::GetInstance()->GetGPUDescriptorHandle(index);
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandleCpu = SrvManager::GetInstance()->GetCPUDescriptorHandle(depthSrvIndex_);
+
+	depthSrvHandleGpu_ = SrvManager::GetInstance()->GetGPUDescriptorHandle(depthSrvIndex_);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC depthSrvDesc{};
 	depthSrvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
@@ -229,19 +258,118 @@ void DXCommon::InitFence(){
 }
 
 void DXCommon::InitViewportRect(){
-	viewport.Width = (float)WinAPI::kClientWidth;
-	viewport.Height = (float)WinAPI::kClientHeight;
-	viewport.TopLeftX = 0;
-	viewport.TopLeftY = 0;
+	// 変更 オフスクリーン描画用はレンダーテクスチャ全体を使う
+	sceneViewport_.Width = (float)sceneWidth_;
+	sceneViewport_.Height = (float)sceneHeight_;
+	sceneViewport_.TopLeftX = 0;
+	sceneViewport_.TopLeftY = 0;
+	sceneViewport_.MinDepth = 0.0f;
+	sceneViewport_.MaxDepth = 1.0f;
+
+	// 変更 スワップチェーン用は縦横比を保つため中央寄せのレターボックス矩形にする
+	viewport.Width = (float)sceneWidth_;
+	viewport.Height = (float)sceneHeight_;
+	viewport.TopLeftX = (float)((backBufferWidth_ - sceneWidth_) / 2);
+	viewport.TopLeftY = (float)((backBufferHeight_ - sceneHeight_) / 2);
 	viewport.MinDepth = 0.0f;
 	viewport.MaxDepth = 1.0f;
 }
 
 void DXCommon::InitScissorRect(){
-	scissorRect.left = 0;
-	scissorRect.right = (LONG)WinAPI::kClientWidth;
-	scissorRect.top = 0;
-	scissorRect.bottom = (LONG)WinAPI::kClientHeight;
+	// 変更 オフスクリーン描画用はレンダーテクスチャ全体を使う
+	sceneScissor_.left = 0;
+	sceneScissor_.right = (LONG)sceneWidth_;
+	sceneScissor_.top = 0;
+	sceneScissor_.bottom = (LONG)sceneHeight_;
+
+	// 変更 スワップチェーン用はビューポートと同じレターボックス矩形にする
+	scissorRect.left = (LONG)viewport.TopLeftX;
+	scissorRect.right = scissorRect.left + (LONG)sceneWidth_;
+	scissorRect.top = (LONG)viewport.TopLeftY;
+	scissorRect.bottom = scissorRect.top + (LONG)sceneHeight_;
+}
+
+// 追加 ウィンドウサイズから各解像度とレターボックス矩形を算出する
+void DXCommon::CalcResolution(uint32_t windowWidth,uint32_t windowHeight){
+	// スワップチェーンはウィンドウ全体を覆う
+	backBufferWidth_ = windowWidth;
+	backBufferHeight_ = windowHeight;
+
+	// 論理解像度の縦横比を保ったまま、ウィンドウに収まる最大の矩形を求める
+	// 幅を基準にした高さがウィンドウに収まるなら幅いっぱい、収まらないなら高さいっぱいにする
+	uint32_t heightFromWidth = windowWidth * WinAPI::kClientHeight / WinAPI::kClientWidth;
+
+	if(heightFromWidth <= windowHeight){
+		// ウィンドウが縦に余っている場合（上下に帯が出る）
+		sceneWidth_ = windowWidth;
+		sceneHeight_ = heightFromWidth;
+	} else{
+		// ウィンドウが横に余っている場合（左右に帯が出る）
+		sceneWidth_ = windowHeight * WinAPI::kClientWidth / WinAPI::kClientHeight;
+		sceneHeight_ = windowHeight;
+	}
+
+	// 計算誤差でゼロになるとリソースを作れないので最低1ピクセルを保証する
+	if(sceneWidth_ == 0){
+		sceneWidth_ = 1;
+	}
+	if(sceneHeight_ == 0){
+		sceneHeight_ = 1;
+	}
+}
+
+// 追加 GPUの処理完了を待つ
+void DXCommon::WaitForGPU(){
+	fenceValue++;
+	commandQueue->Signal(fence.Get(),fenceValue);
+
+	if(fence->GetCompletedValue() < fenceValue){
+		fence->SetEventOnCompletion(fenceValue,fenceEvent);
+		WaitForSingleObject(fenceEvent,INFINITE);
+	}
+}
+
+// 追加 解像度に依存する描画リソースを作り直す
+bool DXCommon::Resize(uint32_t windowWidth,uint32_t windowHeight){
+	// サイズが変わっていなければ何もしない
+	if(backBufferWidth_ == windowWidth && backBufferHeight_ == windowHeight){
+		return false;
+	}
+
+	// 使用中のリソースを解放するためGPUの処理完了を待つ
+	WaitForGPU();
+
+	// ResizeBuffersはバックバッファへの参照が全て消えていないと失敗する
+	for(uint32_t i = 0; i < kNumBackBuffers; ++i){
+		swapChainResources[i].Reset();
+	}
+
+	// 新しい解像度を算出する
+	CalcResolution(windowWidth,windowHeight);
+
+	// スワップチェーンのバッファを作り直す
+	HRESULT hr = swapChain->ResizeBuffers(
+		kNumBackBuffers,backBufferWidth_,backBufferHeight_,swapChainDesc.Format,0);
+	assert(SUCCEEDED(hr));
+
+	// スワップチェーン設定にも新しいサイズを反映しておく
+	swapChainDesc.Width = backBufferWidth_;
+	swapChainDesc.Height = backBufferHeight_;
+
+	// レンダーターゲットビューを同じディスクリプタスロットへ作り直す
+	InitRenderTargetView();
+
+	// 深度バッファと関連するビューを作り直す
+	depthStencilResource.Reset();
+	CreateDepthBuffer();
+	InitDepthStancilView();
+	InitDepthShaderResourceView();
+
+	// ビューポートとシザー矩形を新しい解像度に合わせる
+	InitViewportRect();
+	InitScissorRect();
+
+	return true;
 }
 
 void DXCommon::CreateDXCCompiler(){
@@ -277,16 +405,22 @@ void DXCommon::PreDraw(RenderTexture* renderTexture){
 	// レンダーターゲットの設定
 	commandList->OMSetRenderTargets(1,&targetRtv,false,renderTexture?&dsvHandle:nullptr);
 
-	// 画面のクリア
-	float clearColor[] = {0.1f, 0.25f, 0.5f, 1.0f};
-	commandList->ClearRenderTargetView(targetRtv,clearColor,0,nullptr);
-
+	// 変更 描画先ごとにクリア色とビューポートを切り替える
 	if(renderTexture){
+		// オフスクリーン描画はレンダーテクスチャ全体を使う
+		commandList->ClearRenderTargetView(targetRtv,kSceneClearColor,0,nullptr);
 		commandList->ClearDepthStencilView(dsvHandle,D3D12_CLEAR_FLAG_DEPTH,1.0f,0,0,nullptr);
-	}
 
-	commandList->RSSetViewports(1,&viewport);
-	commandList->RSSetScissorRects(1,&scissorRect);
+		commandList->RSSetViewports(1,&sceneViewport_);
+		commandList->RSSetScissorRects(1,&sceneScissor_);
+	} else{
+		// スワップチェーンへの描画は中央のレターボックス矩形だけを使う
+		// クリアはバックバッファ全体にかかるため、余白は黒で塗られる
+		commandList->ClearRenderTargetView(targetRtv,kBackBufferClearColor,0,nullptr);
+
+		commandList->RSSetViewports(1,&viewport);
+		commandList->RSSetScissorRects(1,&scissorRect);
+	}
 }
 
 void DXCommon::PostDraw(){
@@ -307,14 +441,8 @@ void DXCommon::PostDraw(){
 	// 画面への表示
 	swapChain->Present(1,0);
 
-	// フェンスによるGPU同期
-	fenceValue++;
-	commandQueue->Signal(fence.Get(),fenceValue);
-
-	if(fence->GetCompletedValue() < fenceValue){
-		fence->SetEventOnCompletion(fenceValue,fenceEvent);
-		WaitForSingleObject(fenceEvent,INFINITE);
-	}
+	// 変更 フェンスによるGPU同期は共通処理にまとめた
+	WaitForGPU();
 
 	// 次フレームに向けたリセット
 	hr = commandAllocator->Reset();

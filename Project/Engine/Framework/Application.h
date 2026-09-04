@@ -63,11 +63,25 @@ public:
 	void TriggerGlitch();
 
 private:
+	// --- 追加 リサイズ処理 ---
+
+	/// <summary>
+	/// ウィンドウサイズの変更に合わせて描画リソースを作り直します。
+	/// </summary>
+	void HandleResize();
+
+private:
 	// --- 静的メンバ変数 ---
 	static Application* instance_;
 
 	// --- ポストプロセス関連リソース ---
 	std::unique_ptr<RenderTexture> renderTexture_;
+
+	// --- 追加 レンダーテクスチャのディスクリプタハンドル ---
+	// リサイズで作り直すときに再確保せず使い回すため保持する
+	D3D12_CPU_DESCRIPTOR_HANDLE renderTextureRtvHandle_{};
+	D3D12_CPU_DESCRIPTOR_HANDLE renderTextureSrvHandleCpu_{};
+	D3D12_GPU_DESCRIPTOR_HANDLE renderTextureSrvHandleGpu_{};
 	std::unique_ptr<PostProcess> postProcess_;
 	PostProcess::Type currentPPType_ = PostProcess::Type::PostProcess;
 	std::string currentMaskPath_;
