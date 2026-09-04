@@ -1,4 +1,4 @@
-#include "FallingBlock.h"
+﻿#include "FallingBlock.h"
 
 #include "Board.h"
 
@@ -71,7 +71,7 @@ bool FallingBlock::Update(Board& board,int32_t normalFallInterval){
 	// 猶予を使い切ったので盤面に固定する
 	// この形（回転込み）の端子ビットも一緒に渡す
 	const std::vector<GridPos> lockedCells = GetOccupiedCells();
-	board.Place(lockedCells,blockId_,BlockShape::GetTerminals(type_,rotation_));
+	board.Place(lockedCells,blockId_,BlockShape::GetTerminals(type_,rotation_),type_);
 	UpdateLockedAboveCeiling(lockedCells);
 	return true;
 }
@@ -92,7 +92,7 @@ bool FallingBlock::HardDrop(Board& board){
 	fallTimer_ = 0;
 	lockTimer_ = 0;
 	const std::vector<GridPos> lockedCells = GetOccupiedCells();
-	board.Place(lockedCells,blockId_,BlockShape::GetTerminals(type_,rotation_));
+	board.Place(lockedCells,blockId_,BlockShape::GetTerminals(type_,rotation_),type_);
 	UpdateLockedAboveCeiling(lockedCells);
 
 	return true;

@@ -9,8 +9,12 @@
 // このファイル内だけで使う定数
 namespace{
 
-	// 盤面に固定されたマスに使うモデル（当面は defaultBlock のキューブで代用する）
-	const std::string kBlockModel = "defaultBlock/defaultBlock.obj";
+	// 変更：盤面に固定されたマスに使うモデル。辺と角を面取りしたキューブにして、
+	// 平行光源のハイライトが辺に乗るようにする。
+	const std::string kBlockModel = "blockBevel/blockBevel.obj";
+
+	// 追加：配線に使うモデル。細く引き伸ばして棒にするため、面取りのない素のキューブを使う。
+	const std::string kWireModel = "defaultBlock/defaultBlock.obj";
 
 	// 左右の壁（ゴール）に使うモデル
 	const std::string kGoalBlockModel = "goalBlock/goalBlock.obj";
@@ -18,16 +22,20 @@ namespace{
 	// 下の壁（電源）に使うモデル
 	const std::string kSupplyBlockModel = "supplyBlock/supplyBlock.obj";
 
-	// 追加：盤面に固定されたマスの色
-	const Vector4 kFilledCellColor = {0.55f, 0.65f, 0.85f, 1.0f};
-	const Vector4 kStrongestCellColor = {0.9f, 0.45f, 1.0f, 1.0f};
+	// 削除：通常の固定マスの色は PuzzleConfig::GetBlockColor() でブロックの種類ごとに引くようにした
+
+	// 変更：以下の色はすべて「画面に出したい色」（sRGB）で書き、
+	// PuzzleConfig::ToLinearColor() で線形へ変換したものを保持する。
+	// 描画先が sRGB のレンダーターゲットなので、変換せずに渡すと色が淡く浮いてしまう。
+
+	// 最強マス（十字マス）の色。元ブロックの種類を持たないため専用色で描く
+	const Vector4 kStrongestCellColor = PuzzleConfig::ToLinearColor({0.9f, 0.45f, 1.0f, 1.0f});
 
 	// 消去演出中のマスの色（通電したことが分かるよう明るい色で光らせる）
-	const Vector4 kClearingCellColor = {1.0f, 0.95f, 0.4f, 1.0f};
+	const Vector4 kClearingCellColor = PuzzleConfig::ToLinearColor({1.0f, 0.95f, 0.4f, 1.0f});
 
-	// 電源から通電が届いているマスの色（まだゴールには届いていない状態）。
-	// 「あと1マスで届く」が見えるよう、通常のマスとはっきり違う明るさにする。
-	const Vector4 kPoweredCellColor = {0.4f, 0.95f, 0.9f, 1.0f};
+	// 削除：通電中のマスは専用色で塗らず、PuzzleConfig::MakePoweredColor() で
+	// 本来の色を明るくするだけにした（元のブロックの種類が分かるようにするため）。
 
 	// 通電判定で使う4方向の隣接オフセットと、向き合う辺の端子ビットの対応表。
 	// kSelfBits[i] は自分がその方向を向くための端子、kOtherBits[i] は隣のマスが
@@ -39,13 +47,24 @@ namespace{
 	// 追加：配線描画（2.6の可視化）用の定数。
 	// マス中心から辺へ向かって伸びる細い棒として、端子が立っている方向だけ描画する。
 	constexpr float kWireThicknessScale = 0.08f; // 配線の太さ
-	constexpr float kWireLengthScale = 0.3f;     // 配線の長さ（＝マス中心からのずらし量）
 
-	// 追加：通電中の配線の色（明るく光らせる）
-	const Vector4 kWireLitColor = {1.0f, 0.95f, 0.3f, 1.0f};
+	// 変更：配線の長さ（＝マス中心からのずらし量）はマスの半分ちょうどにする。
+	// こうすると繋がっている隣同士の配線が境界で接して1本の線に見え、
+	// 繋がっていない端子はマスの外へ出ない短い突起として残る。
+	constexpr float kWireLengthScale = PuzzleConfig::kCellWorldSize * 0.5f;
 
-	// 追加：非通電の配線の色（暗く表示する）
-	const Vector4 kWireUnlitColor = {0.2f, 0.22f, 0.28f, 1.0f};
+	// 追加：配線をマスの手前へ出す量。
+	// カメラは盤面より -Z 側にあるので、マスの前面（-Z 側の面）よりさらに手前へ置く。
+	// 配線の厚みの半分だけマスへめり込ませて、面が重なるちらつきを避ける。
+	constexpr float kWireFrontOffset = PuzzleConfig::kCellModelScale + kWireThicknessScale * 0.5f;
+
+	// 変更：通電中の配線の色。電気そのものを表す水色にする。
+	// マスの色（黄緑・紅・山吹・藤紫）とは色相が離れているので、
+	// どの種類のブロックの上でも配線が埋もれない。
+	const Vector4 kWireLitColor = PuzzleConfig::ToLinearColor({0.35f, 0.95f, 1.0f, 1.0f});
+
+	// 変更：非通電の配線の色。マスの色に沈む暗い線にする。
+	const Vector4 kWireUnlitColor = PuzzleConfig::ToLinearColor({0.10f, 0.11f, 0.16f, 1.0f});
 }
 
 // コンストラクタ・デストラクタ
@@ -59,6 +78,7 @@ void Board::Initialize(Obj3dCommon* object3dCommon){
 
 	// 使用するモデルを読み込む
 	ModelManager::GetInstance()->LoadModel(kBlockModel);
+	ModelManager::GetInstance()->LoadModel(kWireModel); // 追加：配線用のモデルもここで読み込む
 	ModelManager::GetInstance()->LoadModel(kGoalBlockModel);
 	ModelManager::GetInstance()->LoadModel(kSupplyBlockModel);
 
@@ -112,19 +132,31 @@ void Board::RebuildCellObjects(){
 			obj->SetScale({PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale});
 			obj->SetTranslate(GridToWorld(x,y));
 
-			// 消去色を優先し、十字マスは紫色を保つ。通電は配線の発光でも示す。
+			// 変更：まずマス本来の色（最強マスは専用の紫、それ以外はブロックの種類色）を決め、
+			// 通電中はその色を塗り替えず明るくするだけにする。
+			// 別の色で塗りつぶすと元のブロックの種類が分からなくなるため。
+			// 消去演出中だけは一瞬の演出なので専用色で塗りつぶす。
 			const bool isClearingCell = IsClearingCell(x,y);
 
-			Vector4 color = cells_[y][x].IsStrongest() ? kStrongestCellColor : kFilledCellColor;
+			Vector4 color = cells_[y][x].IsStrongest()
+				? kStrongestCellColor
+				: PuzzleConfig::GetBlockColor(cells_[y][x].type);
 			if(isClearingCell){
 				color = kClearingCellColor;
-			} else if(powered[y][x] && !cells_[y][x].IsStrongest()){
-				color = kPoweredCellColor;
+			} else if(powered[y][x]){
+				color = PuzzleConfig::MakePoweredColor(color);
 			}
+
+			// 決めた色に、ライティングによる減衰ぶんの補正をまとめてかける
+			color = PuzzleConfig::ApplyLitGain(color);
 
 			if(Model::Material* cellMaterial = obj->GetMaterial()){
 				cellMaterial->color = color;
-				cellMaterial->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+
+				// 変更：面取り面が光を拾うようライティングを有効にし、光沢を乗せる
+				cellMaterial->enableLighting = 1;
+				cellMaterial->shininess = PuzzleConfig::kBlockShininess;
+				cellMaterial->environmentCoefficient = PuzzleConfig::kBlockEnvironmentCoefficient;
 			}
 
 			cellObjs_.push_back(std::move(obj));
@@ -140,7 +172,7 @@ void Board::RebuildCellObjects(){
 
 				auto wireObj = std::make_unique<Obj3D>();
 				wireObj->Initialize(object3dCommon_);
-				wireObj->SetModel(kBlockModel);
+				wireObj->SetModel(kWireModel);
 
 				// 上下方向（dir 0,1）は縦長、左右方向（dir 2,3）は横長のスケールにする
 				const bool isVertical = (dir == 0 || dir == 1);
@@ -153,6 +185,9 @@ void Board::RebuildCellObjects(){
 				Vector3 wirePos = GridToWorld(x,y);
 				wirePos.x += static_cast<float>(kDirs[dir].x) * kWireLengthScale;
 				wirePos.y -= static_cast<float>(kDirs[dir].y) * kWireLengthScale;
+
+				// 変更：マスの手前へ出す。ここを外すとマスの立方体に埋まって配線が見えない。
+				wirePos.z -= kWireFrontOffset;
 				wireObj->SetTranslate(wirePos);
 
 				if(Model::Material* wireMaterial = wireObj->GetMaterial()){
@@ -332,7 +367,7 @@ bool Board::CanFall(const std::vector<GridPos>& cells) const{
 }
 
 // 指定したマス群へ blockId・端子ビットを書き込んで盤面に固定する。
-void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals){
+void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::vector<uint8_t>& terminals,BlockShape::Type type){
 	for(size_t i = 0; i < cells.size(); ++i){
 		const GridPos& pos = cells[i];
 
@@ -342,6 +377,9 @@ void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::v
 		}
 
 		cells_[pos.y][pos.x].blockId = blockId;
+
+		// 変更：描画の色分けに使う元ブロックの種類を控えておく
+		cells_[pos.y][pos.x].type = type;
 
 		// 対応する端子ビットがあれば書き込む（無ければ0のまま）
 		if(i < terminals.size()){

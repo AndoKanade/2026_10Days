@@ -1,6 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
+
+#include "MyMath.h"
+#include "BlockShape.h"
 
 // =============================================================================
 // パズルゲームの調整用定数
@@ -118,5 +122,83 @@ namespace PuzzleConfig{
 
 	// 追加：ネクストの各枠に確保する縦方向のマス数（I字が縦向きでも収まる高さ）
 	constexpr int32_t kNextPreviewRowSpan = 4;
+
+	// --- ブロックの質感 ---
+	// ブロックは面取りキューブで描画する。辺の面取り面が平行光源を拾うことで、
+	// 面の中心と辺で明るさに差が出て立体的なツヤが乗る。
+
+	// 鏡面反射の鋭さ。小さいほどハイライトが広く柔らかくなる。
+	// 面が平らなので下げすぎると面全体が白く濁って色がくすむ。控えめな値にしておく。
+	constexpr float kBlockShininess = 30.0f;
+
+	// 環境マップ（スカイボックス）の映り込みの強さ。
+	// 全チャンネルに一律で足されるため、上げすぎると彩度が落ちる。
+	constexpr float kBlockEnvironmentCoefficient = 0.03f;
+
+	// ライティングを通すと、カメラ正面を向いた面はおよそ 0.57 倍まで暗くなる。
+	// 下の色をそのまま渡すと沈んで見えるため、この係数で持ち上げてから渡す。
+	// 面取り面はこれより明るくなり、上辺は白く飛んでハイライトになる。
+	constexpr float kBlockLitColorGain = 1.75f;
+
+	// ゴーストや使用済みホールドを暗く見せるときの、元の色に対する倍率。
+	constexpr float kDimColorRate = 0.35f;
+
+	// 追加：通電中のマスを明るく見せるときの設定。
+	// 別の色で塗りつぶすと元のブロックの種類が分からなくなるため、色相は変えずに
+	// 白へ少し寄せてから倍率をかける。明るい色は倍率だけでは頭打ちになって差が出ないため、
+	// 白へ寄せるぶん（＝彩度の低下）で「光っている」を見せる。
+	constexpr float kPoweredWhiteMixRate = 0.25f; // 白へ寄せる割合
+	constexpr float kPoweredColorGain = 1.25f;    // 明るさの倍率
+
+	// --- ブロックの種類ごとの色 ---
+	// 並び順は BlockShape::Type に対応する。種類を足したらここにも色を足すこと。
+	// 落ちものパズルの一般的なピース配色とは別の色相で組んでいる。
+	//
+	// 値は「画面に出したい色」（カラーピッカーで選ぶのと同じ sRGB の値）で書く。
+	// 描画先が sRGB のレンダーターゲットで、シェーダには線形の値を渡す必要があるため、
+	// GetBlockColor() が線形へ変換してから返す。ここに線形の値を直接書かないこと。
+	inline const Vector4 kBlockColors[BlockShape::kTypeCount] = {
+		{0.40f, 0.85f, 0.20f, 1.0f}, // L 黄緑
+		{0.92f, 0.20f, 0.35f, 1.0f}, // T 紅
+		{1.00f, 0.68f, 0.05f, 1.0f}, // I 山吹
+		{0.60f, 0.30f, 0.95f, 1.0f}, // J 藤紫
+	};
+
+	// sRGB の1チャンネルを線形に変換する。
+	inline float SrgbToLinear(float value){
+		return (value <= 0.04045f) ? (value / 12.92f) : std::pow((value + 0.055f) / 1.055f,2.4f);
+	}
+
+	// 追加：sRGB で書いた色を、シェーダへ渡せる線形の値へ変換する。
+	// 画面に出したい色をそのまま書けるよう、色の定数はすべてこれを通してから使う。
+	inline Vector4 ToLinearColor(const Vector4& srgb){
+		return {SrgbToLinear(srgb.x), SrgbToLinear(srgb.y), SrgbToLinear(srgb.z), srgb.w};
+	}
+
+	// ブロックの種類に対応する色を、シェーダへ渡せる線形の値で返す。
+	inline Vector4 GetBlockColor(BlockShape::Type type){
+		return ToLinearColor(kBlockColors[static_cast<int32_t>(type)]);
+	}
+
+	// ライティングを有効にして描くものへ渡す色を返す（減衰ぶんを持ち上げる）。
+	inline Vector4 ApplyLitGain(const Vector4& color){
+		return {color.x * kBlockLitColorGain, color.y * kBlockLitColorGain, color.z * kBlockLitColorGain, color.w};
+	}
+
+	// 追加：指定した色を通電中の見た目にしたものを返す。
+	// 色相を保ったまま明るくするだけなので、何のブロックだったかは色で分かり続ける。
+	inline Vector4 MakePoweredColor(const Vector4& color){
+		return {
+			(color.x + (1.0f - color.x) * kPoweredWhiteMixRate) * kPoweredColorGain,
+			(color.y + (1.0f - color.y) * kPoweredWhiteMixRate) * kPoweredColorGain,
+			(color.z + (1.0f - color.z) * kPoweredWhiteMixRate) * kPoweredColorGain,
+			color.w
+		};
+	}
+
+	// 指定した色を暗くしたものを返す（ゴーストや使用済み表示に使う）。
+	inline Vector4 MakeDimColor(const Vector4& color){
+		return {color.x * kDimColorRate, color.y * kDimColorRate, color.z * kDimColorRate, color.w};
+	}
 
 }
