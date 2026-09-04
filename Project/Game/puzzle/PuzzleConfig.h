@@ -120,8 +120,10 @@ namespace PuzzleConfig{
 	// ホールド表示を左の壁と重ねないための余白計算に使う。
 	constexpr int32_t kPreviewShapeMaxExtent = 2;
 
-	// 追加：ネクストの各枠に確保する縦方向のマス数（I字が縦向きでも収まる高さ）
-	constexpr int32_t kNextPreviewRowSpan = 4;
+	// 変更：ネクストの各枠に確保する縦方向のマス数。
+	// プレビューは常に回転0の形で表示するため、必要な高さは回転0での最大の縦幅
+	// （L字・J字の3マス）ぶんで足りる。1マスぶんは重ならないための余白。
+	constexpr int32_t kNextPreviewRowSpan = 3;
 
 	// --- ブロックの質感 ---
 	// ブロックは面取りキューブで描画する。辺の面取り面が平行光源を拾うことで、
