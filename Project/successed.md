@@ -33,7 +33,7 @@
 | `Game/puzzle/PuzzleConfig.h` | 調整用定数の集約ヘッダ。実装ロジックは持たない。 |
 | `Game/puzzle/Cell.h` | マス構造体。`blockId`（空 = -1）＋端子4bit `terminals`（マス同士の通電判定に使用）＋壁判定専用の `wallTerminals` ＋ `IsEmpty()`。 |
 | `Game/puzzle/GridPos.h` | マス座標の共通型 `struct GridPos { int32_t x; int32_t y; };`。境界インターフェースの受け渡しに使う。 |
-| `Game/puzzle/BlockShape.h` / `BlockShape.cpp` | 形テーブル。`enum class Type { L, T }` ＋ `GetCells()` / `GetTerminals()` / `GetWallTerminals()`。**T字・L字とも4回転分を実装済み。** |
+| `Game/puzzle/BlockShape.h` / `BlockShape.cpp` | 形テーブル。`enum class Type { L, T, I, J }` ＋ 種類数 `kTypeCount` ＋ `GetCells()` / `GetTerminals()` / `GetWallTerminals()`。**T字・L字・I字・J字とも4回転分を実装済み。** |
 | `Game/puzzle/FallingBlock.h` / `FallingBlock.cpp` | 落下中ブロック。出現・自動落下・左右移動・回転（拒否方式）・ハードドロップ・着地予測を実装済み。 |
 | `Game/puzzle/Board.h` / `Board.cpp` | 10×10 のマスデータ配列＋U字の壁の描画＋配線描画。`CanPlace()` / `CanFall()` / `Place()` ＋ 通電判定BFS・消去演出・マス単位落下・連鎖ループを実装済み。 |
 | `Game/scenes/GameScene` | `Board board_;` をメンバに持ち、Initialize / Update / Draw から呼び出す。変更箇所は「追加：」コメントで明示。 |
@@ -71,9 +71,9 @@
 
 ### `BlockShape` / `FallingBlock` の現状
 
-- `BlockShape`：`GetCells()` / `GetTerminals()` / `GetWallTerminals()` を T字・L字とも4回転分実装済み（どちらも4マスのテトロミノ）。基準(0,0)は棒の中央マス。端子ビットは形テーブルの隣接関係から計算し、先端のマスは反対側の辺も露出させて別ブロックの先端と繋がれるようにする。`GetWallTerminals()` は「本来の先端」だけを残した壁（ゴール）・床（電源）到達判定専用のビット（T字は出っ張りのみ、L字は両端）。
+- `BlockShape`：`GetCells()` / `GetTerminals()` / `GetWallTerminals()` を T字・L字・I字・J字とも4回転分実装済み（いずれも4マスのテトロミノ）。基準(0,0)は棒の中央マス（I字は左から2番目／上から2番目のマス）。J字は L字の左右反転。I字は180度回すと同じ形になるため rot0＝rot2、rot1＝rot3。端子ビットは形テーブルの隣接関係から計算し、先端のマスは反対側の辺も露出させて別ブロックの先端と繋がれるようにする。`GetWallTerminals()` は「本来の先端」だけを残した壁（ゴール）・床（電源）到達判定専用のビット（T字は出っ張りのみ、L字・I字・J字は1本道なので両端）。種類の総数は `kTypeCount`（現在4）。
 - `FallingBlock`：`Spawn` / `Update` / `HardDrop` / `MoveLeft` / `MoveRight` / `Rotate` / `SetSoftDrop` / `GetOccupiedCells` / `GetLandingCells` / `GetType` / `GetBlockId` / `IsLockedAboveCeiling`。自動落下・固定猶予・衝突時拒否の回転・ハードドロップを実装。固定時は `Board::Place` に端子ビット・壁の先端ビットも渡す。出現は `kSpawnRow`（= -2、天井より上の空中）から。衝突判定は `Board::CanFall`。固定時に y<0 のマスが残れば `IsLockedAboveCeiling()` が true。`GetLandingCells()` はいま真下に落とした場合の着地マス（ゴースト表示用）。壁蹴り（押し戻し）は未実装。
-- `GameScene`：`fallingBlock_` を持ち、WASD（A/D=左右、W=回転、S=加速落下）＋ Enter でハードドロップ。消去演出中（`board_.IsBusy()`）は操作・落下・出現を止める。`nextType_` でネクストを管理し、`SpawnNextBlock()` が「ネクストを出現 → 次のネクストを抽選」を行う。`PickNextBlockType()` は T字・L字を等確率抽選（`randomEngine_`）。固定されたら自動で次を出現。固定時に `IsLockedAboveCeiling()` が true（または出現不可）なら `SceneManager::ChangeScene("GAMEOVER")` へ遷移。落下中ブロック（`fallingObjs_`）と着地予測ゴースト（`ghostObjs_`、暗色・少し小さめ）を描画。通電・消去の可視化は `Board` 側が担当する。ネクストは ImGui「GameScene Debug」→「Next Block」に等幅テキストのグリッドで表示。天井警告演出は未実装。
+- `GameScene`：`fallingBlock_` を持ち、WASD（A/D=左右、W=回転、S=加速落下）＋ Enter でハードドロップ。消去演出中（`board_.IsBusy()`）は操作・落下・出現を止める。`nextType_` でネクストを管理し、`SpawnNextBlock()` が「ネクストを出現 → 次のネクストを抽選」を行う。`PickNextBlockType()` は `BlockShape::kTypeCount` を使って全種類（L字・T字・I字・J字）を等確率抽選（`randomEngine_`）。固定されたら自動で次を出現。固定時に `IsLockedAboveCeiling()` が true（または出現不可）なら `SceneManager::ChangeScene("GAMEOVER")` へ遷移。落下中ブロック（`fallingObjs_`）と着地予測ゴースト（`ghostObjs_`、暗色・少し小さめ）を描画。通電・消去の可視化は `Board` 側が担当する。ネクストは ImGui「GameScene Debug」→「Next Block」に等幅テキストのグリッドで表示。天井警告演出は未実装。
 
 ### ビルド・動作確認
 
@@ -87,7 +87,7 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 ### 完了済み
 
 1. ~~`Game/puzzle/GridPos.h`~~ **完了。**
-2. `Game/puzzle/BlockShape.h/.cpp`：**T字・L字とも完了**（各4回転テーブル＋端子ビット＋壁の先端ビット。どちらも4マスのテトロミノ）。
+2. `Game/puzzle/BlockShape.h/.cpp`：**T字・L字・I字・J字とも完了**（各4回転テーブル＋端子ビット＋壁の先端ビット。いずれも4マスのテトロミノ）。
 3. `Game/puzzle/FallingBlock.h/.cpp`：**自動落下・左右移動・回転（拒否方式）・ハードドロップ・次ブロック出現＋ネクスト抽選は完了**。壁蹴りは未実装。
 4. 落下中ブロック・盤面に置かれたブロックの3D描画＋配線描画：**完了**。種類ごとの色分けは未対応（`Cell` が種類を持たないため）。
 5. `Board` の `CanPlace` / `CanFall` / `Place` ＋ 着地固定：**完了**。天井到達（ゲームオーバー）判定も**完了**（天井より上に残って固定、または次ブロックが出現位置に置けなければ GAMEOVER シーンへ遷移）。
@@ -139,6 +139,33 @@ Debug/x64 でビルド成功（`MyGameEngine.exe` 生成確認）。タイトル
 ---
 
 ## 作業ログ
+
+### 2026-09-04（2）
+
+**追加：ブロックの種類に J字（L字の左右反転）を追加**
+
+- `BlockShape::Type` に `J` を追加し、`kTypeCount` を 3 → 4 に更新。
+- `kJShapeCells` を4回転分追加。基準(0,0)は縦棒／横棒の中央マスで、L字と同じ取り方。rot0＝縦棒＋左下の足、rot1＝横棒＋左上の足、rot2＝縦棒＋右上の足、rot3＝横棒＋右下の足（rot0 から時計回り）。
+- 端子ビット `kJShapeTerminals`・壁の先端ビット `kJShapeWallTerminals` を追加。J字は L字の鏡像で枝分かれのない1本道なので、`ComputeWallTerminals()` では L字・I字と同じく全マスをそのまま通す。
+- `GetCells()` / `GetTerminals()` / `GetWallTerminals()` の switch に `Type::J` の分岐を追加。
+- ネクスト表示（ImGui）の種類名 switch に `J` を追加。抽選側は `kTypeCount` を見ているため変更不要。
+
+これで左右どちらの壁も同じくらい狙いやすくなった。Debug/x64 でビルド成功。実機での見た目・難易度の確認はまだ。
+
+### 2026-09-04
+
+**追加：ブロックの種類に I字（4マスの棒）を追加**
+
+種類を増やすにあたり、O字（2x2）は全マスが degree 2 の閉ループになって先端が1つも生まれず、壁にも他ブロックにも繋がらないため候補から除外した。S字・Z字は段差ができて積みにくく難易度調整が必要になるため今回は見送り、ロードマップ Day 6 に挙げていた I字だけを追加した。
+
+- `BlockShape::Type` に `I` を追加し、種類の総数を表す `kTypeCount`（現在3）を新設。
+- `kIShapeCells` を4回転分追加。基準(0,0)は棒の左から2番目／上から2番目のマス（横棒のとき基準の左右に1マスと2マス伸びる形で、出現列からはみ出しにくい）。I字は180度回すと同じ形になるため rot0＝rot2、rot1＝rot3 の同じ内容。
+- 端子ビット `kIShapeTerminals`・壁の先端ビット `kIShapeWallTerminals` を追加。I字は L字と同じく枝分かれのない1本道なので、`ComputeWallTerminals()` では全マスをそのまま通す（両端が壁・床の先端になる）。
+- `GetCells()` / `GetTerminals()` / `GetWallTerminals()` の switch に `Type::I` の分岐を追加。
+- `GameScene::PickNextBlockType()` を、`0 or 1` の直書きから `BlockShape::kTypeCount` を使った全種類の等確率抽選（`static_cast<BlockShape::Type>`）に変更。以後、種類を足したときに直すのは `Type` と `kTypeCount` だけで済む。
+- ネクスト表示（ImGui）の種類名 switch に `I` を追加。
+
+Debug/x64 でビルド成功。実機での見た目・難易度の確認はまだ。
 
 ### 2026-09-03
 
