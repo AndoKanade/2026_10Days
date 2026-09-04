@@ -92,7 +92,7 @@ namespace{
 		}
 #endif
 	}
-}
+
 
 GameScene::GameScene() = default;
 GameScene::~GameScene() = default;
@@ -383,57 +383,57 @@ void GameScene::RebuildLevelObjects(){
 void GameScene::Finalize(){}
 
 // --- 更新処理 ---
-void GameScene::Update(){
+void GameScene::Update() {
 	// レベル配置JSONのホットリロード確認
 	// ファイルが更新されていた場合、自動で再読み込みしてlevelObjects_を作り直す
-	if(levelManager_.CheckAndReload()){
+	if (levelManager_.CheckAndReload()) {
 		RebuildLevelObjects();
 	}
 
 	// 追加：盤面の更新
 	board_.Update();
-	for(const Board::ClearResult& result : board_.TakeClearResults()){
-		specialGauge_.AddFromClear(result.cellCount,result.chainCount);
+	for (const Board::ClearResult& result : board_.TakeClearResults()) {
+		specialGauge_.AddFromClear(result.cellCount, result.chainCount);
 	}
 
 	// スペシャル発動後は、対象選択中もゲージを減少させる
-	if(!isGameOver_){
+	if (!isGameOver_) {
 		specialGauge_.Update();
 	}
-	if(specialSelector_.IsSelecting() && !specialGauge_.IsActivationActive()){
+	if (specialSelector_.IsSelecting() && !specialGauge_.IsActivationActive()) {
 		// 制限時間内に決定できなかったため、選択を終了する
 		specialSelector_.Cancel();
 	}
 
 	// Qキーでスペシャルの対象選択を開始する
-	if(!isGameOver_ && !board_.IsBusy() && !specialSelector_.IsSelecting() &&
-		specialGauge_.CanActivate() && input_->TriggerKey(DIK_Q)){
-		if(specialSelector_.Begin(board_)){
+	if (!isGameOver_ && !board_.IsBusy() && !specialSelector_.IsSelecting() &&
+		specialGauge_.CanActivate() && input_->TriggerKey(DIK_Q)) {
+		if (specialSelector_.Begin(board_)) {
 			specialGauge_.StartActivation();
 		}
 	}
 
 	// 対象選択中は落下処理を止め、カーソル操作だけを受け付ける
-	if(specialSelector_.IsSelecting()){
+	if (specialSelector_.IsSelecting()) {
 		fallingBlock_.SetSoftDrop(false);
 
-		if(input_->TriggerKey(DIK_LEFT)){
-			specialSelector_.Move(-1,0,board_);
+		if (input_->TriggerKey(DIK_LEFT)) {
+			specialSelector_.Move(-1, 0, board_);
 		}
-		if(input_->TriggerKey(DIK_RIGHT)){
-			specialSelector_.Move(1,0,board_);
+		if (input_->TriggerKey(DIK_RIGHT)) {
+			specialSelector_.Move(1, 0, board_);
 		}
-		if(input_->TriggerKey(DIK_UP)){
-			specialSelector_.Move(0,-1,board_);
+		if (input_->TriggerKey(DIK_UP)) {
+			specialSelector_.Move(0, -1, board_);
 		}
-		if(input_->TriggerKey(DIK_DOWN)){
-			specialSelector_.Move(0,1,board_);
+		if (input_->TriggerKey(DIK_DOWN)) {
+			specialSelector_.Move(0, 1, board_);
 		}
-		if(input_->TriggerKey(DIK_RETURN)){
+		if (input_->TriggerKey(DIK_RETURN)) {
 			ConfirmSpecialTarget();
 		}
 		SyncSpecialCursor();
-	}else 	if (!isGameOver_) {
+	} else if (!isGameOver_) {
 			// 追加：消去演出中（Board::IsBusy）はブロックの操作・落下・出現を止める
 			if (!board_.IsBusy()) {
 				// 左右移動・回転はトリガー（押した瞬間）で1回ずつ
@@ -446,191 +446,175 @@ void GameScene::Update(){
 				if (input_->TriggerKey(DIK_W)) {
 					fallingBlock_.Rotate(board_);
 				}
+				// 追加：ホールド操作（1個のブロックにつき1回まで）
+				if (input_->TriggerKey(DIK_C) && canHold_) {
+					if (!SwapHold()) {
+						// 差し替えたブロックの出現位置が塞がっていた＝ゲームオーバー
+						isGameOver_ = true;
+						SceneManager::GetInstance()->ChangeScene("GAMEOVER");
+						return;
+					}
+				}
 				// 下キーは押しっぱなしで加速落下
 				fallingBlock_.SetSoftDrop(input_->PushKey(DIK_S));
-	
 
-		// 追加：消去演出中（Board::IsBusy）はブロックの操作・落下・出現を止める
-		if(!board_.IsBusy()){
-			// 左右移動・回転はトリガー（押した瞬間）で1回ずつ
-			if(input_->TriggerKey(DIK_A)){
-				fallingBlock_.MoveLeft(board_);
+				// 時間経過を進め、盤面に固定されたら次のブロックを出す
+				const bool blockLocked = input_->TriggerKey(DIK_RETURN)
+					? fallingBlock_.HardDrop(board_)
+					: fallingBlock_.Update(board_);
+
+				if (blockLocked) {
+					// 天井より上にはみ出したまま固定された ＝ 積み上がりすぎでゲームオーバー
+					const bool lockedAboveCeiling = fallingBlock_.IsLockedAboveCeiling();
+
+					// 次のブロック（ネクスト）を出現させる。出現位置が塞がっていても同様にゲームオーバー
+					const bool spawned = SpawnNextBlock();
+
+					if (lockedAboveCeiling || !spawned) {
+						isGameOver_ = true;
+						SceneManager::GetInstance()->ChangeScene("GAMEOVER");
+						return;
+					}
+				}
+
+				// 描画オブジェクトを現在の占有マス／着地予測マスに合わせて動かす
+				SyncFallingObjs();
 			}
-			if(input_->TriggerKey(DIK_D)){
-				fallingBlock_.MoveRight(board_);
+
+			for (auto& obj : fallingObjs_) {
+				obj->Update();
 			}
-			if(input_->TriggerKey(DIK_W)){
-				fallingBlock_.Rotate(board_);
+			for (auto& obj : ghostObjs_) {
+				obj->Update();
 			}
-			// 追加：ホールド操作（1個のブロックにつき1回まで）
-			if(input_->TriggerKey(DIK_C) && canHold_){
-				if(!SwapHold()){
-					// 差し替えたブロックの出現位置が塞がっていた＝ゲームオーバー
-					isGameOver_ = true;
-					SceneManager::GetInstance()->ChangeScene("GAMEOVER");
-					return;
+			// 追加：ネクスト・ホールドのプレビューも毎フレーム行列を更新する
+			for (auto& slot : nextPreviewObjs_) {
+				for (auto& obj : slot) {
+					obj->Update();
 				}
 			}
-			// 下キーは押しっぱなしで加速落下
-			fallingBlock_.SetSoftDrop(input_->PushKey(DIK_S));
-
-			// 時間経過を進め、盤面に固定されたら次のブロックを出す
-			const bool blockLocked = input_->TriggerKey(DIK_RETURN)
-				? fallingBlock_.HardDrop(board_)
-				: fallingBlock_.Update(board_);
-
-			if(blockLocked){
-				// 天井より上にはみ出したまま固定された ＝ 積み上がりすぎでゲームオーバー
-				const bool lockedAboveCeiling = fallingBlock_.IsLockedAboveCeiling();
-
-				// 次のブロック（ネクスト）を出現させる。出現位置が塞がっていても同様にゲームオーバー
-				const bool spawned = SpawnNextBlock();
-
-				if(lockedAboveCeiling || !spawned){
-					isGameOver_ = true;
-					SceneManager::GetInstance()->ChangeScene("GAMEOVER");
-					return;
-				}
-			}
-
-			// 描画オブジェクトを現在の占有マス／着地予測マスに合わせて動かす
-			SyncFallingObjs();
-		}
-
-		for(auto& obj : fallingObjs_){
-			obj->Update();
-		}
-		for(auto& obj : ghostObjs_){
-			obj->Update();
-		}
-		// 追加：ネクスト・ホールドのプレビューも毎フレーム行列を更新する
-		for(auto& slot : nextPreviewObjs_){
-			for(auto& obj : slot){
+			for (auto& obj : holdPreviewObjs_) {
 				obj->Update();
 			}
 		}
-		for(auto& obj : holdPreviewObjs_){
+
+		for (auto& obj : levelObjects_) {
 			obj->Update();
 		}
-	}
 
-	for(auto& obj : levelObjects_){
-		obj->Update();
-	}
+		// スペースキーでゲームクリア画面へ遷移
+		if (!specialSelector_.IsSelecting() && input_->TriggerKey(DIK_SPACE)) {
+			SceneManager::GetInstance()->ChangeScene("GAMECLEAR");
+		}
 
-	// スペースキーでゲームクリア画面へ遷移
-	if(!specialSelector_.IsSelecting() && input_->TriggerKey(DIK_SPACE)){
-		SceneManager::GetInstance()->ChangeScene("GAMECLEAR");
-	}
-
-	// --- デバッグUIの表示 ---
+		// --- デバッグUIの表示 ---
 #ifdef USE_IMGUI
-	if(Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera()){
-		// メインデバッグウィンドウ
-		ImGui::Begin("GameScene Debug");
+		if (Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera()) {
+			// メインデバッグウィンドウ
+			ImGui::Begin("GameScene Debug");
 
-		// 追加：次に落ちてくるブロック（ネクスト）の表示
-		ShowNextBlockGui();
+			// 追加：次に落ちてくるブロック（ネクスト）の表示
+			ShowNextBlockGui();
 
-		// カメラ設定
-		if(ImGui::CollapsingHeader("Camera Settings")){
-			Vector3 camPos = activeCamera->GetTranslate();
-			if(ImGui::DragFloat3("Camera Pos",&camPos.x,0.1f)){
-				activeCamera->SetTranslate(camPos);
-			}
+			// カメラ設定
+			if (ImGui::CollapsingHeader("Camera Settings")) {
+				Vector3 camPos = activeCamera->GetTranslate();
+				if (ImGui::DragFloat3("Camera Pos", &camPos.x, 0.1f)) {
+					activeCamera->SetTranslate(camPos);
+				}
 
-			Vector3 camRot = activeCamera->GetRotate();
-			if(ImGui::DragFloat3("Camera Rotate",&camRot.x,0.01f)){
-				activeCamera->SetRotate(camRot);
-			}
-		}
-
-		// ライティング設定
-		if(ImGui::CollapsingHeader("Lighting")){
-			if(PointLight* pData = object3dCommon_->GetPointLightData()){
-				ImGui::Text("Point Light");
-				ImGui::ColorEdit4("Point Color",&pData->color.x);
-				ImGui::DragFloat3("Point Pos",&pData->position.x,0.1f);
-				ImGui::DragFloat("Point Intensity",&pData->intensity,0.1f,0.0f,100.0f);
-			}
-			if(SpotLight* sData = object3dCommon_->GetSpotLightData()){
-				ImGui::Text("Spot Light");
-				ImGui::ColorEdit4("Spot Color",&sData->color.x);
-			}
-		}
-
-		// レベル配置(JSON)の描画切り替え・手動ホットリロード
-		if(ImGui::CollapsingHeader("Level Objects")){
-			// 読み込んだ配置オブジェクトを描画するかどうかの切り替え
-			ImGui::Checkbox("Draw Level Objects",&isLevelObjectsVisible_);
-
-			// ボタン押下でJSONファイルを強制的に再読み込みする
-			if(ImGui::Button("Reload Level JSON")){
-				levelManager_.LoadJSON(kLevelJsonFile);
-				RebuildLevelObjects();
-			}
-		}
-
-		// スペシャルゲージの加算・消費を単独で確認する
-		if(ImGui::CollapsingHeader("Special Gauge")){
-			ImGui::Text("Gauge: %d / %d",specialGauge_.GetValue(),specialGauge_.GetMaxValue());
-			ImGui::ProgressBar(specialGauge_.GetRatio(),ImVec2(-1.0f,0.0f));
-			const char* specialStatus = specialGauge_.IsActivationActive() ? "ACTIVE" :
-				(specialGauge_.CanActivate() ? "READY" : "CHARGING");
-			ImGui::Text("Status: %s",specialStatus);
-			ImGui::Text("Active Limit: %.1f seconds",
-				static_cast<float>(PuzzleConfig::kSpecialReadyDurationFrames) / PuzzleConfig::kFrameRate);
-
-			ImGui::InputInt("Cleared Cells",&debugClearedCellCount_);
-			ImGui::InputInt("Chain Count",&debugChainCount_);
-
-			if(ImGui::Button("Apply Clear Result")){
-				specialGauge_.AddFromClear(debugClearedCellCount_,debugChainCount_);
-			}
-
-			if(ImGui::Button("Fill Gauge")){
-				specialGauge_.Fill();
-			}
-			ImGui::SameLine();
-			if(ImGui::Button("Complete Use (Debug)")){
-				if(specialGauge_.Consume()){
-					specialSelector_.Cancel();
+				Vector3 camRot = activeCamera->GetRotate();
+				if (ImGui::DragFloat3("Camera Rotate", &camRot.x, 0.01f)) {
+					activeCamera->SetRotate(camRot);
 				}
 			}
-			ImGui::SameLine();
-			if(ImGui::Button("Reset Gauge")){
-				specialGauge_.Reset();
-				specialSelector_.Cancel();
+
+			// ライティング設定
+			if (ImGui::CollapsingHeader("Lighting")) {
+				if (PointLight* pData = object3dCommon_->GetPointLightData()) {
+					ImGui::Text("Point Light");
+					ImGui::ColorEdit4("Point Color", &pData->color.x);
+					ImGui::DragFloat3("Point Pos", &pData->position.x, 0.1f);
+					ImGui::DragFloat("Point Intensity", &pData->intensity, 0.1f, 0.0f, 100.0f);
+				}
+				if (SpotLight* sData = object3dCommon_->GetSpotLightData()) {
+					ImGui::Text("Spot Light");
+					ImGui::ColorEdit4("Spot Color", &sData->color.x);
+				}
 			}
 
-			if(!specialSelector_.IsSelecting()){
-				if(ImGui::Button("Start Selection")){
-					if(!isGameOver_ && !board_.IsBusy() && specialGauge_.CanActivate()){
-						if(specialSelector_.Begin(board_)){
-							specialGauge_.StartActivation();
-						}
+			// レベル配置(JSON)の描画切り替え・手動ホットリロード
+			if (ImGui::CollapsingHeader("Level Objects")) {
+				// 読み込んだ配置オブジェクトを描画するかどうかの切り替え
+				ImGui::Checkbox("Draw Level Objects", &isLevelObjectsVisible_);
+
+				// ボタン押下でJSONファイルを強制的に再読み込みする
+				if (ImGui::Button("Reload Level JSON")) {
+					levelManager_.LoadJSON(kLevelJsonFile);
+					RebuildLevelObjects();
+				}
+			}
+
+			// スペシャルゲージの加算・消費を単独で確認する
+			if (ImGui::CollapsingHeader("Special Gauge")) {
+				ImGui::Text("Gauge: %d / %d", specialGauge_.GetValue(), specialGauge_.GetMaxValue());
+				ImGui::ProgressBar(specialGauge_.GetRatio(), ImVec2(-1.0f, 0.0f));
+				const char* specialStatus = specialGauge_.IsActivationActive() ? "ACTIVE" :
+					(specialGauge_.CanActivate() ? "READY" : "CHARGING");
+				ImGui::Text("Status: %s", specialStatus);
+				ImGui::Text("Active Limit: %.1f seconds",
+					static_cast<float>(PuzzleConfig::kSpecialReadyDurationFrames) / PuzzleConfig::kFrameRate);
+
+				ImGui::InputInt("Cleared Cells", &debugClearedCellCount_);
+				ImGui::InputInt("Chain Count", &debugChainCount_);
+
+				if (ImGui::Button("Apply Clear Result")) {
+					specialGauge_.AddFromClear(debugClearedCellCount_, debugChainCount_);
+				}
+
+				if (ImGui::Button("Fill Gauge")) {
+					specialGauge_.Fill();
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Complete Use (Debug)")) {
+					if (specialGauge_.Consume()) {
+						specialSelector_.Cancel();
 					}
 				}
-			}else{
-				const GridPos target = specialSelector_.GetTarget();
-				ImGui::Text("Target: (%d, %d)",target.x,target.y);
-				ImGui::Text("Target Cell: %s",specialSelector_.CanConfirm(board_) ? "VALID" : "INVALID");
-				ImGui::Text("Arrow Keys: Move / Enter: Confirm");
-				if(ImGui::Button("Confirm Target")){
-					ConfirmSpecialTarget();
-				}
-				if(ImGui::Button("Force Cancel (Debug)")){
-					specialSelector_.Cancel();
+				ImGui::SameLine();
+				if (ImGui::Button("Reset Gauge")) {
 					specialGauge_.Reset();
+					specialSelector_.Cancel();
+				}
+
+				if (!specialSelector_.IsSelecting()) {
+					if (ImGui::Button("Start Selection")) {
+						if (!isGameOver_ && !board_.IsBusy() && specialGauge_.CanActivate()) {
+							if (specialSelector_.Begin(board_)) {
+								specialGauge_.StartActivation();
+							}
+						}
+					}
+				} else {
+					const GridPos target = specialSelector_.GetTarget();
+					ImGui::Text("Target: (%d, %d)", target.x, target.y);
+					ImGui::Text("Target Cell: %s", specialSelector_.CanConfirm(board_) ? "VALID" : "INVALID");
+					ImGui::Text("Arrow Keys: Move / Enter: Confirm");
+					if (ImGui::Button("Confirm Target")) {
+						ConfirmSpecialTarget();
+					}
+					if (ImGui::Button("Force Cancel (Debug)")) {
+						specialSelector_.Cancel();
+						specialGauge_.Reset();
+					}
 				}
 			}
+
+			ModelManager::GetInstance()->UpdateLightGui();
+			ImGui::End();
+
+			Application::GetInstance()->ShowPostProcessUI();
 		}
-
-		ModelManager::GetInstance()->UpdateLightGui();
-		ImGui::End();
-
-		Application::GetInstance()->ShowPostProcessUI();
-	}
 #endif
 }
 
@@ -656,6 +640,16 @@ void GameScene::Draw(){
 		for(const auto& obj : fallingObjs_){
 			obj->Draw();
 		}
+	}
+
+	// ネクスト・ホールドはスペシャル使用時だけでなく毎フレーム描画する。
+	for(const auto& slot : nextPreviewObjs_){
+		for(const auto& obj : slot){
+			obj->Draw();
+		}
+	}
+	for(const auto& obj : holdPreviewObjs_){
+		obj->Draw();
 	}
 
 	// スペシャルの対象選択カーソルを最後に重ねて描画する
@@ -691,14 +685,5 @@ void GameScene::ConfirmSpecialTarget(){
 		// 通電しなくても変換自体が成功すれば使用済み。十字マスは盤面に残る。
 		specialGauge_.Consume();
 		specialSelector_.Cancel();
-		// 追加：ネクスト・ホールドのプレビューを描画する
-		for(const auto& slot : nextPreviewObjs_){
-			for(const auto& obj : slot){
-				obj->Draw();
-			}
-		}
-		for(const auto& obj : holdPreviewObjs_){
-			obj->Draw();
-		}
 	}
 }
