@@ -83,17 +83,24 @@ void Board::Initialize(Obj3dCommon* object3dCommon){
 	ModelManager::GetInstance()->LoadModel(kGoalBlockModel);
 	ModelManager::GetInstance()->LoadModel(kSupplyBlockModel);
 
-	// --- U字の壁ブロックの生成 ---
-	// 盤面のマス領域のすぐ外側を、左・下・右の順に囲む。上辺は開けておく（U字）。
-	// 左右の壁はゴール（goalBlock）、下の壁は電源（supplyBlock）で描画する。
+	// U字の壁ブロックを生成する（幅は width_ の初期値を使う）
+	RebuildWalls();
+}
+
+// 追加：現在の width_ に合わせて、U字の壁ブロックを作り直す。
+// 盤面のマス領域のすぐ外側を、左・下・右の順に囲む。上辺は開けておく（U字）。
+// 左右の壁はゴール（goalBlock）、下の壁は電源（supplyBlock）で描画する。
+void Board::RebuildWalls(){
+	wallObjs_.clear();
+
 	for(int32_t y = 0; y < PuzzleConfig::kBoardHeight; ++y){
 		CreateWallBlock(-1,y,kGoalBlockModel);           // 左の壁（ゴール）
 	}
 	for(int32_t y = 0; y < PuzzleConfig::kBoardHeight; ++y){
-		CreateWallBlock(width_,y,kGoalBlockModel);       // 右の壁（ゴール）
+		CreateWallBlock(width_,y,kGoalBlockModel);       // 右の壁（ゴール。位置は幅で変わる）
 	}
 	for(int32_t x = -1; x <= width_; ++x){
-		CreateWallBlock(x,PuzzleConfig::kBoardHeight,kSupplyBlockModel); // 下の壁（電源。左右の角を含む）
+		CreateWallBlock(x,PuzzleConfig::kBoardHeight,kSupplyBlockModel); // 下の壁（電源。左右の角を含む。範囲は幅で変わる）
 	}
 }
 
@@ -681,11 +688,28 @@ Vector3 Board::GridToWorld(int32_t x,int32_t y) const{
 	};
 }
 
-// 盤面の幅を切り替える
+// 変更：盤面の幅を切り替える。壁の位置・固定マスの見た目は幅に依存するため、
+// width_ を書き換えるだけでなくここで作り直す。
 void Board::SetWidth(int32_t width){
-	// 想定外の値は無視する
-	if(width <= 0 || width > PuzzleConfig::kBoardWidthMax){
+	// 想定外の値・変化なしは無視する
+	if(width <= 0 || width > PuzzleConfig::kBoardWidthMax || width == width_){
 		return;
 	}
+
 	width_ = width;
+
+	// 盤面データを作り直す。幅が変わると列の意味が変わり、元の幅で埋まっていた
+	// マスをそのまま残すと壁の外に隠れて存在してしまう（幅を戻すと復活する）ため、
+	// 固定マス・消去演出の状態はいったんクリアする。
+	cells_ = {};
+	clearingCells_.clear();
+	isClearing_ = false;
+	clearTimer_ = 0;
+	chainCount_ = 0;
+
+	// 壁を新しい幅の位置・範囲で作り直す
+	RebuildWalls();
+
+	// 固定マスの見た目も作り直す（cells_をクリアしたので実質空になる）
+	RebuildCellObjects();
 }
