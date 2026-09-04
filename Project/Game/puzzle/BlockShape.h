@@ -15,11 +15,18 @@
 // =============================================================================
 namespace BlockShape{
 
-	// ブロックの種類。初期実装は L字・T字の2種類。
+	// 変更：ブロックの種類。L字・T字に I字（4マスの棒）と
+	// J字（L字の左右反転）を追加した4種類。
 	enum class Type{
 		L,
 		T,
+		I,
+		J,
 	};
+
+	// 追加：ブロックの種類の総数（Type の要素数）。種類の抽選などに使う。
+	// Type に種類を足したら、この値も必ず合わせて増やすこと。
+	constexpr int32_t kTypeCount = 4;
 
 	// 回転の総数（0〜3の4方向）
 	constexpr int32_t kRotationCount = 4;
@@ -42,6 +49,6 @@ namespace BlockShape{
 	// 実際に届いてよい」端子ビットを返す。並び順は GetCells() と対応する。
 	// GetTerminals() と違い、ブロック同士の接続用に露出させた先端のうち、
 	// 形ごとに定めた「本来の先端」だけを残した値になる（T字は出っ張りのみ、
-	// L字は両端とも）。それ以外のマスは0を返す。
+	// L字・I字・J字は1本道なので両端とも）。それ以外のマスは0を返す。
 	const std::vector<uint8_t>& GetWallTerminals(Type type,int32_t rotation);
 }

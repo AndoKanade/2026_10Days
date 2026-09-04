@@ -122,9 +122,11 @@ bool GameScene::SpawnNextBlock(){
 
 // 追加：次に落ちてくるブロックの種類をひとつ抽選して返す。
 BlockShape::Type GameScene::PickNextBlockType(){
-	// T字とL字を等確率で選ぶ（0 = T字、1 = L字）
-	std::uniform_int_distribution<int32_t> dist(0,1);
-	return (dist(randomEngine_) == 0) ? BlockShape::Type::T : BlockShape::Type::L;
+	// 変更：全種類（L字・T字・I字・J字）を等確率で選ぶ。
+	// 種類が増えても直すのは BlockShape::kTypeCount だけで済むよう、
+	// Type の並び順をそのまま抽選値として使う。
+	std::uniform_int_distribution<int32_t> dist(0,BlockShape::kTypeCount - 1);
+	return static_cast<BlockShape::Type>(dist(randomEngine_));
 }
 
 // 追加：ImGui にネクスト（次に落ちてくるブロック）を表示する。
@@ -142,6 +144,14 @@ void GameScene::ShowNextBlockGui() const{
 		break;
 	case BlockShape::Type::L:
 		typeName = "L";
+		break;
+	// 追加：I字
+	case BlockShape::Type::I:
+		typeName = "I";
+		break;
+	// 追加：J字
+	case BlockShape::Type::J:
+		typeName = "J";
 		break;
 	}
 	ImGui::Text("Type: %s",typeName);
