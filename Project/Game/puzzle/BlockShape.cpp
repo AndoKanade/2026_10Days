@@ -53,6 +53,49 @@ namespace{
 		{ {-1, 0}, {0, 0}, {1, 0}, {1, -1} },
 	}};
 
+	// 追加：J字ブロック（Jテトロミノ・4マス）の4回転分のマス相対座標テーブル。
+	// L字を左右反転させた形。基準(0,0)は縦棒／横棒の中央マス。rot0 から時計回りに回転する。
+	//   rot0：縦棒＋左下の足   rot1：横棒＋左上の足
+	//   rot2：縦棒＋右上の足   rot3：横棒＋右下の足
+	const std::array<std::vector<GridPos>,BlockShape::kRotationCount> kJShapeCells = {{
+		// rot0： .X
+		//        .X
+		//        XX
+		{ {0, -1}, {0, 0}, {0, 1}, {-1, 1} },
+		// rot1： X..
+		//        XXX
+		{ {-1, 0}, {0, 0}, {1, 0}, {-1, -1} },
+		// rot2： XX
+		//        X.
+		//        X.
+		{ {0, -1}, {0, 0}, {0, 1}, {1, -1} },
+		// rot3： XXX
+		//        ..X
+		{ {-1, 0}, {0, 0}, {1, 0}, {1, 1} },
+	}};
+
+	// 追加：I字ブロック（Iテトロミノ・4マスの棒）の4回転分のマス相対座標テーブル。
+	// 基準(0,0)は棒の左から2番目／上から2番目のマス。横棒のときに基準の左右へ
+	// 1マスと2マス伸びる形になり、出現列（盤面中央付近）からはみ出しにくい。
+	// I字は180度回すと同じ形になるため、rot0とrot2、rot1とrot3は同じ内容になる。
+	//   rot0：横棒   rot1：縦棒   rot2：横棒   rot3：縦棒
+	const std::array<std::vector<GridPos>,BlockShape::kRotationCount> kIShapeCells = {{
+		// rot0： XXXX
+		{ {-1, 0}, {0, 0}, {1, 0}, {2, 0} },
+		// rot1： X
+		//        X
+		//        X
+		//        X
+		{ {0, -1}, {0, 0}, {0, 1}, {0, 2} },
+		// rot2： XXXX
+		{ {-1, 0}, {0, 0}, {1, 0}, {2, 0} },
+		// rot3： X
+		//        X
+		//        X
+		//        X
+		{ {0, -1}, {0, 0}, {0, 1}, {0, 2} },
+	}};
+
 	// 追加：まだ端子テーブルを持たない種類のために返す空の配列。
 	const std::vector<uint8_t> kEmptyTerminals{};
 
@@ -114,7 +157,7 @@ namespace{
 		return terminals;
 	}
 
-	// 追加：T字・L字の4回転分の端子ビットテーブル。各形の Cells から計算する。
+	// 変更：T字・L字・I字・J字の4回転分の端子ビットテーブル。各形の Cells から計算する。
 	const std::array<std::vector<uint8_t>,BlockShape::kRotationCount> kTShapeTerminals = {
 		ComputeTerminals(kTShapeCells[0]),
 		ComputeTerminals(kTShapeCells[1]),
@@ -127,13 +170,27 @@ namespace{
 		ComputeTerminals(kLShapeCells[2]),
 		ComputeTerminals(kLShapeCells[3]),
 	};
+	// 追加：I字の端子ビットテーブル
+	const std::array<std::vector<uint8_t>,BlockShape::kRotationCount> kIShapeTerminals = {
+		ComputeTerminals(kIShapeCells[0]),
+		ComputeTerminals(kIShapeCells[1]),
+		ComputeTerminals(kIShapeCells[2]),
+		ComputeTerminals(kIShapeCells[3]),
+	};
+	// 追加：J字の端子ビットテーブル
+	const std::array<std::vector<uint8_t>,BlockShape::kRotationCount> kJShapeTerminals = {
+		ComputeTerminals(kJShapeCells[0]),
+		ComputeTerminals(kJShapeCells[1]),
+		ComputeTerminals(kJShapeCells[2]),
+		ComputeTerminals(kJShapeCells[3]),
+	};
 
 	// 追加：壁（ゴール）・床（電源）に実際に届いてよい「本来の先端」だけを残した
 	// 端子ビットを計算する。ブロック同士の接続用に先端露出させたビットのうち、
 	// 形ごとに決めた先端のマスだけそのまま残し、それ以外は0にする。
 	// T字は出っ張り（配列の添字3。kTShapeCellsのコメント通り、どの回転でも
 	// 添字3が出っ張りになるよう並べてある）だけを壁の先端として扱う。
-	// L字は途中で枝分かれしない1本道の形なので、両端（先端）ならどちらも
+	// L字・I字・J字は途中で枝分かれしない1本道の形なので、両端（先端）ならどちらも
 	// 正規の壁の先端として扱う。
 	std::vector<uint8_t> ComputeWallTerminals(BlockShape::Type type,const std::vector<uint8_t>& exposedTerminals){
 		std::vector<uint8_t> wallTerminals(exposedTerminals.size(),0);
@@ -148,6 +205,14 @@ namespace{
 			case BlockShape::Type::L:
 				isWallTip = true;
 				break;
+			// 追加：I字も1本道なので、L字と同じく全マスをそのまま通す
+			case BlockShape::Type::I:
+				isWallTip = true;
+				break;
+			// 追加：J字はL字の左右反転なので、L字と同じ扱いにする
+			case BlockShape::Type::J:
+				isWallTip = true;
+				break;
 			}
 
 			if(isWallTip){
@@ -158,7 +223,7 @@ namespace{
 		return wallTerminals;
 	}
 
-	// 追加：T字・L字の4回転分の「壁の先端」端子ビットテーブル。
+	// 変更：T字・L字・I字・J字の4回転分の「壁の先端」端子ビットテーブル。
 	const std::array<std::vector<uint8_t>,BlockShape::kRotationCount> kTShapeWallTerminals = {
 		ComputeWallTerminals(BlockShape::Type::T,kTShapeTerminals[0]),
 		ComputeWallTerminals(BlockShape::Type::T,kTShapeTerminals[1]),
@@ -170,6 +235,20 @@ namespace{
 		ComputeWallTerminals(BlockShape::Type::L,kLShapeTerminals[1]),
 		ComputeWallTerminals(BlockShape::Type::L,kLShapeTerminals[2]),
 		ComputeWallTerminals(BlockShape::Type::L,kLShapeTerminals[3]),
+	};
+	// 追加：I字の「壁の先端」端子ビットテーブル
+	const std::array<std::vector<uint8_t>,BlockShape::kRotationCount> kIShapeWallTerminals = {
+		ComputeWallTerminals(BlockShape::Type::I,kIShapeTerminals[0]),
+		ComputeWallTerminals(BlockShape::Type::I,kIShapeTerminals[1]),
+		ComputeWallTerminals(BlockShape::Type::I,kIShapeTerminals[2]),
+		ComputeWallTerminals(BlockShape::Type::I,kIShapeTerminals[3]),
+	};
+	// 追加：J字の「壁の先端」端子ビットテーブル
+	const std::array<std::vector<uint8_t>,BlockShape::kRotationCount> kJShapeWallTerminals = {
+		ComputeWallTerminals(BlockShape::Type::J,kJShapeTerminals[0]),
+		ComputeWallTerminals(BlockShape::Type::J,kJShapeTerminals[1]),
+		ComputeWallTerminals(BlockShape::Type::J,kJShapeTerminals[2]),
+		ComputeWallTerminals(BlockShape::Type::J,kJShapeTerminals[3]),
 	};
 }
 
@@ -185,6 +264,12 @@ namespace BlockShape{
 			return kTShapeCells[r];
 		case Type::L:
 			return kLShapeCells[r];
+		// 追加：I字
+		case Type::I:
+			return kIShapeCells[r];
+		// 追加：J字
+		case Type::J:
+			return kJShapeCells[r];
 		}
 
 		return kEmptyCells;
@@ -200,6 +285,12 @@ namespace BlockShape{
 			return kTShapeTerminals[r];
 		case Type::L:
 			return kLShapeTerminals[r];
+		// 追加：I字
+		case Type::I:
+			return kIShapeTerminals[r];
+		// 追加：J字
+		case Type::J:
+			return kJShapeTerminals[r];
 		}
 
 		return kEmptyTerminals;
@@ -214,6 +305,12 @@ namespace BlockShape{
 			return kTShapeWallTerminals[r];
 		case Type::L:
 			return kLShapeWallTerminals[r];
+		// 追加：I字
+		case Type::I:
+			return kIShapeWallTerminals[r];
+		// 追加：J字
+		case Type::J:
+			return kJShapeWallTerminals[r];
 		}
 
 		return kEmptyTerminals;
