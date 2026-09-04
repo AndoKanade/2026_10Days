@@ -185,7 +185,38 @@ namespace{
 		ComputeTerminals(kJShapeCells[3]),
 	};
 
-}
+	// 壁への接続も、ブロック同士と同じ配線の向きで判定する。
+	// T字も出っ張りだけに制限せず、横棒の両端からゴールへ接続できる。
+	std::vector<uint8_t> ComputeWallTerminals(BlockShape::Type type,const std::vector<uint8_t>& exposedTerminals){
+		std::vector<uint8_t> wallTerminals(exposedTerminals.size(),0);
+
+		for(size_t i = 0; i < exposedTerminals.size(); ++i){
+			bool isWallTip = false;
+
+			switch(type){
+			case BlockShape::Type::T:
+				isWallTip = true;
+				break;
+			case BlockShape::Type::L:
+				isWallTip = true;
+				break;
+			// 追加：I字も1本道なので、L字と同じく全マスをそのまま通す
+			case BlockShape::Type::I:
+				isWallTip = true;
+				break;
+			// 追加：J字はL字の左右反転なので、L字と同じ扱いにする
+			case BlockShape::Type::J:
+				isWallTip = true;
+				break;
+			}
+
+			if(isWallTip){
+				wallTerminals[i] = exposedTerminals[i];
+			}
+		}
+
+		return wallTerminals;
+	}
 
 namespace BlockShape{
 
