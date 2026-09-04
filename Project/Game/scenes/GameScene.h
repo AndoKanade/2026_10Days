@@ -82,6 +82,9 @@ private:
 	// 追加：天井到達などでこれ以上ブロックを出せない状態かどうか
 	bool isGameOver_ = false;
 
+	// スペシャル選択・消去演出を除いた、落下速度上昇用の経過時間。
+	int64_t activePlayFrames_ = 0;
+
 	// スペシャル発動に使用するゲージ
 	SpecialGauge specialGauge_;
 

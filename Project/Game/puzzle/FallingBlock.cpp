@@ -38,7 +38,7 @@ bool FallingBlock::Spawn(const Board& board,BlockShape::Type type,int32_t blockI
 }
 
 // 追加：自動落下と固定猶予の時間経過を1フレーム分進める。
-bool FallingBlock::Update(Board& board){
+bool FallingBlock::Update(Board& board,int32_t normalFallInterval){
 	// 真下に1マス動けるかどうか
 	const GridPos down = {origin_.x, origin_.y + 1};
 	const bool canFall = board.CanFall(CalcCells(down,rotation_));
@@ -48,7 +48,10 @@ bool FallingBlock::Update(Board& board){
 		lockTimer_ = 0;
 
 		// 加速中かどうかで落下間隔を切り替える
-		const int32_t fallInterval = isSoftDrop_ ? PuzzleConfig::kFallIntervalFramesFast : PuzzleConfig::kFallIntervalFrames;
+		// ソフトドロップで通常落下より遅くならないようにする。
+		const int32_t safeInterval = normalFallInterval > 0 ? normalFallInterval : 1;
+		const int32_t fallInterval = isSoftDrop_ && PuzzleConfig::kFallIntervalFramesFast < safeInterval
+			? PuzzleConfig::kFallIntervalFramesFast : safeInterval;
 
 		++fallTimer_;
 		if(fallTimer_ >= fallInterval){

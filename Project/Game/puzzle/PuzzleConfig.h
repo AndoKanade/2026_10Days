@@ -50,6 +50,18 @@ namespace PuzzleConfig{
 	// ブロックが自動で1マス落下するまでのフレーム数（60 = 約1.0秒）
 	constexpr int32_t kFallIntervalFrames = 60;
 
+	// 操作できる時間10秒ごとに2フレームずつ短縮する。最速でも0.3秒/マス。
+	constexpr int32_t kFallSpeedStepFrames = 10 * static_cast<int32_t>(kFrameRate);// 何秒ごとに落下速度を上げるか
+	constexpr int32_t kFallSpeedReductionFrames = 2;// 何フレームずつ落下速度を上げるか
+	constexpr int32_t kFallIntervalFramesMin = 18;// 最速で何フレームまで落下速度を上げるか（18 = 約0.3秒）
+	constexpr int32_t GetFallIntervalFrames(int64_t activeFrames){
+		const int64_t steps = activeFrames > 0 ? activeFrames / kFallSpeedStepFrames : 0;
+		const int64_t maxSteps = (kFallIntervalFrames - kFallIntervalFramesMin +
+			kFallSpeedReductionFrames - 1) / kFallSpeedReductionFrames;
+		if(steps >= maxSteps){ return kFallIntervalFramesMin; }
+		return kFallIntervalFrames - static_cast<int32_t>(steps) * kFallSpeedReductionFrames;
+	}
+
 	// 下キーで加速させているときの落下フレーム数（6 = 約0.1秒）
 	constexpr int32_t kFallIntervalFramesFast = 6;
 

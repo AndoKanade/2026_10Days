@@ -29,7 +29,7 @@ public:
 
 	// 追加：自動落下と固定猶予の時間経過を1フレーム分進める。
 	// このフレームで盤面に固定されたら true を返す（呼び出し側が次ブロックを出す）。
-	bool Update(Board& board);
+	bool Update(Board& board,int32_t normalFallInterval = PuzzleConfig::kFallIntervalFrames);
 
 	// 落下可能な最下段まで移動し、即座に盤面へ固定する。
 	bool HardDrop(Board& board);

@@ -102,6 +102,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	object3dCommon_ = object3dCommon;
 	input_ = input;
 	spriteCommon_ = spriteCommon;
+	activePlayFrames_ = 0;
 
 	// カメラの生成・設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
@@ -436,6 +437,7 @@ void GameScene::Update() {
 	} else if (!isGameOver_) {
 			// 追加：消去演出中（Board::IsBusy）はブロックの操作・落下・出現を止める
 			if (!board_.IsBusy()) {
+				++activePlayFrames_;
 				// 左右移動・回転はトリガー（押した瞬間）で1回ずつ
 				if (input_->TriggerKey(DIK_A)) {
 					fallingBlock_.MoveLeft(board_);
@@ -461,7 +463,7 @@ void GameScene::Update() {
 				// 時間経過を進め、盤面に固定されたら次のブロックを出す
 				const bool blockLocked = input_->TriggerKey(DIK_RETURN)
 					? fallingBlock_.HardDrop(board_)
-					: fallingBlock_.Update(board_);
+					: fallingBlock_.Update(board_,PuzzleConfig::GetFallIntervalFrames(activePlayFrames_));
 
 				if (blockLocked) {
 					// 天井より上にはみ出したまま固定された ＝ 積み上がりすぎでゲームオーバー
@@ -512,6 +514,12 @@ void GameScene::Update() {
 		if (Camera* activeCamera = CameraManager::GetInstance()->GetActiveCamera()) {
 			// メインデバッグウィンドウ
 			ImGui::Begin("GameScene Debug");
+
+			if(ImGui::CollapsingHeader("Fall Speed")){
+				ImGui::Text("Active time: %.1f sec",static_cast<double>(activePlayFrames_) / PuzzleConfig::kFrameRate);
+				ImGui::Text("Fall interval: %.3f sec / cell",
+					PuzzleConfig::GetFallIntervalFrames(activePlayFrames_) / PuzzleConfig::kFrameRate);
+			}
 
 			// 追加：次に落ちてくるブロック（ネクスト）の表示
 			ShowNextBlockGui();
