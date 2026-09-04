@@ -35,9 +35,8 @@ private:
 
 	// --- メンバ変数：内部リソース (所有するもの) ---
 	std::unique_ptr<Sprite> background_;
-	ScoreHistory history_;
+	// シーンを作り直しても共有し、アプリを終了すると破棄する。
+	inline static ScoreHistory history_;
 	bool resultRecorded_ = false;
 	bool isNewRecord_ = false;
-	bool historyLoaded_ = true;
-	bool historySaved_ = false;
 };

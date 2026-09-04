@@ -24,14 +24,9 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 	input_ = input;
 	spriteCommon_ = spriteCommon;
 
-	// 実行ファイルの隣に保存し、起動時の作業フォルダに依存させない。
+	// 今回の起動中だけ共有するランキングへ、1プレイにつき1回登録する。
 	if(!resultRecorded_){
 		resultRecorded_ = true;
-		wchar_t executable[32768]{};
-		const DWORD length = GetModuleFileNameW(nullptr,executable,32768);
-		const bool pathValid = length > 0 && length < 32768;
-		const auto path = std::filesystem::path(executable).parent_path() / "save" / "score_history.txt";
-		historyLoaded_ = pathValid && history_.Load(path);
 		ScoreRecord record;
 		record.score = SceneManager::GetInstance()->GetFinalScore();
 		record.cells = SceneManager::GetInstance()->GetFinalClearedCells();
@@ -40,10 +35,8 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 		char date[20]{};
 		if(localtime_s(&local,&now) == 0){ std::strftime(date,sizeof(date),"%Y-%m-%d %H:%M:%S",&local); }
 		record.date = date[0] ? date : "0000-00-00 00:00:00";
-		isNewRecord_ = historyLoaded_ && record.score > 0 &&
+		isNewRecord_ = record.score > 0 &&
 			(history_.GetRecords().empty() || record.score > history_.GetRecords().front().score);
-		// 読み込み失敗時は既存ファイルを変更しない。今回の結果は画面には表示する。
-		historySaved_ = historyLoaded_ && ScoreHistory::Append(path,record);
 		history_.Add(record);
 	}
 
@@ -68,10 +61,9 @@ void GameOverScene::Update(){
 	ImGui::Text("Final Score: %lld",static_cast<long long>(SceneManager::GetInstance()->GetFinalScore()));
 	ImGui::Text("Total cleared cells: %lld",static_cast<long long>(SceneManager::GetInstance()->GetFinalClearedCells()));
 	if(isNewRecord_){ ImGui::Text("NEW RECORD!"); }
-	if(!historyLoaded_){ ImGui::Text("History could not be fully loaded. Existing file was not changed."); }
-	if(!historySaved_){ ImGui::Text("This result could not be saved."); }
 	ImGui::Separator();
-	ImGui::Text("High Scores - Top 10 (including this run)");
+	ImGui::Text("High Scores - Top 10 (this session)");
+	ImGui::Text("Records reset when the game is closed.");
 	if(ImGui::BeginTable("ScoreHistory",4,ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)){
 		ImGui::TableSetupColumn("Rank");
 		ImGui::TableSetupColumn("Score");
