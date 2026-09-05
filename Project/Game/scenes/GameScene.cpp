@@ -63,6 +63,8 @@ namespace{
 		case BlockShape::Type::L: return "L";
 		case BlockShape::Type::I: return "I";
 		case BlockShape::Type::J: return "J";
+		case BlockShape::Type::S: return "S";
+		case BlockShape::Type::Z: return "Z";
 		}
 		return "?";
 	}
@@ -131,7 +133,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	// カメラの生成・設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
 	auto* defaultCamera = CameraManager::GetInstance()->GetCamera("default");
-	defaultCamera->SetTranslate({0.0f, 0.0f, -30.0f});
+	defaultCamera->SetTranslate({0.0f, 0.0f, PuzzleConfig::kCameraDistanceZ});
 	CameraManager::GetInstance()->SetActiveCamera("default");
 	object3dCommon_->SetDefaultCamera(CameraManager::GetInstance()->GetActiveCamera());
 
