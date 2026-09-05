@@ -19,7 +19,7 @@ namespace PuzzleConfig{
 	constexpr int32_t kBoardWidth = 10;
 
 	// 盤面の高さ（マス数）
-	constexpr int32_t kBoardHeight = 10;
+	constexpr int32_t kBoardHeight = 15;
 
 	// 横断が難しすぎて消えない場合に切り替える、狭い盤面の幅（マス数）
 	// 実際の切り替え処理は担当Cがデバッグ用UIで行う。ここでは候補値のみ定義する。
@@ -43,6 +43,11 @@ namespace PuzzleConfig{
 
 	// 盤面を並べる Z 座標
 	constexpr float kBoardCenterZ = 0.0f;
+
+	// 変更：カメラを -Z 側へ引く距離。盤面の高さ（ワールド単位）に比例させておくことで、
+	// kBoardHeight を調整しても盤面全体が画面に収まる距離へ自動で追従する。
+	// 元々は盤面高さ10のとき-30だったため、その比率（3倍）を保つ。
+	constexpr float kCameraDistanceZ = -(static_cast<float>(kBoardHeight) * 3.0f);
 
 	// --- 時間関連（フレーム単位）---
 	// このエンジンは可変デルタタイムを持たず 60fps 固定で動く前提のため、
@@ -164,6 +169,8 @@ namespace PuzzleConfig{
 		{0.92f, 0.20f, 0.35f, 1.0f}, // T 紅
 		{1.00f, 0.68f, 0.05f, 1.0f}, // I 山吹
 		{0.60f, 0.30f, 0.95f, 1.0f}, // J 藤紫
+		{0.15f, 0.75f, 0.80f, 1.0f}, // S 水色
+		{0.95f, 0.35f, 0.70f, 1.0f}, // Z 桃
 	};
 
 	// sRGB の1チャンネルを線形に変換する。

@@ -16,17 +16,19 @@
 namespace BlockShape{
 
 	// 変更：ブロックの種類。L字・T字に I字（4マスの棒）と
-	// J字（L字の左右反転）を追加した4種類。
+	// J字（L字の左右反転）、S字・Z字（互い違いの4マス）を追加した6種類。
 	enum class Type{
 		L,
 		T,
 		I,
 		J,
+		S,
+		Z,
 	};
 
 	// 追加：ブロックの種類の総数（Type の要素数）。種類の抽選などに使う。
 	// Type に種類を足したら、この値も必ず合わせて増やすこと。
-	constexpr int32_t kTypeCount = 4;
+	constexpr int32_t kTypeCount = 6;
 
 	// 回転の総数（0〜3の4方向）
 	constexpr int32_t kRotationCount = 4;

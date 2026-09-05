@@ -96,6 +96,47 @@ namespace{
 		{ {0, -1}, {0, 0}, {0, 1}, {0, 2} },
 	}};
 
+	// 追加：S字ブロック（Sテトロミノ・4マス）の4回転分のマス相対座標テーブル。
+	// 基準(0,0)は上段の左側マス。他の形と同じく、rot0の各座標に (x,y)->(-y,x) を
+	// 順に適用して rot1〜rot3 を求めている。
+	//   rot0：横向きS   rot1：縦向きS   rot2：横向きS   rot3：縦向きS
+	const std::array<std::vector<GridPos>,BlockShape::kRotationCount> kSShapeCells = {{
+		// rot0： .XX
+		//        XX.
+		{ {0, 0}, {1, 0}, {-1, 1}, {0, 1} },
+		// rot1： X.
+		//        XX
+		//        .X
+		{ {0, 0}, {0, 1}, {-1, -1}, {-1, 0} },
+		// rot2： .XX
+		//        XX.
+		{ {0, 0}, {-1, 0}, {1, -1}, {0, -1} },
+		// rot3： X.
+		//        XX
+		//        .X
+		{ {0, 0}, {0, -1}, {1, 1}, {1, 0} },
+	}};
+
+	// 追加：Z字ブロック（Zテトロミノ・4マス）の4回転分のマス相対座標テーブル。
+	// S字を左右反転させた形。基準(0,0)は上段の左側マス。rot0からS字と同じ規則で回転させる。
+	//   rot0：横向きZ   rot1：縦向きZ   rot2：横向きZ   rot3：縦向きZ
+	const std::array<std::vector<GridPos>,BlockShape::kRotationCount> kZShapeCells = {{
+		// rot0： XX.
+		//        .XX
+		{ {-1, 0}, {0, 0}, {0, 1}, {1, 1} },
+		// rot1： .X
+		//        XX
+		//        X.
+		{ {0, -1}, {0, 0}, {-1, 0}, {-1, 1} },
+		// rot2： XX.
+		//        .XX
+		{ {1, 0}, {0, 0}, {0, -1}, {-1, -1} },
+		// rot3： .X
+		//        XX
+		//        X.
+		{ {0, 1}, {0, 0}, {1, 0}, {1, -1} },
+	}};
+
 	// 追加：まだ端子テーブルを持たない種類のために返す空の配列。
 	const std::vector<uint8_t> kEmptyTerminals{};
 
@@ -184,6 +225,20 @@ namespace{
 		ComputeTerminals(kJShapeCells[2]),
 		ComputeTerminals(kJShapeCells[3]),
 	};
+	// 追加：S字の端子ビットテーブル
+	const std::array<std::vector<uint8_t>,BlockShape::kRotationCount> kSShapeTerminals = {
+		ComputeTerminals(kSShapeCells[0]),
+		ComputeTerminals(kSShapeCells[1]),
+		ComputeTerminals(kSShapeCells[2]),
+		ComputeTerminals(kSShapeCells[3]),
+	};
+	// 追加：Z字の端子ビットテーブル
+	const std::array<std::vector<uint8_t>,BlockShape::kRotationCount> kZShapeTerminals = {
+		ComputeTerminals(kZShapeCells[0]),
+		ComputeTerminals(kZShapeCells[1]),
+		ComputeTerminals(kZShapeCells[2]),
+		ComputeTerminals(kZShapeCells[3]),
+	};
 
 }
 
@@ -205,6 +260,12 @@ namespace BlockShape{
 		// 追加：J字
 		case Type::J:
 			return kJShapeCells[r];
+		// 追加：S字
+		case Type::S:
+			return kSShapeCells[r];
+		// 追加：Z字
+		case Type::Z:
+			return kZShapeCells[r];
 		}
 
 		return kEmptyCells;
@@ -226,6 +287,12 @@ namespace BlockShape{
 		// 追加：J字
 		case Type::J:
 			return kJShapeTerminals[r];
+		// 追加：S字
+		case Type::S:
+			return kSShapeTerminals[r];
+		// 追加：Z字
+		case Type::Z:
+			return kZShapeTerminals[r];
 		}
 
 		return kEmptyTerminals;
