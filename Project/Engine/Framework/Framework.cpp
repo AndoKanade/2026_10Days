@@ -20,7 +20,7 @@ void Framework::Initialize(){
 
 	// WinAPIの初期化
 	winApi_ = std::make_unique<WinAPI>();
-	winApi_->Initialize(L"3041_ゲームタイトル",1280,720);
+	winApi_->Initialize(L"3041_テトロード",1280,720);
 
 	// DirectXの初期化
 	dxCommon_ = std::make_unique<DXCommon>();
