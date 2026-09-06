@@ -19,6 +19,7 @@ class Input;
 class Obj3D;
 class Obj3dCommon;
 class SpriteCommon;
+class Sprite;
 class Application;
 
 class GameScene : public BaseScene{
@@ -95,6 +96,8 @@ private:
 
 	// スペシャル発動に使用するゲージ
 	SpecialGauge specialGauge_;
+	// スペシャルによって始まった消去・連鎖では、ゲージを自己充電させない。
+	bool suppressSpecialClearCharge_ = false;
 	ScoreSystem score_;
 
 	// スペシャルで最強マスにする対象の選択状態
@@ -102,6 +105,16 @@ private:
 
 	// 対象選択中のマスを示すカーソル
 	std::unique_ptr<Obj3D> specialCursorObj_;
+
+	// Releaseでも表示するスペシャルゲージ。背景・チャージ・満タン・発動中の4層。
+	std::unique_ptr<Sprite> specialGaugeBackgroundSprite_;
+	std::unique_ptr<Sprite> specialGaugeChargeSprite_;
+	std::unique_ptr<Sprite> specialGaugeReadySprite_;
+	std::unique_ptr<Sprite> specialGaugeActiveSprite_;
+	int32_t specialGaugeRainbowFrame_ = 0;
+
+	// Releaseでも表示するゲーム中スコア（数字画像を1文字ずつ切り出す）。
+	std::vector<std::unique_ptr<Sprite>> scoreDigitSprites_;
 
 	// ImGuiから消去結果を再現するための入力値
 	int32_t debugClearedCellCount_ = 3;
@@ -160,6 +173,8 @@ private:
 	void SyncSpecialCursor();
 	// EnterまたはデバッグUIから共通の決定処理を呼ぶ。
 	void ConfirmSpecialTarget();
+	void UpdateSpecialGaugeUi();
+	void UpdateScoreUi();
 
 	// レベル配置オブジェクトを描画するかどうか（ImGuiで切り替え）
 	bool isLevelObjectsVisible_ = false;

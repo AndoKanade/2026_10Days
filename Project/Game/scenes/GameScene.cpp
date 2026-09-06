@@ -7,12 +7,36 @@
 #include "Obj3D.h"
 #include "Obj3dCommon.h"
 #include "SpriteCommon.h"
+#include "Sprite.h"
+#include "TextureManager.h"
 #include "Application.h"
 #include "Logger.h"
 #include "LevelManager.h"
 #include "SceneManager.h"
 
 namespace{
+	const std::string kGaugeBackgroundTexture = "resource/ui/specialGauge/red.png";
+	const std::string kGaugeChargeTexture = "resource/ui/specialGauge/orange.png";
+	const std::string kGaugeReadyTexture = "resource/ui/specialGauge/parple.png";
+	const std::string kGaugeRainbowTexture = "resource/character/white.png";
+	constexpr Vector2 kGaugePosition = {20.0f,20.0f};
+	constexpr Vector2 kGaugeMaxSize = {360.0f,28.0f};
+	const std::string kScoreNumberTexture = "resource/ui/score/numbers.png";
+	constexpr int32_t kScoreDigitCount = 8;
+	constexpr Vector2 kScorePosition = {20.0f,60.0f};
+	constexpr Vector2 kScoreDigitTextureSize = {8.0f,12.0f};
+	constexpr Vector2 kScoreDigitDrawSize = {32.0f,48.0f};
+	constexpr int32_t kRainbowFramesPerColor = 12;
+	constexpr Vector4 kRainbowColors[] = {
+		{1.0f,0.15f,0.15f,1.0f}, {1.0f,0.55f,0.10f,1.0f},
+		{1.0f,0.95f,0.10f,1.0f}, {0.15f,1.0f,0.25f,1.0f},
+		{0.10f,0.85f,1.0f,1.0f}, {0.20f,0.30f,1.0f,1.0f},
+		{0.75f,0.20f,1.0f,1.0f}
+	};
+	Vector4 LerpColor(const Vector4& a,const Vector4& b,float t){
+		return {a.x + (b.x-a.x)*t,a.y + (b.y-a.y)*t,
+			a.z + (b.z-a.z)*t,a.w + (b.w-a.w)*t};
+	}
 	// 追加：ゲーム画面のBGMの初期音量
 	constexpr float kBgmVolume = 0.5f;
 
@@ -129,6 +153,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	activePlayFrames_ = 0;
 	debugManualFallSpeed_ = false;
 	debugFallIntervalFrames_ = PuzzleConfig::kFallIntervalFrames;
+	suppressSpecialClearCharge_ = false;
 
 	// カメラの生成・設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
@@ -224,6 +249,41 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 		material->color = kSpecialCursorValidColor;
 		material->enableLighting = 0;
 	}
+
+	// 通常UIのスペシャルゲージを作る。白画像は発動中の七色着色専用。
+	TextureManager::GetInstance()->LoadTexture(kGaugeBackgroundTexture);
+	TextureManager::GetInstance()->LoadTexture(kGaugeChargeTexture);
+	TextureManager::GetInstance()->LoadTexture(kGaugeReadyTexture);
+	TextureManager::GetInstance()->LoadTexture(kGaugeRainbowTexture);
+	auto createGaugeSprite = [&](const std::string& texture){
+		auto sprite = std::make_unique<Sprite>();
+		sprite->Initialize(spriteCommon_,texture);
+		sprite->SetPosition(kGaugePosition);
+		sprite->SetSize(kGaugeMaxSize);
+		return sprite;
+	};
+	specialGaugeBackgroundSprite_ = createGaugeSprite(kGaugeBackgroundTexture);
+	specialGaugeChargeSprite_ = createGaugeSprite(kGaugeChargeTexture);
+	specialGaugeReadySprite_ = createGaugeSprite(kGaugeReadyTexture);
+	specialGaugeActiveSprite_ = createGaugeSprite(kGaugeRainbowTexture);
+	specialGaugeRainbowFrame_ = 0;
+	UpdateSpecialGaugeUi();
+
+	// 80x12の数字画像を8x12ずつ切り出し、8桁のスコアとして並べる。
+	TextureManager::GetInstance()->LoadTexture(kScoreNumberTexture);
+	scoreDigitSprites_.clear();
+	for(int32_t i = 0; i < kScoreDigitCount; ++i){
+		auto digit = std::make_unique<Sprite>();
+		digit->Initialize(spriteCommon_,kScoreNumberTexture);
+		digit->SetPosition({
+			kScorePosition.x + kScoreDigitDrawSize.x * static_cast<float>(i),
+			kScorePosition.y
+		});
+		digit->SetSize(kScoreDigitDrawSize);
+		digit->SetTextureSize(kScoreDigitTextureSize);
+		scoreDigitSprites_.push_back(std::move(digit));
+	}
+	UpdateScoreUi();
 
 	// LevelManagerを初期化し、レベル配置オブジェクトを構築
 	levelManager_.LoadJSON(kLevelJsonFile);
@@ -508,8 +568,14 @@ void GameScene::Update() {
 	// 追加：盤面の更新
 	board_.Update();
 	for (const Board::ClearResult& result : board_.TakeClearResults()) {
-		specialGauge_.AddFromClear(result.cellCount, result.chainCount);
+		if(!suppressSpecialClearCharge_){
+			specialGauge_.AddFromClear(result.cellCount, result.chainCount);
+		}
 		score_.AddFromClear(result.cellCount,result.chainCount);
+	}
+	// スペシャルから始まった消去と、その落下連鎖がすべて終わってから通常チャージへ戻す。
+	if(suppressSpecialClearCharge_ && !board_.IsBusy()){
+		suppressSpecialClearCharge_ = false;
 	}
 
 	// スペシャル発動後は、対象選択中もゲージを減少させる
@@ -771,6 +837,8 @@ void GameScene::Update() {
 			Application::GetInstance()->ShowPostProcessUI();
 		}
 #endif
+	UpdateSpecialGaugeUi();
+	UpdateScoreUi();
 }
 
 // --- 描画処理 ---
@@ -818,6 +886,67 @@ void GameScene::Draw(){
 	if(specialSelector_.IsSelecting() && specialCursorObj_){
 		specialCursorObj_->Draw();
 	}
+
+	// 3D描画の後に通常UIとして重ねる。Releaseでも表示される。
+	if(spriteCommon_ && specialGaugeBackgroundSprite_){
+		spriteCommon_->Draw();
+		specialGaugeBackgroundSprite_->Draw();
+		if(specialGauge_.IsActivationActive()){
+			specialGaugeActiveSprite_->Draw();
+		}else if(specialGauge_.CanActivate()){
+			specialGaugeReadySprite_->Draw();
+		}else if(specialGauge_.GetValue() > 0){
+			specialGaugeChargeSprite_->Draw();
+		}
+		for(const auto& digit : scoreDigitSprites_){
+			digit->Draw();
+		}
+	}
+}
+
+void GameScene::UpdateScoreUi(){
+	if(scoreDigitSprites_.empty()){ return; }
+
+	// 表示は8桁。範囲を超えた場合は99999999で止める。
+	int64_t displayScore = score_.GetTotal();
+	if(displayScore < 0){ displayScore = 0; }
+	if(displayScore > 99999999){ displayScore = 99999999; }
+
+	for(int32_t i = kScoreDigitCount - 1; i >= 0; --i){
+		const int32_t digit = static_cast<int32_t>(displayScore % 10);
+		displayScore /= 10;
+		scoreDigitSprites_[i]->SetTextureLeftTop({
+			kScoreDigitTextureSize.x * static_cast<float>(digit),0.0f
+		});
+		scoreDigitSprites_[i]->Update();
+	}
+}
+
+void GameScene::UpdateSpecialGaugeUi(){
+	if(!specialGaugeBackgroundSprite_){ return; }
+	const float width = kGaugeMaxSize.x * specialGauge_.GetRatio();
+	const Vector2 fillSize = {width,kGaugeMaxSize.y};
+	specialGaugeBackgroundSprite_->SetSize(kGaugeMaxSize);
+	specialGaugeChargeSprite_->SetSize(fillSize);
+	specialGaugeReadySprite_->SetSize(fillSize);
+	specialGaugeActiveSprite_->SetSize(fillSize);
+
+	if(specialGauge_.IsActivationActive()){
+		++specialGaugeRainbowFrame_;
+		constexpr int32_t colorCount = static_cast<int32_t>(std::size(kRainbowColors));
+		const int32_t color = (specialGaugeRainbowFrame_ / kRainbowFramesPerColor) % colorCount;
+		const int32_t next = (color + 1) % colorCount;
+		const float t = static_cast<float>(specialGaugeRainbowFrame_ % kRainbowFramesPerColor) /
+			static_cast<float>(kRainbowFramesPerColor);
+		specialGaugeActiveSprite_->SetColor(LerpColor(kRainbowColors[color],kRainbowColors[next],t));
+	}else{
+		specialGaugeRainbowFrame_ = 0;
+	}
+
+	specialGaugeBackgroundSprite_->Update();
+	specialGaugeChargeSprite_->Update();
+	specialGaugeReadySprite_->Update();
+	specialGaugeActiveSprite_->Update();
 }
 
 // スペシャル選択カーソルの位置と色を現在の対象に合わせる
@@ -846,6 +975,8 @@ void GameScene::ConfirmSpecialTarget(){
 	if(board_.ConvertToStrongest(target.x,target.y)){
 		// 通電しなくても変換自体が成功すれば使用済み。十字マスは盤面に残る。
 		specialGauge_.Consume();
+		// この変換で始まる消去・連鎖からはゲージを再チャージしない。
+		suppressSpecialClearCharge_ = board_.IsBusy();
 		specialSelector_.Cancel();
 	}
 }

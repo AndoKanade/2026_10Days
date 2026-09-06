@@ -8,6 +8,7 @@
 #include <thread>
 #include <cassert>
 #include <format>
+#include <stdexcept>
 
 #include "externals/DirectXTex/DirectXTex.h"
 #include "externals/DirectXTex/d3dx12.h"
@@ -473,7 +474,14 @@ ComPtr<IDxcBlob> DXCommon::CompileShader(const std::wstring& filePath,const wcha
 	Logger::Log(std::format("Begin CompileShader: {}\n",ConvertString(filePath)));
 
 	ComPtr<IDxcBlobEncoding> shaderSource = nullptr;
-	assert(SUCCEEDED(dxcUtils->LoadFile(filePath.c_str(),nullptr,&shaderSource)));
+	// assertの式はReleaseでは実行されないため、処理本体をassert内に書かない。
+	const HRESULT loadResult = dxcUtils->LoadFile(filePath.c_str(),nullptr,&shaderSource);
+	if(FAILED(loadResult) || shaderSource == nullptr){
+		const std::string message = std::format("Failed to load shader: {} (HRESULT=0x{:08X})\n",
+			ConvertString(filePath),static_cast<uint32_t>(loadResult));
+		Logger::Log(message);
+		throw std::runtime_error(message);
+	}
 
 	DxcBuffer buffer;
 	buffer.Ptr = shaderSource->GetBufferPointer();
@@ -490,18 +498,39 @@ ComPtr<IDxcBlob> DXCommon::CompileShader(const std::wstring& filePath,const wcha
 	};
 
 	ComPtr<IDxcResult> shaderResult = nullptr;
-	dxcCompiler->Compile(&buffer,arguments,_countof(arguments),includeHandler,IID_PPV_ARGS(&shaderResult));
+	const HRESULT compileCallResult = dxcCompiler->Compile(
+		&buffer,arguments,_countof(arguments),includeHandler,IID_PPV_ARGS(&shaderResult));
+	if(FAILED(compileCallResult) || shaderResult == nullptr){
+		const std::string message = std::format("Failed to invoke shader compiler: {} (HRESULT=0x{:08X})\n",
+			ConvertString(filePath),static_cast<uint32_t>(compileCallResult));
+		Logger::Log(message);
+		throw std::runtime_error(message);
+	}
 
 	// コンパイルエラーのチェック
 	ComPtr<IDxcBlobUtf8> shaderError = nullptr;
 	shaderResult->GetOutput(DXC_OUT_ERRORS,IID_PPV_ARGS(&shaderError),nullptr);
 	if(shaderError != nullptr && shaderError->GetStringLength() != 0){
 		Logger::Log(shaderError->GetStringPointer());
-		assert(false);
+	}
+	HRESULT shaderStatus = E_FAIL;
+	const HRESULT statusResult = shaderResult->GetStatus(&shaderStatus);
+	if(FAILED(statusResult) || FAILED(shaderStatus)){
+		const std::string message = std::format("Shader compilation failed: {} (HRESULT=0x{:08X})\n",
+			ConvertString(filePath),static_cast<uint32_t>(shaderStatus));
+		Logger::Log(message);
+		throw std::runtime_error(message);
 	}
 
 	ComPtr<IDxcBlob> shaderBlob = nullptr;
-	assert(SUCCEEDED(shaderResult->GetOutput(DXC_OUT_OBJECT,IID_PPV_ARGS(&shaderBlob),nullptr)));
+	const HRESULT objectResult = shaderResult->GetOutput(
+		DXC_OUT_OBJECT,IID_PPV_ARGS(&shaderBlob),nullptr);
+	if(FAILED(objectResult) || shaderBlob == nullptr){
+		const std::string message = std::format("Failed to get compiled shader: {} (HRESULT=0x{:08X})\n",
+			ConvertString(filePath),static_cast<uint32_t>(objectResult));
+		Logger::Log(message);
+		throw std::runtime_error(message);
+	}
 
 	Logger::Log(std::format("Compile Succeeded: {}\n",ConvertString(filePath)));
 	return shaderBlob;
