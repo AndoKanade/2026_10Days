@@ -43,7 +43,7 @@ private:
 	// 設定・状態
 	// 変更：ゲーム画面のBGMをサクラカゼに差し替え
 	const std::string kBgmPath_ = "resource/music/bgm/サクラカゼ.mp3";
-	bool isPaused_ = false;
+	// 削除：どこからも使われていなかった isPaused_ は、下のポーズ画面の項目へまとめた
 
 	// レベル配置オブジェクト
 	std::vector<std::shared_ptr<Obj3D>> levelObjects_;
@@ -120,6 +120,43 @@ private:
 	// Releaseでも表示するゲーム中スコア（数字画像を1文字ずつ切り出す）。
 	std::vector<std::unique_ptr<Sprite>> scoreDigitSprites_;
 
+	// --- 追加：ポーズ画面 ---
+
+	// ポーズ中に表示する画面の種類
+	enum class PauseMode{
+		Menu,     // 項目を選ぶメニュー
+		Tutorial, // チュートリアル（内容はこれから追加する）
+	};
+
+	// ポーズメニューの項目。並び順がそのまま表示順になる。
+	enum class PauseMenuItem{
+		Restart,  // 最初からやり直す
+		Title,    // タイトルへ戻る
+		Tutorial, // チュートリアルを開く
+		Count,    // 項目数（末尾に置くこと）
+	};
+
+	// ポーズ中かどうか
+	bool isPaused_ = false;
+
+	// ポーズ中に表示している画面
+	PauseMode pauseMode_ = PauseMode::Menu;
+
+	// 選択中の項目（PauseMenuItem に対応する添字）
+	int32_t pauseMenuIndex_ = 0;
+
+	// 画面全体を暗くする暗幕
+	std::unique_ptr<Sprite> pauseOverlaySprite_;
+
+	// ポーズ画面の見出し
+	std::unique_ptr<Sprite> pauseHeaderSprite_;
+
+	// メニュー項目のラベル。並びは PauseMenuItem に対応する。
+	std::vector<std::unique_ptr<Sprite>> pauseMenuSprites_;
+
+	// チュートリアル画面の見出し
+	std::unique_ptr<Sprite> pauseTutorialHeaderSprite_;
+
 	// ImGuiから消去結果を再現するための入力値
 	int32_t debugClearedCellCount_ = 3;
 	int32_t debugChainCount_ = 1;
@@ -182,6 +219,23 @@ private:
 	void ConfirmSpecialTarget();
 	void UpdateSpecialGaugeUi();
 	void UpdateScoreUi();
+
+	// --- 追加：ポーズ画面 ---
+
+	// ポーズ画面のスプライトを生成して初期配置する（Initializeから呼ぶ）
+	void InitializePauseUi();
+
+	// ポーズ中の入力を受け付け、UIを更新する
+	void UpdatePauseMenu();
+
+	// ポーズ画面のスプライトを、いまの選択状態に合わせて更新する
+	void UpdatePauseUi();
+
+	// 選択中の項目を決定したときの処理
+	void ConfirmPauseMenuItem();
+
+	// ポーズ画面を描画する（ほかのUIより手前に重ねる）
+	void DrawPause();
 
 	// レベル配置オブジェクトを描画するかどうか（ImGuiで切り替え）
 	bool isLevelObjectsVisible_ = false;
