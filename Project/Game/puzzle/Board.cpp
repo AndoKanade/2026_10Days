@@ -442,9 +442,14 @@ void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::v
 }
 
 // 電源（最下段）から幅優先探索で通電範囲（一かたまり）を調べ、ゴール（左右端）まで
-// 繋がっていれば、その一かたまりから行き止まりの枝を取り除いた残りのマスを
-// 消去演出の対象にする（電源とゴールを実際に繋ぐのに使われているマスだけが残る。
-// 複数ルートやループも、行き止まりでなければすべて残る）。この時点ではまだ消さない。
+// 繋がっていれば、そのかたまりを消去演出の対象にする。
+//
+// どこまで消すかは難易度で変わる（詳しくは Difficulty.h）。
+//   Easy   ：かたまりが通っている横列を丸ごと消す。通電に関係ないマスも片付く。
+//   Normal ：かたまりのマスをすべて消す。枝分かれもループも含む。
+//   Hard   ：電源とゴールを実際に結んでいるマスだけを消す。枝は盤面に残る。
+//
+// この時点ではまだ消さない。
 void Board::ResolveConduction(){
 	// 既に消去演出中なら、演出が終わるまで新たな判定はしない
 	if(isClearing_){
@@ -454,8 +459,13 @@ void Board::ResolveConduction(){
 	// マスごとの訪問済みフラグ（同じマスを何度も探索しないようにする）
 	std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> visited{};
 
-	// 通電が確定したマスをまとめて集める
+	// 消去対象のマス。Normal と Hard はここへ直接ためる。
+	// 一かたまりどうしは visited を共有していて重ならないため、重複はしない。
 	std::vector<GridPos> cellsToClear;
+
+	// Easy 用。通電が成立した一かたまりが通っている横列に印を付ける。
+	// 行単位でまとめるので、複数のかたまりが同じ行を通っても重複しない。
+	std::array<bool,PuzzleConfig::kBoardHeight> rowsToClear{};
 
 	const int32_t bottomY = PuzzleConfig::kBoardHeight - 1;
 
@@ -511,85 +521,45 @@ void Board::ResolveConduction(){
 			continue;
 		}
 
-		// この一かたまりから、行き止まりの枝（他のマスと1本以下しか繋がっていないマス）を
-		// 繰り返し取り除いていく。残ったマスが消去対象になる。
-		std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> inSet{};
-		std::array<std::array<int32_t,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> degree{};
+		// 難易度ごとに、このかたまりから消す範囲を決める
+		switch(difficulty_){
+		case Difficulty::Easy:
+			// かたまりが通っている横列に印を付ける。実際に集めるのはループを抜けたあと。
+			for(const GridPos& pos : component){
+				rowsToClear[pos.y] = true;
+			}
+			break;
 
-		for(const GridPos& pos : component){
-			inSet[pos.y][pos.x] = true;
-		}
-		for(const GridPos& pos : component){
-			const Cell& posCell = cells_[pos.y][pos.x];
-			int32_t d = 0;
-			for(int32_t dir = 0; dir < 4; ++dir){
-				const int32_t nx = pos.x + kDirs[dir].x;
-				const int32_t ny = pos.y + kDirs[dir].y;
-				if(!IsInside(nx,ny) || !inSet[ny][nx]){
-					continue;
-				}
-				// 位置が隣り合っていても、互いに向き合う端子ビットが両方立っていなければ
-				// 繋がっているとは数えない（別ルート経由で同じ一かたまりに入っているだけの場合がある）
-				if(!(posCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
-					continue;
-				}
-				++d;
-			}
-			// 電源（最下段）・ゴール（左右端）は、外部と繋がっている仮想の1本があるものとして数える
-			if(pos.y == bottomY){
-				++d;
-			}
-			if(pos.x == 0 || pos.x == width_ - 1){
-				++d;
-			}
-			degree[pos.y][pos.x] = d;
+		case Difficulty::Normal:
+			// かたまりのマスをそのまま消す
+			cellsToClear.insert(cellsToClear.end(),component.begin(),component.end());
+			break;
+
+		case Difficulty::Hard:{
+			// 行き止まりの枝を取り除き、電源とゴールを結ぶマスだけを消す
+			const std::vector<GridPos> trunk = PruneDeadEndCells(component);
+			cellsToClear.insert(cellsToClear.end(),trunk.begin(),trunk.end());
+			break;
 		}
 
-		// 繋がりが1本以下のマスを取り除きの起点にする
-		std::vector<GridPos> pruneQueue;
-		for(const GridPos& pos : component){
-			if(degree[pos.y][pos.x] <= 1){
-				pruneQueue.push_back(pos);
-			}
+		default:
+			break;
 		}
+	}
 
-		size_t pruneHead = 0;
-		while(pruneHead < pruneQueue.size()){
-			const GridPos current = pruneQueue[pruneHead];
-			++pruneHead;
-
-			// 既に取り除き済みなら何もしない
-			if(!inSet[current.y][current.x]){
+	// Easy のみ：印の付いた横列にあるマスを、通電しているかどうかに関係なくすべて集める。
+	// 行単位で1回だけ走査するので重複しない（重複するとマス数を二重に数えて
+	// スコアとスペシャルゲージがずれる）。
+	if(difficulty_ == Difficulty::Easy){
+		for(int32_t y = 0; y < PuzzleConfig::kBoardHeight; ++y){
+			if(!rowsToClear[y]){
 				continue;
 			}
-			inSet[current.y][current.x] = false;
-
-			const Cell& currentCell = cells_[current.y][current.x];
-
-			// 取り除いた分、端子ビットで実際に繋がっていた隣のマスだけ繋がり本数を減らし、
-			// 1本以下になったら追加で取り除く
-			for(int32_t dir = 0; dir < 4; ++dir){
-				const int32_t nx = current.x + kDirs[dir].x;
-				const int32_t ny = current.y + kDirs[dir].y;
-
-				if(!IsInside(nx,ny) || !inSet[ny][nx]){
+			for(int32_t x = 0; x < width_; ++x){
+				if(cells_[y][x].IsEmpty()){
 					continue;
 				}
-				if(!(currentCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
-					continue;
-				}
-
-				--degree[ny][nx];
-				if(degree[ny][nx] <= 1){
-					pruneQueue.push_back({nx, ny});
-				}
-			}
-		}
-
-		// 取り除かれずに残ったマスを消去対象にする
-		for(const GridPos& pos : component){
-			if(inSet[pos.y][pos.x]){
-				cellsToClear.push_back(pos);
+				cellsToClear.push_back({x, y});
 			}
 		}
 	}
@@ -645,6 +615,96 @@ std::vector<Board::ClearResult> Board::TakeClearResults(){
 // 出っ張りマスを巻き込んで落とさないようにするため。
 // 対象になった列は、その列全体を空きマスが無くなるまで下に詰め直す
 // （落下はマス単位で行い、ブロックの形は保持しない仕様のため）。
+// 追加：Hard で使う。通電した一かたまりから、行き止まりの枝（他のマスと1本以下しか
+// 繋がっていないマス）を繰り返し取り除き、残ったマスを返す。
+// 残るのは電源とゴールを実際に結ぶのに使われているマスだけで、複数ルートやループも
+// 行き止まりでなければ残る。
+std::vector<GridPos> Board::PruneDeadEndCells(const std::vector<GridPos>& component) const{
+	const int32_t bottomY = PuzzleConfig::kBoardHeight - 1;
+
+	std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> inSet{};
+	std::array<std::array<int32_t,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> degree{};
+
+	for(const GridPos& pos : component){
+		inSet[pos.y][pos.x] = true;
+	}
+	for(const GridPos& pos : component){
+		const Cell& posCell = cells_[pos.y][pos.x];
+		int32_t d = 0;
+		for(int32_t dir = 0; dir < 4; ++dir){
+			const int32_t nx = pos.x + kDirs[dir].x;
+			const int32_t ny = pos.y + kDirs[dir].y;
+			if(!IsInside(nx,ny) || !inSet[ny][nx]){
+				continue;
+			}
+			// 位置が隣り合っていても、互いに向き合う端子ビットが両方立っていなければ
+			// 繋がっているとは数えない（別ルート経由で同じ一かたまりに入っているだけの場合がある）
+			if(!(posCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
+				continue;
+			}
+			++d;
+		}
+		// 電源（最下段）・ゴール（左右端）は、外部と繋がっている仮想の1本があるものとして数える
+		if(pos.y == bottomY){
+			++d;
+		}
+		if(pos.x == 0 || pos.x == width_ - 1){
+			++d;
+		}
+		degree[pos.y][pos.x] = d;
+	}
+
+	// 繋がりが1本以下のマスを取り除きの起点にする
+	std::vector<GridPos> pruneQueue;
+	for(const GridPos& pos : component){
+		if(degree[pos.y][pos.x] <= 1){
+			pruneQueue.push_back(pos);
+		}
+	}
+
+	size_t pruneHead = 0;
+	while(pruneHead < pruneQueue.size()){
+		const GridPos current = pruneQueue[pruneHead];
+		++pruneHead;
+
+		// 既に取り除き済みなら何もしない
+		if(!inSet[current.y][current.x]){
+			continue;
+		}
+		inSet[current.y][current.x] = false;
+
+		const Cell& currentCell = cells_[current.y][current.x];
+
+		// 取り除いた分、端子ビットで実際に繋がっていた隣のマスだけ繋がり本数を減らし、
+		// 1本以下になったら追加で取り除く
+		for(int32_t dir = 0; dir < 4; ++dir){
+			const int32_t nx = current.x + kDirs[dir].x;
+			const int32_t ny = current.y + kDirs[dir].y;
+
+			if(!IsInside(nx,ny) || !inSet[ny][nx]){
+				continue;
+			}
+			if(!(currentCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
+				continue;
+			}
+
+			--degree[ny][nx];
+			if(degree[ny][nx] <= 1){
+				pruneQueue.push_back({nx, ny});
+			}
+		}
+	}
+
+	// 取り除かれずに残ったマスを返す
+	std::vector<GridPos> trunk;
+	for(const GridPos& pos : component){
+		if(inSet[pos.y][pos.x]){
+			trunk.push_back(pos);
+		}
+	}
+	return trunk;
+}
+
 void Board::ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds){
 	// どの列を対象にするかを、列単位のフラグに変換しておく
 	std::array<bool,PuzzleConfig::kBoardWidthMax> clearedColumns{};

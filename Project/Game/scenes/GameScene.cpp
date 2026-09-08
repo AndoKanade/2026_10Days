@@ -233,6 +233,9 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	// 追加：パズルの盤面を初期化する（盤面は3Dオブジェクトで描画する）
 	board_.Initialize(object3dCommon_);
 
+	// 追加：タイトルで選んだ難易度を盤面へ渡す。通電時に消す範囲がこれで変わる。
+	board_.SetDifficulty(SceneManager::GetInstance()->GetDifficulty());
+
 	// 追加：次ブロック抽選用の乱数エンジンをシードする
 	std::random_device seedGenerator;
 	randomEngine_.seed(seedGenerator());

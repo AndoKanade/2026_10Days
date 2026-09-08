@@ -4,6 +4,8 @@
 #include "MyMath.h"
 #include "Board.h" // 追加：タイトルの背景として描画するパズルの盤面
 #include "FallingBlock.h" // 追加：背景のデモプレイで落とすブロック
+#include "Difficulty.h" // 追加：タイトルで選ぶ難易度
+#include <cstdint>
 #include <memory>
 #include <random>
 #include <string>
@@ -58,6 +60,20 @@ private:
 
 	// 明るさを脈打たせるための経過フレーム数
 	int32_t skyboxPulseFrame_ = 0;
+
+	// --- 追加：難易度の選択UI ---
+
+	// 見出し「DIFFICULTY」
+	std::unique_ptr<Sprite> difficultyLabel_;
+
+	// 難易度の項目。並びは Difficulty の Easy / Normal / Hard に対応する。
+	std::vector<std::unique_ptr<Sprite>> difficultySprites_;
+
+	// 選択中の項目（Difficulty に対応する添字）
+	int32_t difficultyIndex_ = 0;
+
+	// 選択状態に合わせて項目の色を塗り分け、行列を更新する
+	void UpdateDifficultyUi();
 
 	// 追加：盤面の上に重ねて表示するタイトルロゴ（title.obj）
 	std::unique_ptr<Obj3D> titleObj_;

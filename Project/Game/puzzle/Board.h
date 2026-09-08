@@ -10,6 +10,7 @@
 #include "Cell.h"
 #include "GridPos.h" // 追加：マス座標の共通型
 #include "PuzzleConfig.h"
+#include "Difficulty.h" // 追加：消す範囲を決める難易度
 
 // 前方宣言
 class Obj3dCommon;
@@ -79,6 +80,11 @@ public:
 	// 盤面の幅を切り替える（6と10の切り替え用。デバッグUIから呼ぶ想定）
 	void SetWidth(int32_t width);
 
+	// 追加：通電が成立したときに消す範囲を切り替える。
+	// タイトルで選んだ値を GameScene から渡す。詳しくは Difficulty.h を参照。
+	void SetDifficulty(Difficulty difficulty){ difficulty_ = difficulty; }
+	Difficulty GetDifficulty() const{ return difficulty_; }
+
 	// 追加：マスの中身と消去演出の状態をすべて初期状態へ戻す（壁はそのまま）。
 	// タイトル背景のデモプレイを、天井まで積み上がったときに最初からやり直すために使う。
 	void Reset();
@@ -106,6 +112,9 @@ private:
 
 	// 現在有効な盤面の幅（マス数）
 	int32_t width_ = PuzzleConfig::kBoardWidth;
+
+	// 追加：通電が成立したときに消す範囲。既定はタイトルと同じ Normal。
+	Difficulty difficulty_ = Difficulty::Normal;
 
 	// 盤面の外周をU字（左・下・右、上は開き）に囲む壁ブロックのオブジェクト
 	std::vector<std::unique_ptr<Obj3D>> wallObjs_;
@@ -142,6 +151,10 @@ private:
 	// 追加：電源（最下段）から幅優先探索で通電範囲を調べ、ゴール（左右端）まで
 	// 繋がっていれば、その範囲のマスを消去演出の対象にする（この時点ではまだ消さない）。
 	void ResolveConduction();
+
+	// 追加：Hard で使う。通電した一かたまりから行き止まりの枝を取り除き、
+	// 電源とゴールを実際に結んでいるマスだけを返す。
+	std::vector<GridPos> PruneDeadEndCells(const std::vector<GridPos>& component) const;
 
 	// 追加：空きマスを詰めるように、各列のマスをマス単位で下へ落とす。
 	// 対象にする列は、clearedCells に1マスでも含まれる列（今回の消去でマスが
