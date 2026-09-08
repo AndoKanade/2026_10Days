@@ -69,6 +69,10 @@ private:
 	// ネクストキュー（先読み表示するブロックの種類。先頭が次に出現する）
 	std::vector<BlockShape::Type> nextQueue_;
 
+	// 追加：ブロックの出現に使う袋。全種類を1個ずつ入れてシャッフルし、
+	// 空になったら詰め直す。取り出すのは末尾から。
+	std::vector<BlockShape::Type> blockBag_;
+
 	// ホールド中のブロックの種類。hasHeldBlock_ が false の間は未使用。
 	BlockShape::Type holdType_ = BlockShape::Type::T;
 
@@ -145,6 +149,9 @@ private:
 
 	// 追加：次に落ちてくるブロックの種類をひとつ抽選して返す。
 	BlockShape::Type PickNextBlockType();
+
+	// 追加：ブロックの袋に全種類を1個ずつ詰め直し、取り出す順番をシャッフルする。
+	void RefillBlockBag();
 
 	// ホールド操作。今のブロックをホールドへ預け、代わりにホールド済みの
 	// ブロック（未ホールドならネクスト先頭のブロック）を出現させる。

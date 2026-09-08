@@ -13,6 +13,7 @@
 #include "Logger.h"
 #include "LevelManager.h"
 #include "SceneManager.h"
+#include <algorithm>
 
 namespace{
 	const std::string kGaugeBackgroundTexture = "resource/ui/specialGauge/red.png";
@@ -347,6 +348,9 @@ bool GameScene::SpawnNextBlock(){
 // 追加：ネクストキューを規定個数ぶん抽選して満たす。
 void GameScene::FillNextQueue(){
 	nextQueue_.clear();
+
+	// 追加：前回の残りを持ち越さないよう、袋も空にしてから詰め直す
+	blockBag_.clear();
 	for(int32_t i = 0; i < PuzzleConfig::kNextQueueSize; ++i){
 		nextQueue_.push_back(PickNextBlockType());
 	}
@@ -354,11 +358,31 @@ void GameScene::FillNextQueue(){
 
 // 追加：次に落ちてくるブロックの種類をひとつ抽選して返す。
 BlockShape::Type GameScene::PickNextBlockType(){
-	// 変更：全種類（L字・T字・I字・J字）を等確率で選ぶ。
+	// 変更：毎回等確率で抽選すると同じ種類が続けて出る偏りが起きるため、
+	// 全種類を1個ずつ入れた袋から1個ずつ取り出す方式にした。
+	// 袋を使い切るまで同じ種類は2回出ず、空になったら詰め直す。
+	if(blockBag_.empty()){
+		RefillBlockBag();
+	}
+
+	// シャッフル済みなので、末尾から順に取り出すだけでよい
+	const BlockShape::Type type = blockBag_.back();
+	blockBag_.pop_back();
+	return type;
+}
+
+// 追加：ブロックの袋に全種類を1個ずつ詰め直し、取り出す順番をシャッフルする。
+void GameScene::RefillBlockBag(){
+	blockBag_.clear();
+	blockBag_.reserve(BlockShape::kTypeCount);
+
 	// 種類が増えても直すのは BlockShape::kTypeCount だけで済むよう、
-	// Type の並び順をそのまま抽選値として使う。
-	std::uniform_int_distribution<int32_t> dist(0,BlockShape::kTypeCount - 1);
-	return static_cast<BlockShape::Type>(dist(randomEngine_));
+	// Type の並び順をそのまま袋の中身として使う
+	for(int32_t i = 0; i < BlockShape::kTypeCount; ++i){
+		blockBag_.push_back(static_cast<BlockShape::Type>(i));
+	}
+
+	std::shuffle(blockBag_.begin(),blockBag_.end(),randomEngine_);
 }
 
 // 追加：ホールド操作。今のブロックをホールドへ預け、代わりにホールド済みの

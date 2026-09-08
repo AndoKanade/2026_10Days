@@ -323,3 +323,5 @@ imgui.ini
 *.log
 /logs
 
+# 音量設定（各自の環境ごとの値なので共有しない）
+soundSettings.txt
