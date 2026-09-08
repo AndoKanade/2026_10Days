@@ -17,11 +17,15 @@ namespace{
 	// 追加：配線に使うモデル。細く引き伸ばして棒にするため、面取りのない素のキューブを使う。
 	const std::string kWireModel = "defaultBlock/defaultBlock.obj";
 
-	// 左右の壁（ゴール）に使うモデル
-	const std::string kGoalBlockModel = "goalBlock/goalBlock.obj";
+	// 変更：左右の壁（ゴール）に使うモデル。落下ブロックと同じツヤを出すため面取り版にする。
+	const std::string kGoalBlockModel = "goalBlock/goalBlockBevel.obj";
 
-	// 下の壁（電源）に使うモデル
-	const std::string kSupplyBlockModel = "supplyBlock/supplyBlock.obj";
+	// 変更：下の壁（電源）に使うモデル。こちらも面取り版にする。
+	const std::string kSupplyBlockModel = "supplyBlock/supplyBlockBevel.obj";
+
+	// 追加：壁ブロックへ渡す色。テクスチャの色をそのまま出したいので白にし、
+	// ライティングによる減衰ぶんだけ持ち上げる。
+	const Vector4 kWallColor = PuzzleConfig::ApplyLitGain(PuzzleConfig::ToLinearColor({1.0f, 1.0f, 1.0f, 1.0f}));
 
 	// 削除：通常の固定マスの色は PuzzleConfig::GetBlockColor() でブロックの種類ごとに引くようにした
 
@@ -113,7 +117,12 @@ void Board::CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath){
 	obj->SetTranslate(GridToWorld(x,y));
 
 	if(Model::Material* wallMaterial = obj->GetMaterial()){
-		wallMaterial->enableLighting = 0; // 2D的な見た目にするため陰影を切る（色はモデルのテクスチャそのまま）
+		// 変更：落下ブロックと同じようにライティングを有効にし、面取り面へツヤを乗せる。
+		// テクスチャが黒ベースで拡散光では光らないため、鏡面反射と映り込みは壁専用の強めの値を使う。
+		wallMaterial->color = kWallColor;
+		wallMaterial->enableLighting = 1;
+		wallMaterial->shininess = PuzzleConfig::kWallShininess;
+		wallMaterial->environmentCoefficient = PuzzleConfig::kWallEnvironmentCoefficient;
 	}
 
 	wallObjs_.push_back(std::move(obj));
