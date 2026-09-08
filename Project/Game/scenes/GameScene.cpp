@@ -3,6 +3,7 @@
 #include "ImGuiManager.h"
 #include "ModelManager.h"
 #include "SoundManager.h"
+#include "SoundConfig.h"  // 追加：汎用SE・ブロック操作SEのパスと再生窓口
 #include "Input.h"
 #include "Obj3D.h"
 #include "Obj3dCommon.h"
@@ -240,13 +241,17 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	// 1フレーム目の描画に間に合うよう、行列をここで一度作っておく
 	skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
 
-	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
+	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_,SoundCategory::BGM);
 
 	// 追加：ゲームBGMをループ再生する
 	SoundManager::GetInstance()->PlayAudio(kBgmPath_,kBgmVolume,true);
 
 	// 追加：ブロックが消えたときのSEをロードしておく（再生は消去成立時のみ）
-	SoundManager::GetInstance()->SoundLoadFile(kDisappearSePath);
+	SoundManager::GetInstance()->SoundLoadFile(kDisappearSePath,SoundCategory::SE);
+
+	// 追加：ポーズメニューで使う汎用SEと、ブロック操作のSEをロードしておく
+	SoundConfig::LoadCommonSe();
+	SoundConfig::LoadBlockSe();
 
 	// 追加：パズルの盤面を初期化する（盤面は3Dオブジェクトで描画する）
 	board_.Initialize(object3dCommon_);
@@ -692,12 +697,20 @@ void GameScene::Update() {
 	if(!isGameOver_ && input_->TriggerKey(DIK_TAB)){
 		if(isPaused_ && pauseMode_ == PauseMode::Tutorial){
 			pauseMode_ = PauseMode::Menu;
+
+			// 追加：一段戻るのでキャンセルSE
+			SoundConfig::PlayCancel();
 		} else{
 			isPaused_ = !isPaused_;
 			if(isPaused_){
 				// 開くたびに先頭の項目から選び直す
 				pauseMode_ = PauseMode::Menu;
 				pauseMenuIndex_ = 0;
+
+				// 追加：開くときは決定SE、閉じるときはキャンセルSE
+				SoundConfig::PlayDecide();
+			} else{
+				SoundConfig::PlayCancel();
 			}
 		}
 		UpdatePauseUi();
@@ -774,19 +787,25 @@ void GameScene::Update() {
 	if (specialSelector_.IsSelecting()) {
 		fallingBlock_.SetSoftDrop(false);
 
+		// 追加：カーソル移動と決定に汎用SEを鳴らす
 		if (input_->TriggerKey(DIK_LEFT)) {
 			specialSelector_.Move(-1, 0, board_);
+			SoundConfig::PlayCursorMove();
 		}
 		if (input_->TriggerKey(DIK_RIGHT)) {
 			specialSelector_.Move(1, 0, board_);
+			SoundConfig::PlayCursorMove();
 		}
 		if (input_->TriggerKey(DIK_UP)) {
 			specialSelector_.Move(0, -1, board_);
+			SoundConfig::PlayCursorMove();
 		}
 		if (input_->TriggerKey(DIK_DOWN)) {
 			specialSelector_.Move(0, 1, board_);
+			SoundConfig::PlayCursorMove();
 		}
 		if (input_->TriggerKey(DIK_RETURN)) {
+			SoundConfig::PlayDecide();
 			ConfirmSpecialTarget();
 		}
 		SyncSpecialCursor();
@@ -796,17 +815,27 @@ void GameScene::Update() {
 				// 手動調整中は自動加速の時計を止める。
 				if(!debugManualFallSpeed_){ ++activePlayFrames_; }
 				// 左右移動・回転はトリガー（押した瞬間）で1回ずつ
+				// 追加：壁や既存ブロックに阻まれて動かなかったときは鳴らさない
 				if (input_->TriggerKey(DIK_A)) {
-					fallingBlock_.MoveLeft(board_);
+					if (fallingBlock_.MoveLeft(board_)) {
+						SoundConfig::PlayBlockMove();
+					}
 				}
 				if (input_->TriggerKey(DIK_D)) {
-					fallingBlock_.MoveRight(board_);
+					if (fallingBlock_.MoveRight(board_)) {
+						SoundConfig::PlayBlockMove();
+					}
 				}
 				if (input_->TriggerKey(DIK_W)) {
-					fallingBlock_.Rotate(board_);
+					if (fallingBlock_.Rotate(board_)) {
+						SoundConfig::PlayBlockRotate();
+					}
 				}
 				// 追加：ホールド操作（1個のブロックにつき1回まで）
 				if (input_->TriggerKey(DIK_C) && canHold_) {
+					// 追加：ホールドSE（差し替えに失敗した場合はゲームオーバーへ抜ける）
+					SoundConfig::PlayBlockHold();
+
 					if (!SwapHold()) {
 						// 差し替えたブロックの出現位置が塞がっていた＝ゲームオーバー
 						isGameOver_ = true;
@@ -825,6 +854,9 @@ void GameScene::Update() {
 					: fallingBlock_.Update(board_,GetCurrentFallInterval());
 
 				if (blockLocked) {
+					// 追加：ブロックを置いた（盤面に固定された）SE
+					SoundConfig::PlayBlockPlace();
+
 					// 天井より上にはみ出したまま固定された ＝ 積み上がりすぎでゲームオーバー
 					const bool lockedAboveCeiling = fallingBlock_.IsLockedAboveCeiling();
 
@@ -1159,21 +1191,29 @@ void GameScene::UpdatePauseMenu(){
 		const int32_t itemCount = static_cast<int32_t>(PauseMenuItem::Count);
 
 		// 上下で選択を移動する（端まで行ったら反対側へ回り込む）
+		// 追加：移動のたびにカーソル移動SEを鳴らす
 		if(input_->TriggerKey(DIK_UP) || input_->TriggerKey(DIK_W)){
 			pauseMenuIndex_ = (pauseMenuIndex_ - 1 + itemCount) % itemCount;
+			SoundConfig::PlayCursorMove();
 		}
 		if(input_->TriggerKey(DIK_DOWN) || input_->TriggerKey(DIK_S)){
 			pauseMenuIndex_ = (pauseMenuIndex_ + 1) % itemCount;
+			SoundConfig::PlayCursorMove();
 		}
 
 		// 決定
 		if(input_->TriggerKey(DIK_RETURN) || input_->TriggerKey(DIK_SPACE)){
+			// 追加：決定SE
+			SoundConfig::PlayDecide();
 			ConfirmPauseMenuItem();
 		}
 	} else{
 		// チュートリアル表示中は、決定でメニューへ戻る（TABでも戻れる）
 		if(input_->TriggerKey(DIK_RETURN) || input_->TriggerKey(DIK_SPACE)){
 			pauseMode_ = PauseMode::Menu;
+
+			// 追加：一段戻るのでキャンセルSE
+			SoundConfig::PlayCancel();
 		}
 	}
 

@@ -30,6 +30,11 @@ namespace{
 	// 追加：音量設定ファイルで、マスター音量の行に書くキー
 	constexpr const char* kMasterVolumeKey = "master";
 
+	// 追加：音量設定ファイルで、分類ごとの音量の行に書くキー。
+	// キーはファイルパスと同じ列に書くため、パスと衝突しない語にしてある
+	constexpr const char* kBgmCategoryKey = "category_bgm";
+	constexpr const char* kSeCategoryKey = "category_se";
+
 	// 追加：音量設定ファイルの1行で、音量とキーを区切る文字
 	constexpr char kVolumeSettingsSeparator = ' ';
 }
@@ -106,10 +111,13 @@ void SoundManager::Finalize(){
 // ==========================================================================
 // 音声ファイルロード (MP3/WAV対応 + reserve最適化)
 // ==========================================================================
-void SoundManager::SoundLoadFile(const std::string& filename){
+bool SoundManager::SoundLoadFile(const std::string& filename,SoundCategory category){
+	// 分類は毎回登録しておく (ロード済みでも呼び直しで上書きできるようにする)
+	categories_[filename] = category;
+
 	// 既にロード済みなら何もしない
 	if(soundDatas_.find(filename) != soundDatas_.end()){
-		return;
+		return true;
 	}
 
 	HRESULT hr;
@@ -122,7 +130,12 @@ void SoundManager::SoundLoadFile(const std::string& filename){
 	// 2. SourceReader (読み込み用クラス) の作成
 	IMFSourceReader* pMFSourceReader = nullptr;
 	hr = MFCreateSourceReaderFromURL(wFilename.c_str(),NULL,&pMFSourceReader);
-	assert(SUCCEEDED(hr));
+
+	// 変更：ファイルが存在しない・読めない場合はここで打ち切る。
+	// 未用意のSEを参照してもゲームが止まらないようにするため、assert では落とさない
+	if(FAILED(hr) || pMFSourceReader == nullptr){
+		return false;
+	}
 
 	// 3. メディアタイプの選択 (PCMへの変換設定)
 	IMFMediaType* pMFMediaType = nullptr;
@@ -131,7 +144,13 @@ void SoundManager::SoundLoadFile(const std::string& filename){
 	pMFMediaType->SetGUID(MF_MT_SUBTYPE,MFAudioFormat_PCM);
 
 	hr = pMFSourceReader->SetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM,nullptr,pMFMediaType);
-	assert(SUCCEEDED(hr));
+
+	// 変更：音声ストリームを持たないファイルなどでも落とさず打ち切る
+	if(FAILED(hr)){
+		pMFMediaType->Release();
+		pMFSourceReader->Release();
+		return false;
+	}
 	pMFMediaType->Release();
 	pMFMediaType = nullptr;
 
@@ -207,6 +226,8 @@ void SoundManager::SoundLoadFile(const std::string& filename){
 	CoTaskMemFree(waveFormat);
 	pMFMediaType->Release();
 	pMFSourceReader->Release();
+
+	return true;
 }
 
 // ==========================================================================
@@ -223,7 +244,12 @@ void SoundManager::Unload(SoundData* soundData){
 // ==========================================================================
 void SoundManager::PlayAudio(const std::string& filename,float volume,bool loop){
 	auto it = soundDatas_.find(filename);
-	assert(it != soundDatas_.end());
+
+	// 変更：ロードできていない音声は鳴らさずに戻る。
+	// 音源をまだ用意していないSEを呼んでも進行できるようにするため
+	if(it == soundDatas_.end()){
+		return;
+	}
 
 	// 二重再生防止：同じファイルが再生中なら停止して再利用
 	if(activeVoices_.find(filename) != activeVoices_.end()){
@@ -242,7 +268,8 @@ void SoundManager::PlayAudio(const std::string& filename,float volume,bool loop)
 	if(volumes_.find(filename) == volumes_.end()){
 		volumes_[filename] = ClampVolume(volume);
 	}
-	pSourceVoice->SetVolume(volumes_[filename] * masterVolume_);
+	// 変更：分類ごとの音量も掛かるようにした
+	pSourceVoice->SetVolume(CalcOutputVolume(filename));
 
 	XAUDIO2_BUFFER buf{};
 	buf.pAudioData = soundData.pBuffer.data();
@@ -304,13 +331,12 @@ bool SoundManager::IsPlaying(const std::string& filename){
 // ==========================================================================
 void SoundManager::SetVolume(const std::string& filename,float volume){
 	// 停止中でも値だけは保持しておき、次の再生に反映されるようにする
-	const float clamped = ClampVolume(volume);
-	volumes_[filename] = clamped;
+	volumes_[filename] = ClampVolume(volume);
 
 	// 再生中ならその場で反映する
 	auto it = activeVoices_.find(filename);
 	if(it != activeVoices_.end()){
-		it->second->SetVolume(clamped * masterVolume_);
+		it->second->SetVolume(CalcOutputVolume(filename));
 	}
 }
 
@@ -334,7 +360,7 @@ void SoundManager::SetMasterVolume(float volume){
 	// 再生中のボイスすべてに反映する
 	for(auto& pair : activeVoices_){
 		if(pair.second){
-			pair.second->SetVolume(GetVolume(pair.first) * masterVolume_);
+			pair.second->SetVolume(CalcOutputVolume(pair.first));
 		}
 	}
 }
@@ -344,6 +370,52 @@ void SoundManager::SetMasterVolume(float volume){
 // ==========================================================================
 float SoundManager::GetMasterVolume() const{
 	return masterVolume_;
+}
+
+// ==========================================================================
+// 分類ごとの音量設定 (追加)
+// ==========================================================================
+void SoundManager::SetCategoryVolume(SoundCategory category,float volume){
+	if(category == SoundCategory::Count){
+		return;
+	}
+	categoryVolumes_[static_cast<size_t>(category)] = ClampVolume(volume);
+
+	// 再生中のうち、その分類のボイスだけに反映する
+	for(auto& pair : activeVoices_){
+		if(pair.second && GetCategory(pair.first) == category){
+			pair.second->SetVolume(CalcOutputVolume(pair.first));
+		}
+	}
+}
+
+// ==========================================================================
+// 分類ごとの音量取得 (追加)
+// ==========================================================================
+float SoundManager::GetCategoryVolume(SoundCategory category) const{
+	if(category == SoundCategory::Count){
+		return kDefaultVolume;
+	}
+	return categoryVolumes_[static_cast<size_t>(category)];
+}
+
+// ==========================================================================
+// 登録済みの分類を取得 (追加)
+// ==========================================================================
+SoundCategory SoundManager::GetCategory(const std::string& filename) const{
+	auto it = categories_.find(filename);
+	if(it == categories_.end()){
+		// 未登録のものは単発音として扱う
+		return SoundCategory::SE;
+	}
+	return it->second;
+}
+
+// ==========================================================================
+// 実際にソースボイスへ渡す音量の計算 (追加)
+// ==========================================================================
+float SoundManager::CalcOutputVolume(const std::string& filename) const{
+	return GetVolume(filename) * GetCategoryVolume(GetCategory(filename)) * masterVolume_;
 }
 
 // ==========================================================================
@@ -375,6 +447,12 @@ void SoundManager::LoadVolumeSettings(){
 
 		if(key == kMasterVolumeKey){
 			masterVolume_ = volume;
+		} else if(key == kBgmCategoryKey){
+			// 追加：BGMの分類音量
+			categoryVolumes_[static_cast<size_t>(SoundCategory::BGM)] = volume;
+		} else if(key == kSeCategoryKey){
+			// 追加：SEの分類音量
+			categoryVolumes_[static_cast<size_t>(SoundCategory::SE)] = volume;
 		} else{
 			// 音声のロードはこの後に行われるため、ロード済みかどうかは確認しない
 			volumes_[key] = volume;
@@ -395,6 +473,12 @@ void SoundManager::SaveVolumeSettings() const{
 
 	file << masterVolume_ << kVolumeSettingsSeparator << kMasterVolumeKey << '\n';
 
+	// 追加：分類ごとの音量も保存する
+	file << categoryVolumes_[static_cast<size_t>(SoundCategory::BGM)]
+		<< kVolumeSettingsSeparator << kBgmCategoryKey << '\n';
+	file << categoryVolumes_[static_cast<size_t>(SoundCategory::SE)]
+		<< kVolumeSettingsSeparator << kSeCategoryKey << '\n';
+
 	for(const auto& pair : volumes_){
 		file << pair.second << kVolumeSettingsSeparator << pair.first << '\n';
 	}
@@ -414,6 +498,25 @@ void SoundManager::ShowVolumeGui(){
 		SetMasterVolume(master);
 	}
 	// 追加：スライダーを離した時点で保存する (ドラッグ中に毎フレーム書き出さないため)
+	if(ImGui::IsItemDeactivatedAfterEdit()){
+		SaveVolumeSettings();
+	}
+	ImGui::PopItemWidth();
+
+	// --- 追加：分類ごとの音量 (オプション画面と同じ値を触る) ---
+	float bgmVolume = GetCategoryVolume(SoundCategory::BGM);
+	ImGui::PushItemWidth(kGuiFullWidth);
+	if(ImGui::SliderFloat("BGM Volume",&bgmVolume,kMinVolume,kMaxVolume)){
+		SetCategoryVolume(SoundCategory::BGM,bgmVolume);
+	}
+	if(ImGui::IsItemDeactivatedAfterEdit()){
+		SaveVolumeSettings();
+	}
+
+	float seVolume = GetCategoryVolume(SoundCategory::SE);
+	if(ImGui::SliderFloat("SE Volume",&seVolume,kMinVolume,kMaxVolume)){
+		SetCategoryVolume(SoundCategory::SE,seVolume);
+	}
 	if(ImGui::IsItemDeactivatedAfterEdit()){
 		SaveVolumeSettings();
 	}

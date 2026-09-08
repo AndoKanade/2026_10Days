@@ -35,13 +35,16 @@ public:
 	bool HardDrop(Board& board);
 
 	// 追加：左に1マス移動する。移動先が壁や既存ブロックと重なる場合は動かさない。
-	void MoveLeft(const Board& board);
+	// 変更：実際に動かせたかどうかを返す（SEを動いたときだけ鳴らすために使う）。
+	bool MoveLeft(const Board& board);
 
 	// 追加：右に1マス移動する。移動先が壁や既存ブロックと重なる場合は動かさない。
-	void MoveRight(const Board& board);
+	// 変更：実際に動かせたかどうかを返す。
+	bool MoveRight(const Board& board);
 
 	// 追加：時計回りに1段階回転する。回転後が壁や既存ブロックと重なる場合は回転しない。
-	void Rotate(const Board& board);
+	// 変更：実際に回転できたかどうかを返す。
+	bool Rotate(const Board& board);
 
 	// 追加：下キーによる加速落下の入り切りを設定する。
 	void SetSoftDrop(bool enable){ isSoftDrop_ = enable; }

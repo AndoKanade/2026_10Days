@@ -72,8 +72,61 @@ private:
 	// 選択中の項目（Difficulty に対応する添字）
 	int32_t difficultyIndex_ = 0;
 
+	// 追加：タイトルの縦メニューでカーソルが指している項目。
+	// Difficulty::Count 未満なら難易度の項目、Difficulty::Count ならオプションの項目を指す。
+	int32_t menuIndex_ = 0;
+
+	// 追加：カーソルがオプションの項目を指しているか
+	bool IsOptionMenuFocused() const;
+
 	// 選択状態に合わせて項目の色を塗り分け、行列を更新する
 	void UpdateDifficultyUi();
+
+	// --- 追加：オプション（音量設定）のUI ---
+
+	// オプションで並べる音量の種類。並び順がそのまま画面の上からの並びになる。
+	enum class OptionItem{
+		Master,	// 全体の音量
+		Bgm,	// BGMだけの音量
+		Se,		// SEだけの音量
+		Count,	// 項目の総数
+	};
+
+	// オプションを開いているか。開いている間はタイトルの操作を受け付けない。
+	bool isOptionOpen_ = false;
+
+	// 追加：難易度の項目の下に並べる「OPTION」のメニュー項目
+	std::unique_ptr<Sprite> optionMenuItem_;
+
+	// 選択中の項目（OptionItem に対応する添字）
+	int32_t optionIndex_ = 0;
+
+	// 背景を暗くする暗幕
+	std::unique_ptr<Sprite> optionOverlay_;
+
+	// 見出し「OPTION」
+	std::unique_ptr<Sprite> optionHeader_;
+
+	// 各項目のラベル。並びは OptionItem に対応する。
+	std::vector<std::unique_ptr<Sprite>> optionLabels_;
+
+	// 音量バーの下地（最大値ぶんの長さで固定）
+	std::vector<std::unique_ptr<Sprite>> optionBarBacks_;
+
+	// 音量バーの中身（現在の音量に応じて横幅を変える）
+	std::vector<std::unique_ptr<Sprite>> optionBarFills_;
+
+	// オプションの開閉と、音量の増減操作を処理する
+	void UpdateOptionInput();
+
+	// 選択状態と現在の音量に合わせて、色とバーの長さを更新する
+	void UpdateOptionUi();
+
+	// 指定した項目の音量を取得する
+	float GetOptionVolume(int32_t index) const;
+
+	// 指定した項目の音量を設定する
+	void SetOptionVolume(int32_t index,float volume);
 
 	// 追加：盤面の上に重ねて表示するタイトルロゴ（title.obj）
 	std::unique_ptr<Obj3D> titleObj_;
