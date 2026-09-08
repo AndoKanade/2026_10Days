@@ -434,6 +434,12 @@ void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::v
 		}
 	}
 
+	// 追加：テトロミノは剛体のまま固定されるため、形によっては一部のマスが
+	// 支え無しの宙に浮いた状態（オーバーハング）になることがある。
+	// 消去を待たず、着地した時点でこのピースが占めていた列だけ
+	// マス単位で落下させ、宙に浮いた部分をすぐに詰める。
+	ApplyGravity(cells,{});
+
 	// 通電判定を行い、ゴールまで繋がっていれば対象マスを消す
 	ResolveConduction();
 
