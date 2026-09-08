@@ -81,6 +81,9 @@ private:
 	// 追加：タイトルロゴをふわふわ浮遊させるための経過フレーム数
 	int32_t titleFloatTimer_ = 0;
 
+	// 追加：「SPACEで決定」のヒント表示（ui/space/space.obj）
+	std::unique_ptr<Obj3D> spaceHintObj_;
+
 	// --- メンバ変数：背景のデモプレイ ---
 	// プレイヤーの代わりに、出現ごとに決めた回数だけ回転・左右移動してから落とす。
 

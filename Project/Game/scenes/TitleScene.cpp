@@ -103,6 +103,21 @@ namespace{
 	// 選択中の項目の色と、選択していない項目の色（ポーズ画面と同じ塗り分け）
 	constexpr Vector4 kDifficultySelectedColor = {1.0f,1.0f,1.0f,1.0f};
 	constexpr Vector4 kDifficultyUnselectedColor = {0.45f,0.45f,0.50f,1.0f};
+
+	// --- 追加：「SPACEで決定」のヒント表示 ---
+
+	// ヒントに使うモデル（Blenderで作成したテキスト形状のメッシュ）
+	const std::string kSpaceHintModel = "ui/space/space.obj";
+
+	// ヒントの拡大率。実際のモデルの見た目の大きさに合わせて調整する。
+	constexpr float kSpaceHintScale = 1.0f;
+
+	// ヒントを表示する盤面マス座標（列0＝盤面中央、盤面の下端よりさらに下の行）。
+	// 盤面幅が変わっても中央に留まるよう、列は常に0を使う。
+	constexpr int32_t kSpaceHintAnchorRow = PuzzleConfig::kBoardHeight + 2;
+
+	// ヒントの色（陰影なしの白っぽい色で光らせ、視認性を確保する）
+	const Vector4 kSpaceHintColor = {0.9f, 0.9f, 0.95f, 1.0f};
 }
 
 // コンストラクタ
@@ -216,6 +231,21 @@ void TitleScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommo
 	board_.SetDifficulty(SceneManager::GetInstance()->GetDifficulty());
 	UpdateDifficultyUi();
 
+	// 追加：「SPACEで決定」のヒントを盤面下の余白に表示する
+	ModelManager::GetInstance()->LoadModel(kSpaceHintModel);
+	spaceHintObj_ = std::make_unique<Obj3D>();
+	spaceHintObj_->Initialize(object3dCommon_);
+	spaceHintObj_->SetModel(kSpaceHintModel);
+	spaceHintObj_->SetScale({kSpaceHintScale, kSpaceHintScale, kSpaceHintScale});
+	// 列は0を渡して盤面幅に応じたY・Zだけ受け取り、Xは中央(0)へ上書きする
+	Vector3 spaceHintPos = board_.GridToWorld(0,kSpaceHintAnchorRow);
+	spaceHintPos.x = 0.0f;
+	spaceHintObj_->SetTranslate(spaceHintPos);
+	if(Model::Material* material = spaceHintObj_->GetMaterial()){
+		material->color = kSpaceHintColor;
+		material->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+	}
+
 	// 追加：タイトルBGMをロードしてループ再生する
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath);
 	SoundManager::GetInstance()->PlayAudio(kBgmPath,kBgmVolume,true);
@@ -284,6 +314,11 @@ void TitleScene::Update(){
 	titleObj_->SetRotate({0.0f, 0.0f, std::sin(swayPhase) * kTitleSwayAmplitudeRadians});
 	titleObj_->Update();
 
+	// 追加：「SPACEで決定」ヒントも毎フレーム行列を更新する
+	if(spaceHintObj_){
+		spaceHintObj_->Update();
+	}
+
 	// 追加：難易度の選択。上下（矢印キーまたはW/S）で移動し、端まで行ったら反対側へ回り込む。
 	// 背景のデモプレイにも同じ難易度を反映して、消え方の違いをその場で見せる。
 	{
@@ -347,6 +382,11 @@ void TitleScene::Draw(){
 
 	// 追加：タイトルロゴを最後に描画し、背景の盤面より手前に重ねて見せる
 	titleObj_->Draw();
+
+	// 追加：「SPACEで決定」のヒントを描画する
+	if(spaceHintObj_){
+		spaceHintObj_->Draw();
+	}
 
 	// 追加：難易度の選択UIを、3D描画の後に通常UIとして重ねる
 	if(spriteCommon_){
