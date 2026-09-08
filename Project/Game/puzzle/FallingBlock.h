@@ -41,7 +41,8 @@ public:
 	void MoveRight(const Board& board);
 
 	// 追加：時計回りに1段階回転する。回転後が壁や既存ブロックと重なる場合は回転しない。
-	void Rotate(const Board& board);
+	// 変更：回転が実際に成功したかどうかを返す（呼び出し側でSE再生の判定に使う）。
+	bool Rotate(const Board& board);
 
 	// 追加：下キーによる加速落下の入り切りを設定する。
 	void SetSoftDrop(bool enable){ isSoftDrop_ = enable; }
