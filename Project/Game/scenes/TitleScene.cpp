@@ -85,6 +85,24 @@ namespace{
 	// 追加：傾き1往復にかけるフレーム数。
 	// 上下運動と同じ周期にすると単調に見えるため、あえてずらして自然な揺れにする。
 	constexpr int32_t kTitleSwayPeriodFrames = 190;
+
+	// --- 追加：難易度の選択UI ---
+
+	// 見出しと各項目のラベル画像。ポーズ画面のラベルと同じ作り方で書き出してある。
+	const std::string kDifficultyLabelTexture = "resource/ui/title/difficulty.png";
+	const std::string kEasyTexture = "resource/ui/title/easy.png";
+	const std::string kNormalTexture = "resource/ui/title/normal.png";
+	const std::string kHardTexture = "resource/ui/title/hard.png";
+
+	// 見出しと項目を並べる位置。盤面は画面の中央を占めるため、左の空きへ縦に並べる。
+	constexpr Vector2 kDifficultyLabelPos = {56.0f,268.0f};
+	constexpr float kDifficultyItemPosX = 76.0f;
+	constexpr float kDifficultyItemTopPosY = 336.0f;
+	constexpr float kDifficultyItemLineHeight = 56.0f;
+
+	// 選択中の項目の色と、選択していない項目の色（ポーズ画面と同じ塗り分け）
+	constexpr Vector4 kDifficultySelectedColor = {1.0f,1.0f,1.0f,1.0f};
+	constexpr Vector4 kDifficultyUnselectedColor = {0.45f,0.45f,0.50f,1.0f};
 }
 
 // コンストラクタ
@@ -168,6 +186,35 @@ void TitleScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommo
 		// ロゴなので陰影は付けず、常に同じ明るさで見えるようにする
 		material->enableLighting = 0;
 	}
+
+	// 追加：難易度の選択UIを作る。
+	// 前回選んだ値を SceneManager が保持しているため、その項目を選んだ状態で始める。
+	TextureManager::GetInstance()->LoadTexture(kDifficultyLabelTexture);
+	TextureManager::GetInstance()->LoadTexture(kEasyTexture);
+	TextureManager::GetInstance()->LoadTexture(kNormalTexture);
+	TextureManager::GetInstance()->LoadTexture(kHardTexture);
+
+	// 画像の実寸のまま置く
+	auto createLabel = [&](const std::string& texture,const Vector2& position){
+		auto sprite = std::make_unique<Sprite>();
+		sprite->Initialize(spriteCommon_,texture);
+		sprite->SetPosition(position);
+		return sprite;
+	};
+
+	difficultyLabel_ = createLabel(kDifficultyLabelTexture,kDifficultyLabelPos);
+
+	// 並びは Difficulty の Easy / Normal / Hard に対応させる
+	difficultySprites_.clear();
+	const std::string difficultyTextures[] = {kEasyTexture, kNormalTexture, kHardTexture};
+	for(int32_t i = 0; i < static_cast<int32_t>(Difficulty::Count); ++i){
+		const float posY = kDifficultyItemTopPosY + kDifficultyItemLineHeight * static_cast<float>(i);
+		difficultySprites_.push_back(createLabel(difficultyTextures[i],{kDifficultyItemPosX,posY}));
+	}
+
+	difficultyIndex_ = static_cast<int32_t>(SceneManager::GetInstance()->GetDifficulty());
+	board_.SetDifficulty(SceneManager::GetInstance()->GetDifficulty());
+	UpdateDifficultyUi();
 
 	// 追加：タイトルBGMをロードしてループ再生する
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath);
@@ -264,9 +311,49 @@ void TitleScene::Update(){
 	titleObj_->SetRotate({0.0f, 0.0f, std::sin(swayPhase) * kTitleSwayAmplitudeRadians});
 	titleObj_->Update();
 
+	// 追加：難易度の選択。上下（矢印キーまたはW/S）で移動し、端まで行ったら反対側へ回り込む。
+	// 背景のデモプレイにも同じ難易度を反映して、消え方の違いをその場で見せる。
+	{
+		const int32_t itemCount = static_cast<int32_t>(Difficulty::Count);
+		bool changed = false;
+
+		if(input_->TriggerKey(DIK_UP) || input_->TriggerKey(DIK_W)){
+			difficultyIndex_ = (difficultyIndex_ - 1 + itemCount) % itemCount;
+			changed = true;
+		}
+		if(input_->TriggerKey(DIK_DOWN) || input_->TriggerKey(DIK_S)){
+			difficultyIndex_ = (difficultyIndex_ + 1) % itemCount;
+			changed = true;
+		}
+
+		if(changed){
+			const Difficulty selected = static_cast<Difficulty>(difficultyIndex_);
+			SceneManager::GetInstance()->SetDifficulty(selected);
+			board_.SetDifficulty(selected);
+		}
+		UpdateDifficultyUi();
+	}
+
 	// 4. シーン遷移 (スペースキー)
 	if(input_->TriggerKey(DIK_SPACE)){
+		// 選択中の難易度を確定させてからゲームへ移る
+		SceneManager::GetInstance()->SetDifficulty(static_cast<Difficulty>(difficultyIndex_));
 		SceneManager::GetInstance()->ChangeScene("GAME");
+	}
+}
+
+// 追加：選択状態に合わせて項目の色を塗り分け、行列を更新する。
+void TitleScene::UpdateDifficultyUi(){
+	if(difficultyLabel_){
+		difficultyLabel_->Update();
+	}
+
+	// 選択中の項目だけ明るくして、いまどれを選んでいるか分かるようにする
+	for(int32_t i = 0; i < static_cast<int32_t>(difficultySprites_.size()); ++i){
+		difficultySprites_[i]->SetColor(i == difficultyIndex_
+			? kDifficultySelectedColor
+			: kDifficultyUnselectedColor);
+		difficultySprites_[i]->Update();
 	}
 }
 
@@ -287,6 +374,17 @@ void TitleScene::Draw(){
 
 	// 追加：タイトルロゴを最後に描画し、背景の盤面より手前に重ねて見せる
 	titleObj_->Draw();
+
+	// 追加：難易度の選択UIを、3D描画の後に通常UIとして重ねる
+	if(spriteCommon_){
+		spriteCommon_->Draw();
+		if(difficultyLabel_){
+			difficultyLabel_->Draw();
+		}
+		for(const auto& sprite : difficultySprites_){
+			sprite->Draw();
+		}
+	}
 }
 
 // 追加：背景のデモプレイを1フレーム進める。
