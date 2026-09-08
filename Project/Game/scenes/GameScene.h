@@ -125,7 +125,7 @@ private:
 	// ポーズ中に表示する画面の種類
 	enum class PauseMode{
 		Menu,     // 項目を選ぶメニュー
-		Tutorial, // チュートリアル（内容はこれから追加する）
+		Tutorial, // チュートリアル（遊びかたをまとめた1枚絵を表示する）
 	};
 
 	// ポーズメニューの項目。並び順がそのまま表示順になる。
@@ -154,8 +154,8 @@ private:
 	// メニュー項目のラベル。並びは PauseMenuItem に対応する。
 	std::vector<std::unique_ptr<Sprite>> pauseMenuSprites_;
 
-	// チュートリアル画面の見出し
-	std::unique_ptr<Sprite> pauseTutorialHeaderSprite_;
+	// 変更：チュートリアル画面の1枚絵（画面と同じ 1280x720 の画像）
+	std::unique_ptr<Sprite> pauseTutorialSheetSprite_;
 
 	// ImGuiから消去結果を再現するための入力値
 	int32_t debugClearedCellCount_ = 3;
