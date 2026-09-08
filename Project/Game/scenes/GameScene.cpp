@@ -344,6 +344,8 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 		});
 		digit->SetSize(kScoreDigitDrawSize);
 		digit->SetTextureSize(kScoreDigitSampleSize);
+		// 元画像の黒色を使わず、透明度だけを数字の形として淡い白色で描く。
+		digit->SetUseAlphaMask(true);
 		scoreDigitSprites_.push_back(std::move(digit));
 	}
 	UpdateScoreUi();
@@ -1217,7 +1219,7 @@ void GameScene::UpdateScoreUi(){
 		});
 		const float flash = scoreArrivalFlashFrames_ > 0 ?
 			1.0f + 1.5f * static_cast<float>(scoreArrivalFlashFrames_) / 12.0f : 1.0f;
-		scoreDigitSprites_[i]->SetColor({flash,flash,flash,1.0f});
+		scoreDigitSprites_[i]->SetColor({0.88f * flash,0.92f * flash,1.0f * flash,1.0f});
 		scoreDigitSprites_[i]->Update();
 	}
 	if(scoreArrivalFlashFrames_ > 0){ --scoreArrivalFlashFrames_; }

@@ -43,6 +43,7 @@ namespace{
 	const Vector4 kSeparatorColor = {0.12f,0.10f,0.20f,1.0f};
 	const Vector4 kRankingLightningColor = {0.15f,0.85f,1.0f,1.0f};
 	const Vector4 kCurrentLightningColor = {1.0f,0.85f,0.10f,1.0f};
+	const Vector4 kNumberBaseColor = {0.88f,0.92f,1.0f,1.0f};
 	// 60fps想定で約2秒ごとに、24フレームかけて光が通る。
 	constexpr int32_t kShineCycleFrames = 120;
 	constexpr int32_t kShineDurationFrames = 24;
@@ -71,8 +72,7 @@ namespace{
 	}
 	// 光の通過量を元に、明るさを計算してRGBAで返す。1.0が通常の明るさ。
 	Vector4 GetBrightnessColor(float shine){
-		const float brightness = 1.0f + shine * 2.0f;
-		return {brightness,brightness,brightness,1.0f};
+		return LerpColor(kNumberBaseColor,{1.5f,1.5f,1.5f,1.0f},shine);
 	}
 }
 
@@ -231,6 +231,8 @@ void GameOverScene::AppendNumberSprites(std::vector<std::unique_ptr<Sprite>>& de
 			kNumberCellSize.x * static_cast<float>(digits[static_cast<size_t>(i)]) + kNumberSampleInset.x,
 			kNumberSampleInset.y
 		});
+		sprite->SetUseAlphaMask(true);
+		sprite->SetColor(kNumberBaseColor);
 		destination.push_back(std::move(sprite));
 	}
 }
