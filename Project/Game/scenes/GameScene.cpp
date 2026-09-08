@@ -13,6 +13,7 @@
 #include "Logger.h"
 #include "LevelManager.h"
 #include "SceneManager.h"
+#include "WinAPI.h"
 #include <algorithm>
 
 namespace{
@@ -23,6 +24,31 @@ namespace{
 	constexpr Vector2 kGaugePosition = {20.0f,20.0f};
 	constexpr Vector2 kGaugeMaxSize = {360.0f,28.0f};
 	const std::string kScoreNumberTexture = "resource/ui/score/numbers.png";
+
+	// --- 追加：ポーズ画面 ---
+
+	// 画面全体を暗くする暗幕に使う画像（白一色。色は下の定数で着ける）
+	const std::string kPauseOverlayTexture = "resource/character/white.png";
+
+	// ポーズ画面の見出しと各項目のラベル画像
+	const std::string kPauseHeaderTexture = "resource/ui/pause/paused.png";
+	const std::string kPauseRestartTexture = "resource/ui/pause/restart.png";
+	const std::string kPauseTitleTexture = "resource/ui/pause/title.png";
+	const std::string kPauseTutorialTexture = "resource/ui/pause/tutorial.png";
+
+	// 暗幕の色（黒の半透明。後ろのゲーム画面がうっすら見える濃さにする）
+	constexpr Vector4 kPauseOverlayColor = {0.0f,0.0f,0.0f,0.65f};
+
+	// 見出しを表示するY座標
+	constexpr float kPauseHeaderPosY = 160.0f;
+
+	// メニュー項目を並べ始めるY座標と、項目どうしの間隔
+	constexpr float kPauseMenuTopPosY = 300.0f;
+	constexpr float kPauseMenuLineHeight = 70.0f;
+
+	// 選択中の項目の色と、選択していない項目の色
+	constexpr Vector4 kPauseSelectedColor = {1.0f,1.0f,1.0f,1.0f};
+	constexpr Vector4 kPauseUnselectedColor = {0.45f,0.45f,0.50f,1.0f};
 	constexpr int32_t kScoreDigitCount = 8;
 	constexpr Vector2 kScorePosition = {20.0f,60.0f};
 	constexpr Vector2 kScoreDigitTextureSize = {8.0f,12.0f};
@@ -285,6 +311,9 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 		scoreDigitSprites_.push_back(std::move(digit));
 	}
 	UpdateScoreUi();
+
+	// 追加：ポーズ画面のスプライトを用意する
+	InitializePauseUi();
 
 	// LevelManagerを初期化し、レベル配置オブジェクトを構築
 	levelManager_.LoadJSON(kLevelJsonFile);
@@ -583,6 +612,29 @@ void GameScene::Finalize(){
 
 // --- 更新処理 ---
 void GameScene::Update() {
+	// 追加：TABでポーズ画面を開閉する。
+	// チュートリアルを表示中はメニューへ戻る一段階として使う。
+	// ゲームオーバー時はリザルトへ遷移済みのため受け付けない。
+	if(!isGameOver_ && input_->TriggerKey(DIK_TAB)){
+		if(isPaused_ && pauseMode_ == PauseMode::Tutorial){
+			pauseMode_ = PauseMode::Menu;
+		} else{
+			isPaused_ = !isPaused_;
+			if(isPaused_){
+				// 開くたびに先頭の項目から選び直す
+				pauseMode_ = PauseMode::Menu;
+				pauseMenuIndex_ = 0;
+			}
+		}
+		UpdatePauseUi();
+	}
+
+	// 追加：ポーズ中はゲームの処理を一切進めず、メニューの操作だけを受け付ける
+	if(isPaused_){
+		UpdatePauseMenu();
+		return;
+	}
+
 	// レベル配置JSONのホットリロード確認
 	// ファイルが更新されていた場合、自動で再読み込みしてlevelObjects_を作り直す
 	if (levelManager_.CheckAndReload()) {
@@ -924,6 +976,150 @@ void GameScene::Draw(){
 		}
 		for(const auto& digit : scoreDigitSprites_){
 			digit->Draw();
+		}
+	}
+
+	// 追加：ポーズ画面はすべての描画の手前に重ねる
+	DrawPause();
+}
+
+// 追加：ポーズ画面のスプライトを生成して初期配置する。
+void GameScene::InitializePauseUi(){
+	TextureManager::GetInstance()->LoadTexture(kPauseOverlayTexture);
+	TextureManager::GetInstance()->LoadTexture(kPauseHeaderTexture);
+	TextureManager::GetInstance()->LoadTexture(kPauseRestartTexture);
+	TextureManager::GetInstance()->LoadTexture(kPauseTitleTexture);
+	TextureManager::GetInstance()->LoadTexture(kPauseTutorialTexture);
+
+	// 画面全体を覆う暗幕
+	pauseOverlaySprite_ = std::make_unique<Sprite>();
+	pauseOverlaySprite_->Initialize(spriteCommon_,kPauseOverlayTexture);
+	pauseOverlaySprite_->SetPosition({0.0f,0.0f});
+	pauseOverlaySprite_->SetSize({
+		static_cast<float>(WinAPI::kClientWidth),
+		static_cast<float>(WinAPI::kClientHeight)
+	});
+	pauseOverlaySprite_->SetColor(kPauseOverlayColor);
+
+	// 画像の実寸のまま、画面の中央にそろえて置く
+	auto createCenteredSprite = [&](const std::string& texture,float posY){
+		auto sprite = std::make_unique<Sprite>();
+		sprite->Initialize(spriteCommon_,texture);
+		const float posX = (static_cast<float>(WinAPI::kClientWidth) - sprite->GetSize().x) * 0.5f;
+		sprite->SetPosition({posX,posY});
+		return sprite;
+	};
+
+	pauseHeaderSprite_ = createCenteredSprite(kPauseHeaderTexture,kPauseHeaderPosY);
+
+	// メニュー項目。並びは PauseMenuItem の順に対応させる
+	pauseMenuSprites_.clear();
+	const std::string menuTextures[] = {
+		kPauseRestartTexture,
+		kPauseTitleTexture,
+		kPauseTutorialTexture,
+	};
+	for(int32_t i = 0; i < static_cast<int32_t>(PauseMenuItem::Count); ++i){
+		const float posY = kPauseMenuTopPosY + kPauseMenuLineHeight * static_cast<float>(i);
+		pauseMenuSprites_.push_back(createCenteredSprite(menuTextures[i],posY));
+	}
+
+	// チュートリアル画面の見出し。内容はこれから追加する
+	pauseTutorialHeaderSprite_ = createCenteredSprite(kPauseTutorialTexture,kPauseHeaderPosY);
+
+	UpdatePauseUi();
+}
+
+// 追加：ポーズ中の入力を受け付け、UIを更新する。
+void GameScene::UpdatePauseMenu(){
+	if(pauseMode_ == PauseMode::Menu){
+		const int32_t itemCount = static_cast<int32_t>(PauseMenuItem::Count);
+
+		// 上下で選択を移動する（端まで行ったら反対側へ回り込む）
+		if(input_->TriggerKey(DIK_UP) || input_->TriggerKey(DIK_W)){
+			pauseMenuIndex_ = (pauseMenuIndex_ - 1 + itemCount) % itemCount;
+		}
+		if(input_->TriggerKey(DIK_DOWN) || input_->TriggerKey(DIK_S)){
+			pauseMenuIndex_ = (pauseMenuIndex_ + 1) % itemCount;
+		}
+
+		// 決定
+		if(input_->TriggerKey(DIK_RETURN) || input_->TriggerKey(DIK_SPACE)){
+			ConfirmPauseMenuItem();
+		}
+	} else{
+		// チュートリアル表示中は、決定でメニューへ戻る（TABでも戻れる）
+		if(input_->TriggerKey(DIK_RETURN) || input_->TriggerKey(DIK_SPACE)){
+			pauseMode_ = PauseMode::Menu;
+		}
+	}
+
+	UpdatePauseUi();
+}
+
+// 追加：ポーズ画面のスプライトを、いまの選択状態に合わせて更新する。
+void GameScene::UpdatePauseUi(){
+	if(pauseOverlaySprite_){
+		pauseOverlaySprite_->Update();
+	}
+	if(pauseHeaderSprite_){
+		pauseHeaderSprite_->Update();
+	}
+	if(pauseTutorialHeaderSprite_){
+		pauseTutorialHeaderSprite_->Update();
+	}
+
+	// 選択中の項目だけ明るくして、いまどれを選んでいるか分かるようにする
+	for(int32_t i = 0; i < static_cast<int32_t>(pauseMenuSprites_.size()); ++i){
+		pauseMenuSprites_[i]->SetColor(i == pauseMenuIndex_ ? kPauseSelectedColor : kPauseUnselectedColor);
+		pauseMenuSprites_[i]->Update();
+	}
+}
+
+// 追加：選択中の項目を決定したときの処理。
+void GameScene::ConfirmPauseMenuItem(){
+	switch(static_cast<PauseMenuItem>(pauseMenuIndex_)){
+	case PauseMenuItem::Restart:
+		// シーンを作り直すことで、盤面・スコア・ゲージをまとめて初期状態に戻す
+		SceneManager::GetInstance()->ChangeScene("GAME");
+		break;
+
+	case PauseMenuItem::Title:
+		SceneManager::GetInstance()->ChangeScene("TITLE");
+		break;
+
+	case PauseMenuItem::Tutorial:
+		pauseMode_ = PauseMode::Tutorial;
+		break;
+
+	default:
+		break;
+	}
+}
+
+// 追加：ポーズ画面を描画する。
+void GameScene::DrawPause(){
+	if(!isPaused_ || !spriteCommon_){
+		return;
+	}
+
+	spriteCommon_->Draw();
+
+	if(pauseOverlaySprite_){
+		pauseOverlaySprite_->Draw();
+	}
+
+	if(pauseMode_ == PauseMode::Menu){
+		if(pauseHeaderSprite_){
+			pauseHeaderSprite_->Draw();
+		}
+		for(const auto& sprite : pauseMenuSprites_){
+			sprite->Draw();
+		}
+	} else{
+		// チュートリアル画面。いまは見出しだけで、内容はこれから追加する
+		if(pauseTutorialHeaderSprite_){
+			pauseTutorialHeaderSprite_->Draw();
 		}
 	}
 }
