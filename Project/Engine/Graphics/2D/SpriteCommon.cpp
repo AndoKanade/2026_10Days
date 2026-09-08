@@ -68,10 +68,12 @@ void SpriteCommon::CreateRootSignature(){
 
 
 	// --- サンプラーの設定 ---
-	staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	// ドット文字やUIを整数倍で拡大してもぼやけないよう、最近傍補間を使う。
+	staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+	// 画像端で反対側のピクセルが混ざらないよう、範囲外は端の色に固定する。
+	staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	staticSamplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 	staticSamplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 	staticSamplers[0].MinLOD = 0.0f;
 	staticSamplers[0].MaxLOD = D3D12_FLOAT32_MAX;

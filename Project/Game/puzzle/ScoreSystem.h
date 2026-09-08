@@ -6,11 +6,13 @@ class ScoreSystem{
 public:
 	static constexpr int64_t kBasePointsPerCell = 100;
 	// 倍率は10倍の整数で保持し、小数の誤差を避ける。
+	
 	static constexpr int64_t CellMultiplierTenths(int32_t cells){
 		return cells <= 4 ? 10 : 11 + (static_cast<int64_t>(cells) - 5) / 3;
 	}
+	// コンボは1連鎖目は倍率1.0倍、2連鎖目は2.0倍、3連鎖目は3.0倍…とする。
 	static constexpr int64_t ChainMultiplierTenths(int32_t chain){
-		return chain <= 1 ? 10 : 10 + (static_cast<int64_t>(chain) - 1) * 3;
+		return chain <= 1 ? 10 : 10 + (static_cast<int64_t>(chain) - 1) * 10;
 	}
 	static constexpr int64_t Calculate(int32_t cells,int32_t chain){
 		if(cells <= 0){ return 0; }

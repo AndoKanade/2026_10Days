@@ -51,6 +51,9 @@ public: // --- 公開する定義・関数 ---
 
 	const Vector4& GetColor() const{ return materialData->color; }
 	void SetColor(const Vector4& color){ materialData->color = color; }
+	// テクスチャ本来のRGBを無視し、透明度だけを文字・図形の形として着色する。
+	// Spriteでは未使用だったenableLightingの領域をマスク切り替えに利用する。
+	void SetUseAlphaMask(bool useAlphaMask){ materialData->enableLighting = useAlphaMask ? 1 : 0; }
 
 	const Vector2& GetSize() const{ return size; }
 	void SetSize(const Vector2& size){ this->size = size; }

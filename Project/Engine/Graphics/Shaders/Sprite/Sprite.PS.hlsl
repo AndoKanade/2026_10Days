@@ -1,7 +1,7 @@
 #include "Sprite.hlsli"
 
-// š‚±‚±‚É struct Material ‚ğ‘‚¢‚Ä‚Í‚¢‚¯‚Ü‚¹‚ñihlsli‚É‚ ‚é‚©‚çj
-// š DirectionalLight (b2) ‚à‘‚¢‚Ä‚Í‚¢‚¯‚Ü‚¹‚ñiC++‚©‚ç‘—‚Á‚Ä‚È‚¢‚©‚çj
+// â˜…ã“ã“ã« struct Material ã‚’æ›¸ã„ã¦ã¯ã„ã‘ã¾ã›ã‚“ï¼ˆhlsliã«ã‚ã‚‹ã‹ã‚‰ï¼‰
+// â˜… DirectionalLight (b2) ã‚‚æ›¸ã„ã¦ã¯ã„ã‘ã¾ã›ã‚“ï¼ˆC++ã‹ã‚‰é€ã£ã¦ãªã„ã‹ã‚‰ï¼‰
 
 ConstantBuffer<Material> gMaterial : register(b0);
 Texture2D<float32_t4> gTexture : register(t0);
@@ -16,16 +16,22 @@ PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
     
-    // UV•ÏŠ·
+    // UVå¤‰æ›
     float4 transformedUV = mul(float32_t4(input.texcoord, 0.0f, 1.0f), gMaterial.uvTransform);
     
-    // ƒeƒNƒXƒ`ƒƒ‚ÌF‚ğæ“¾
+    // ãƒ†ã‚¯ã‚¹ãƒãƒ£ã®è‰²ã‚’å–å¾—
     float32_t4 textureColor = gTexture.Sample(gSampler, transformedUV.xy);
     
-    // ƒ‰ƒCƒgŒvZ‚Í‚¹‚¸A‚»‚Ì‚Ü‚Ü‚ÌF‚ğo—Í
-    output.color = gMaterial.color * textureColor;
+    // ãƒã‚¹ã‚¯è¡¨ç¤ºã§ã¯å…ƒç”»åƒã®RGBã‚’ç„¡è¦–ã—ã€é€æ˜åº¦ã ã‘ã‚’å½¢ã¨ã—ã¦æŒ‡å®šè‰²ã§æãã€‚
+    // Spriteã§ã¯ä½¿ã£ã¦ã„ãªã„enableLightingã‚’ãƒã‚¹ã‚¯åˆ‡ã‚Šæ›¿ãˆãƒ•ãƒ©ã‚°ã¨ã—ã¦åˆ©ç”¨ã™ã‚‹ã€‚
+    float32_t4 sampledColor = textureColor;
+    if (gMaterial.enableLighting != 0)
+    {
+        sampledColor.rgb = float32_t3(1.0f, 1.0f, 1.0f);
+    }
+    output.color = gMaterial.color * sampledColor;
     
-    // “§–¾•”•ª‚ÌœŠO
+    // é€æ˜éƒ¨åˆ†ã®é™¤å¤–
     if (textureColor.a == 0.0f)
     {
         discard;

@@ -24,7 +24,10 @@ namespace{
 	const std::string kScoreNumberTexture = "resource/ui/score/numbers.png";
 	constexpr int32_t kScoreDigitCount = 8;
 	constexpr Vector2 kScorePosition = {20.0f,60.0f};
-	constexpr Vector2 kScoreDigitTextureSize = {8.0f,12.0f};
+	constexpr Vector2 kScoreDigitCellSize = {8.0f,12.0f};
+	// 線形補間で隣の数字を拾わないよう、セル境界ではなく端のピクセル中心を参照する。
+	constexpr Vector2 kScoreDigitSampleInset = {0.5f,0.5f};
+	constexpr Vector2 kScoreDigitSampleSize = {7.0f,11.0f};
 	constexpr Vector2 kScoreDigitDrawSize = {32.0f,48.0f};
 	constexpr int32_t kRainbowFramesPerColor = 12;
 	constexpr Vector4 kRainbowColors[] = {
@@ -280,7 +283,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 			kScorePosition.y
 		});
 		digit->SetSize(kScoreDigitDrawSize);
-		digit->SetTextureSize(kScoreDigitTextureSize);
+		digit->SetTextureSize(kScoreDigitSampleSize);
 		scoreDigitSprites_.push_back(std::move(digit));
 	}
 	UpdateScoreUi();
@@ -916,7 +919,8 @@ void GameScene::UpdateScoreUi(){
 		const int32_t digit = static_cast<int32_t>(displayScore % 10);
 		displayScore /= 10;
 		scoreDigitSprites_[i]->SetTextureLeftTop({
-			kScoreDigitTextureSize.x * static_cast<float>(digit),0.0f
+			kScoreDigitCellSize.x * static_cast<float>(digit) + kScoreDigitSampleInset.x,
+			kScoreDigitSampleInset.y
 		});
 		scoreDigitSprites_[i]->Update();
 	}
