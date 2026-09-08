@@ -21,6 +21,8 @@ class Obj3dCommon;
 class SpriteCommon;
 class Sprite;
 class Application;
+class Skybox;       // 追加：背景の天球
+class SkyboxCommon; // 追加：天球の共通設定（ルートシグネチャとPSO）
 
 class GameScene : public BaseScene{
 public:
@@ -38,6 +40,17 @@ private:
 	Obj3dCommon* object3dCommon_ = nullptr;
 	Input* input_ = nullptr;
 	SpriteCommon* spriteCommon_ = nullptr;
+
+	// --- 追加：ゲーミングな背景の天球 ---
+	// 天球はまだどのシーンでも使われていないため、共通設定もこのシーンで持つ。
+	std::unique_ptr<SkyboxCommon> skyboxCommon_;
+	std::unique_ptr<Skybox> skybox_;
+
+	// 天球の回転角（ラジアン）。毎フレーム少しずつ足して背景を流す。
+	float skyboxRotationY_ = 0.0f;
+
+	// 明るさを脈打たせるための経過フレーム数
+	int32_t skyboxPulseFrame_ = 0;
 	Application* app_ = nullptr;
 
 	// 設定・状態

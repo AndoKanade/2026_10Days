@@ -13,6 +13,8 @@ class Input;
 class Obj3dCommon;
 class Sprite;
 class SpriteCommon;
+class Skybox;       // 追加：背景の天球
+class SkyboxCommon; // 追加：天球の共通設定（ルートシグネチャとPSO）
 
 /// <summary>
 /// ゲームオーバー画面シーン
@@ -36,9 +38,23 @@ private:
 	SpriteCommon* spriteCommon_ = nullptr;
 
 	// --- メンバ変数：内部リソース (所有するもの) ---
-	std::unique_ptr<Sprite> background_;
+
+	// 削除：仮置きだったuvCheckerの全画面スプライト（背景は天球に置き換えた）
+
+	// 追加：ゲーム中・タイトルと同じゲーミングな背景の天球
+	std::unique_ptr<SkyboxCommon> skyboxCommon_;
+	std::unique_ptr<Skybox> skybox_;
+
+	// 天球の回転角（ラジアン）。毎フレーム少しずつ足して背景を流す。
+	float skyboxRotationY_ = 0.0f;
+
+	// 明るさを脈打たせるための経過フレーム数
+	int32_t skyboxPulseFrame_ = 0;
+
+	// 修正：コンフリクト解消 削除された古い背景とパネルの変数を消し、雷エフェクトの変数を残しました
 	std::vector<std::unique_ptr<Sprite>> rankingLightningSprites_;
 	std::vector<std::unique_ptr<Sprite>> currentLightningSprites_;
+
 	std::unique_ptr<Sprite> separator_;
 	std::unique_ptr<Sprite> rankingLabel_;
 	std::unique_ptr<Sprite> rankLabel_;

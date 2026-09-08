@@ -8,13 +8,18 @@
 #include "SoundManager.h"
 #include "WinAPI.h"
 #include "ImGuiManager.h"
+// 修正：コンフリクト解消 天球用のインクルードを残しました
+#include "CameraManager.h" // 追加：天球の描画に使うカメラを取得する
+#include "Obj3dCommon.h"   // 追加：天球の共通設定の初期化にDXCommonが要る
+#include "DXCommon.h"
+#include "Skybox.h"        // 追加：背景の天球
+#include "SkyboxCommon.h"  // 追加：天球の共通設定
+#include "PuzzleConfig.h"  // 追加：天球の調整用定数
 #include <cmath>
 #include <ctime>
 
 namespace{
-	// 背景に使うテクスチャ（専用画像がないため既存テクスチャを赤で着色して流用）
-	const std::string kBackgroundTexture = "resource/uvChecker.png";
-	const Vector4 kOverColor = {1.0f, 0.3f, 0.3f, 1.0f};
+	// 削除：仮置きだった背景テクスチャ（uvCheckerの赤着色）。背景は天球に置き換えた。
 	const std::string kNumberTexture = "resource/ui/score/numbers.png";
 	const std::string kRankingTexture = "resource/ui/score/ranking.png";
 	const std::string kRankTexture = "resource/ui/score/rank.png";
@@ -102,14 +107,19 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 		history_.Add(record);
 	}
 
-	// --- 背景スプライトの生成 ---
-	TextureManager::GetInstance()->LoadTexture(kBackgroundTexture);
-
-	background_ = std::make_unique<Sprite>();
-	background_->Initialize(spriteCommon_,kBackgroundTexture);
-	background_->SetPosition({0.0f, 0.0f});
-	background_->SetSize({float(WinAPI::kClientWidth), float(WinAPI::kClientHeight)});
-	background_->SetColor(kOverColor);
+	// --- 変更：背景を仮置きのスプライトから、ゲーム中と同じ天球に置き換える ---
+	// 天球の共通設定（ルートシグネチャとPSO）はエンジン側で作られないため、シーンごとに作る。
+	// カメラはゲーム中のものがそのまま残っているため、それを使って見え方を揃える。
+	skyboxCommon_ = std::make_unique<SkyboxCommon>();
+	skyboxCommon_->Initialize(object3dCommon_->GetDxCommon());
+	skybox_ = std::make_unique<Skybox>();
+	skybox_->Initialize(skyboxCommon_.get(),PuzzleConfig::kSkyboxBackgroundTexture);
+	skyboxRotationY_ = 0.0f;
+	skyboxPulseFrame_ = 0;
+	// 1フレーム目の描画に間に合うよう、行列をここで一度作っておく
+	if(Camera* camera = CameraManager::GetInstance()->GetActiveCamera()){
+		skybox_->Update(*camera);
+	}
 
 	// 上位5件と今回スコアを、ImGuiを使わない通常UIとして作る。
 	TextureManager::GetInstance()->LoadTexture(kNumberTexture);
@@ -172,7 +182,7 @@ void GameOverScene::AppendLightningUnderline(std::vector<std::unique_ptr<Sprite>
 	float startX,float endX,float baseY,const Vector4& color){
 	// ジグザグのオフセットを16分割で作る。最後の要素は終点のオフセットとして使う。
 	constexpr int32_t kSegmentCount = 16;
-	// 16分割のオフセットは、-6～+6の範囲でラ��ダムに作る。最後の要素は終点のオフセットとして使う。
+	// 16分割のオフセットは、-6～+6の範囲でランダムに作る。最後の要素は終点のオフセットとして使う。
 	constexpr float kOffsets[kSegmentCount + 1] = {
 		0.0f,-5.0f,3.0f,-2.0f,6.0f,-4.0f,2.0f,-6.0f,1.0f,
 		5.0f,-3.0f,4.0f,-5.0f,2.0f,-1.0f,5.0f,0.0f
@@ -264,8 +274,27 @@ void GameOverScene::Update(){
 	ImGui::Text("SPACE: Return to title");
 	ImGui::End();
 #endif
-	if(background_){
-		background_->Update();
+	// 変更：仮置きの背景スプライトの代わりに、背景の天球を進める。
+	// 動かし方はゲーム中・タイトルと同じ。
+	if(skybox_){
+		skyboxRotationY_ += PuzzleConfig::kSkyboxRotationPerFrame;
+		if(skyboxRotationY_ >= 2.0f * PuzzleConfig::kPi){
+			skyboxRotationY_ -= 2.0f * PuzzleConfig::kPi;
+		}
+		skybox_->SetRotationY(skyboxRotationY_);
+
+		++skyboxPulseFrame_;
+		if(skyboxPulseFrame_ >= PuzzleConfig::kSkyboxPulseCycleFrames){
+			skyboxPulseFrame_ = 0;
+		}
+		const float phase = 2.0f * PuzzleConfig::kPi *
+			static_cast<float>(skyboxPulseFrame_) / static_cast<float>(PuzzleConfig::kSkyboxPulseCycleFrames);
+		const float brightness = 1.0f + PuzzleConfig::kSkyboxPulseAmplitude * std::sin(phase);
+		skybox_->SetColor({brightness,brightness,brightness,1.0f});
+
+		if(Camera* camera = CameraManager::GetInstance()->GetActiveCamera()){
+			skybox_->Update(*camera);
+		}
 	}
 	++lightningAnimationFrame_;
 	for(size_t i = 0; i < rankingLightningSprites_.size(); ++i){
@@ -324,9 +353,16 @@ void GameOverScene::Update(){
 
 // 描画処理
 void GameOverScene::Draw(){
-	if(spriteCommon_ && background_){
+	// 追加：背景の天球を最初に描く。
+	// 天球は深度を書き込まないので、このあとのスプライトがそのまま手前に重なる。
+	if(skybox_){
+		skybox_->Draw();
+	}
+
+	// 変更：背景スプライトを消したため、条件から background_ を外した
+	if(spriteCommon_){
 		spriteCommon_->Draw();
-		background_->Draw();
+		// 修正：コンフリクト解消 宣言のない背景パネルと不要になった古い背景スプライトを削除し、雷エフェクトの描画を残しました
 		for(const auto& line : rankingLightningSprites_){ line->Draw(); }
 		for(const auto& line : currentLightningSprites_){ line->Draw(); }
 		if(separator_){ separator_->Draw(); }

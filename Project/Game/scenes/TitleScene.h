@@ -15,6 +15,8 @@ class Obj3D;
 class Obj3dCommon;
 class Sprite;
 class SpriteCommon;
+class Skybox;       // 追加：背景の天球
+class SkyboxCommon; // 追加：天球の共通設定（ルートシグネチャとPSO）
 
 /// <summary>
 /// タイトル画面シーン
@@ -43,6 +45,19 @@ private:
 	// 代わりにゲーム中と同じ盤面を背景として持つ。
 	// タイトル名はこの盤面の上に重ねて描画する。
 	Board board_;
+
+	// 修正：コンフリクトを解消し、背景の天球とタイトルロゴの変数を両方残しました
+
+	// --- 追加：ゲーム中と同じゲーミングな背景の天球 ---
+	// 天球の共通設定はシーンごとに持つ（GameSceneも同じ持ち方をしている）。
+	std::unique_ptr<SkyboxCommon> skyboxCommon_;
+	std::unique_ptr<Skybox> skybox_;
+
+	// 天球の回転角（ラジアン）。毎フレーム少しずつ足して背景を流す。
+	float skyboxRotationY_ = 0.0f;
+
+	// 明るさを脈打たせるための経過フレーム数
+	int32_t skyboxPulseFrame_ = 0;
 
 	// 追加：盤面の上に重ねて表示するタイトルロゴ（title.obj）
 	std::unique_ptr<Obj3D> titleObj_;

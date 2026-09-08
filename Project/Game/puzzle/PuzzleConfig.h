@@ -170,6 +170,24 @@ namespace PuzzleConfig{
 	constexpr float kPoweredWhiteMixRate = 0.25f; // 白へ寄せる割合
 	constexpr float kPoweredColorGain = 1.25f;    // 明るさの倍率
 
+	// --- 背景の天球（ゲーム中とタイトルで共通）---
+	// ゆっくり回して虹色の帯を横へ流し、あわせて明るさをわずかに脈打たせる。
+
+	// 天球に貼るキューブマップ。水平方向に虹色の帯が1本入っている。
+	// 盤面が見づらくならないよう地色は暗くしてある。
+	inline const char* const kSkyboxBackgroundTexture = "resource/Skybox/gamingSkybox.dds";
+
+	// 1フレームあたりの回転量（ラジアン）。1周におよそ2分かかる速さ。
+	// 目で追えるより遅くして、見ていないときにだけ色が変わっているようにする。
+	constexpr float kSkyboxRotationPerFrame = 0.0009f;
+
+	// 明るさの脈動。周期（フレーム数）と、明るさ1.0に対する振れ幅。
+	constexpr int32_t kSkyboxPulseCycleFrames = 240;
+	constexpr float kSkyboxPulseAmplitude = 0.12f;
+
+	// 円周率（回転角の折り返しと脈動の計算に使う）
+	constexpr float kPi = 3.14159265f;
+
 	// --- ブロックの種類ごとの色 ---
 	// 並び順は BlockShape::Type に対応する。種類を足したらここにも色を足すこと。
 	// 落ちものパズルの一般的なピース配色とは別の色相で組んでいる。
