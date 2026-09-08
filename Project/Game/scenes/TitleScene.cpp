@@ -240,33 +240,6 @@ void TitleScene::Update(){
 	SoundManager::GetInstance()->ShowVolumeGui();
 #endif
 
-	if(input_->TriggerKey(DIK_NUMPAD1) || input_->TriggerKey(DIK_1)){
-		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::PostProcess); // Default
-	} else if(input_->TriggerKey(DIK_NUMPAD2) || input_->TriggerKey(DIK_2)){
-		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::BoxFilter);
-	} else if(input_->TriggerKey(DIK_NUMPAD3) || input_->TriggerKey(DIK_3)){
-		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::Grayscale);
-	} else if(input_->TriggerKey(DIK_NUMPAD4) || input_->TriggerKey(DIK_4)){
-		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::Vignette);
-	} else if(input_->TriggerKey(DIK_NUMPAD5) || input_->TriggerKey(DIK_5)){
-		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::GaussianBlur);
-	} else if(input_->TriggerKey(DIK_NUMPAD6) || input_->TriggerKey(DIK_6)){
-		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::LuminanceOutline);
-	} else if(input_->TriggerKey(DIK_NUMPAD7) || input_->TriggerKey(DIK_7)){
-		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::DepthOutline);
-	} else if(input_->TriggerKey(DIK_NUMPAD8) || input_->TriggerKey(DIK_8)){
-		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::RadialBlur);
-	} else if(input_->TriggerKey(DIK_NUMPAD9) || input_->TriggerKey(DIK_9)){
-		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::Dissolve);
-		// アニメーションのトリガーを引く
-		Application::GetInstance()->StartDissolveAnimation();
-	} else if(input_->TriggerKey(DIK_NUMPAD0) || input_->TriggerKey(DIK_0)){
-		Application::GetInstance()->SetCurrentPPType(PostProcess::Type::Random);
-	}else if(input_->TriggerKey(DIK_RETURN)){
-		// 弱点を突いた瞬間をシミュレートしてグリッチを発動
-		Application::GetInstance()->TriggerGlitch();
-	}
-
 	// 追加：背景の天球を進める（ゲーム中と同じ動かし方）。
 	// ゆっくり回して虹色の帯を横へ流し、あわせて明るさをわずかに脈打たせる。
 	if(skybox_){
