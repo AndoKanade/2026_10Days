@@ -132,6 +132,17 @@ private:
 
 	// Releaseでも表示するゲーム中スコア（数字画像を1文字ずつ切り出す）。
 	std::vector<std::unique_ptr<Sprite>> scoreDigitSprites_;
+	struct ScorePopup{
+		std::vector<std::unique_ptr<Sprite>> scoreDigits;
+		std::vector<std::unique_ptr<Sprite>> comboDigits;
+		std::unique_ptr<Sprite> plusHorizontal;
+		std::unique_ptr<Sprite> plusVertical;
+		std::unique_ptr<Sprite> comboSlashUp;
+		std::unique_ptr<Sprite> comboSlashDown;
+		int32_t frame = 0;
+	};
+	std::vector<ScorePopup> scorePopups_;
+	int32_t scoreArrivalFlashFrames_ = 0;
 
 	// --- 追加：ポーズ画面 ---
 
@@ -232,6 +243,9 @@ private:
 	void ConfirmSpecialTarget();
 	void UpdateSpecialGaugeUi();
 	void UpdateScoreUi();
+	void SpawnScorePopup(int64_t gainedScore,int32_t combo);
+	void UpdateScorePopups();
+	void DrawScorePopups() const;
 
 	// --- 追加：ポーズ画面 ---
 

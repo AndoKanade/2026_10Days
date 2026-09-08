@@ -63,6 +63,14 @@ namespace{
 	constexpr Vector2 kScoreDigitSampleInset = {0.5f,0.5f};
 	constexpr Vector2 kScoreDigitSampleSize = {7.0f,11.0f};
 	constexpr Vector2 kScoreDigitDrawSize = {32.0f,48.0f};
+	constexpr Vector2 kPopupStartPosition = {28.0f,260.0f};
+	constexpr Vector2 kPopupTargetPosition = {20.0f,60.0f};
+	constexpr Vector2 kPopupScoreDigitSize = {40.0f,60.0f};
+	constexpr Vector2 kPopupComboDigitSize = {32.0f,48.0f};
+	constexpr int32_t kPopupHoldFrames = 30;
+	constexpr int32_t kPopupTravelFrames = 45;
+	constexpr Vector4 kPopupScoreColor = {0.15f,0.90f,1.0f,1.0f};
+	constexpr Vector4 kPopupComboColor = {1.0f,0.85f,0.10f,1.0f};
 	constexpr int32_t kRainbowFramesPerColor = 12;
 	constexpr Vector4 kRainbowColors[] = {
 		{1.0f,0.15f,0.15f,1.0f}, {1.0f,0.55f,0.10f,1.0f},
@@ -73,6 +81,9 @@ namespace{
 	Vector4 LerpColor(const Vector4& a,const Vector4& b,float t){
 		return {a.x + (b.x-a.x)*t,a.y + (b.y-a.y)*t,
 			a.z + (b.z-a.z)*t,a.w + (b.w-a.w)*t};
+	}
+	Vector2 LerpVector2(const Vector2& a,const Vector2& b,float t){
+		return {a.x + (b.x-a.x)*t,a.y + (b.y-a.y)*t};
 	}
 	// 追加：ゲーム画面のBGMの初期音量
 	constexpr float kBgmVolume = 0.5f;
@@ -187,6 +198,8 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	input_ = input;
 	spriteCommon_ = spriteCommon;
 	score_.Reset();
+	scorePopups_.clear();
+	scoreArrivalFlashFrames_ = 0;
 	SceneManager::GetInstance()->SetFinalScore(0);
 	SceneManager::GetInstance()->SetFinalClearedCells(0);
 	activePlayFrames_ = 0;
@@ -693,6 +706,7 @@ void GameScene::Update() {
 			specialGauge_.AddFromClear(result.cellCount, result.chainCount);
 		}
 		score_.AddFromClear(result.cellCount,result.chainCount);
+		SpawnScorePopup(score_.GetLastGain(),score_.GetLastChain());
 	}
 	// スペシャルから始まった消去と、その落下連鎖がすべて終わってから通常チャージへ戻す。
 	if(suppressSpecialClearCharge_ && !board_.IsBusy()){
@@ -960,6 +974,7 @@ void GameScene::Update() {
 #endif
 	UpdateSpecialGaugeUi();
 	UpdateScoreUi();
+	UpdateScorePopups();
 }
 
 // --- 描画処理 ---
@@ -1028,6 +1043,7 @@ void GameScene::Draw(){
 		for(const auto& digit : scoreDigitSprites_){
 			digit->Draw();
 		}
+		DrawScorePopups();
 	}
 
 	// 追加：ポーズ画面はすべての描画の手前に重ねる
@@ -1199,7 +1215,126 @@ void GameScene::UpdateScoreUi(){
 			kScoreDigitCellSize.x * static_cast<float>(digit) + kScoreDigitSampleInset.x,
 			kScoreDigitSampleInset.y
 		});
+		const float flash = scoreArrivalFlashFrames_ > 0 ?
+			1.0f + 1.5f * static_cast<float>(scoreArrivalFlashFrames_) / 12.0f : 1.0f;
+		scoreDigitSprites_[i]->SetColor({flash,flash,flash,1.0f});
 		scoreDigitSprites_[i]->Update();
+	}
+	if(scoreArrivalFlashFrames_ > 0){ --scoreArrivalFlashFrames_; }
+}
+
+// 加算点のポップアップを生成する。
+void GameScene::SpawnScorePopup(int64_t gainedScore,int32_t combo){
+	if(gainedScore <= 0){ return; }
+	ScorePopup popup;
+
+	auto makeDigit = [&](int32_t digit,const Vector2& size,const Vector4& color){
+		auto sprite = std::make_unique<Sprite>();
+		sprite->Initialize(spriteCommon_,kScoreNumberTexture);
+		sprite->SetSize(size);
+		sprite->SetTextureSize(kScoreDigitSampleSize);
+		sprite->SetTextureLeftTop({
+			kScoreDigitCellSize.x * static_cast<float>(digit) + kScoreDigitSampleInset.x,
+			kScoreDigitSampleInset.y
+		});
+		sprite->SetUseAlphaMask(true);
+		sprite->SetColor(color);
+		return sprite;
+	};
+
+	const std::string scoreText = std::to_string(std::min<int64_t>(gainedScore,999999));
+	for(char character : scoreText){
+		popup.scoreDigits.push_back(makeDigit(character - '0',kPopupScoreDigitSize,kPopupScoreColor));
+	}
+	const std::string comboText = std::to_string(std::clamp(combo,1,99));
+	for(char character : comboText){
+		popup.comboDigits.push_back(makeDigit(character - '0',kPopupComboDigitSize,kPopupComboColor));
+	}
+
+	auto makeLine = [&](const Vector4& color){
+		auto sprite = std::make_unique<Sprite>();
+		sprite->Initialize(spriteCommon_,kGaugeRainbowTexture);
+		sprite->SetColor(color);
+		return sprite;
+	};
+	popup.plusHorizontal = makeLine(kPopupScoreColor);
+	popup.plusVertical = makeLine(kPopupScoreColor);
+	popup.comboSlashUp = makeLine(kPopupComboColor);
+	popup.comboSlashDown = makeLine(kPopupComboColor);
+	scorePopups_.push_back(std::move(popup));
+}
+
+// 加算点ポップアップのアニメーションを更新する。
+void GameScene::UpdateScorePopups(){
+	constexpr int32_t kTotalFrames = kPopupHoldFrames + kPopupTravelFrames;
+	bool scoreArrived = false;
+	for(auto& popup : scorePopups_){
+		++popup.frame;
+		const float rawProgress = std::clamp(
+			static_cast<float>(popup.frame - kPopupHoldFrames) / static_cast<float>(kPopupTravelFrames),0.0f,1.0f);
+		const float progress = rawProgress * rawProgress * (3.0f - 2.0f * rawProgress);
+		const float pulse = popup.frame < kPopupHoldFrames ? 1.0f + std::sin(static_cast<float>(popup.frame) * 0.35f) * 0.06f : 1.0f;
+		const Vector2 base = LerpVector2(kPopupStartPosition,kPopupTargetPosition,progress);
+		const Vector2 digitSize = LerpVector2(kPopupScoreDigitSize,{16.0f,24.0f},progress);
+		const float alpha = rawProgress > 0.78f ? (1.0f - rawProgress) / 0.22f : 1.0f;
+		const Vector4 scoreColor = {kPopupScoreColor.x,kPopupScoreColor.y,kPopupScoreColor.z,std::clamp(alpha,0.0f,1.0f)};
+
+		const float markScale = digitSize.y / kPopupScoreDigitSize.y;
+		popup.plusHorizontal->SetPosition({base.x,base.y + digitSize.y * 0.5f - 3.0f * markScale});
+		popup.plusHorizontal->SetSize({28.0f * markScale,6.0f * markScale});
+		popup.plusHorizontal->SetColor(scoreColor);
+		popup.plusHorizontal->Update();
+		popup.plusVertical->SetPosition({base.x + 11.0f * markScale,base.y + digitSize.y * 0.5f - 14.0f * markScale});
+		popup.plusVertical->SetSize({6.0f * markScale,28.0f * markScale});
+		popup.plusVertical->SetColor(scoreColor);
+		popup.plusVertical->Update();
+
+		for(size_t i = 0; i < popup.scoreDigits.size(); ++i){
+			auto& digit = popup.scoreDigits[i];
+			digit->SetPosition({base.x + 38.0f * markScale + (digitSize.x + 2.0f) * static_cast<float>(i),base.y});
+			digit->SetSize({digitSize.x * pulse,digitSize.y * pulse});
+			digit->SetColor(scoreColor);
+			digit->Update();
+		}
+
+		// コンボは加算点の下で少し上昇しながら消え、加算点だけが合計へ飛ぶ。
+		const float comboAlpha = std::clamp(1.0f - rawProgress,0.0f,1.0f);
+		const Vector2 comboBase = {kPopupStartPosition.x + 20.0f,kPopupStartPosition.y + 70.0f - progress * 18.0f};
+		const Vector4 comboColor = {kPopupComboColor.x,kPopupComboColor.y,kPopupComboColor.z,comboAlpha};
+		popup.comboSlashUp->SetPosition({comboBase.x,comboBase.y + 20.0f});
+		popup.comboSlashUp->SetSize({28.0f,5.0f});
+		popup.comboSlashUp->SetRotation(-0.75f);
+		popup.comboSlashUp->SetColor(comboColor);
+		popup.comboSlashUp->Update();
+		popup.comboSlashDown->SetPosition({comboBase.x,comboBase.y});
+		popup.comboSlashDown->SetSize({28.0f,5.0f});
+		popup.comboSlashDown->SetRotation(0.75f);
+		popup.comboSlashDown->SetColor(comboColor);
+		popup.comboSlashDown->Update();
+		for(size_t i = 0; i < popup.comboDigits.size(); ++i){
+			auto& digit = popup.comboDigits[i];
+			digit->SetPosition({comboBase.x + 38.0f + (kPopupComboDigitSize.x + 2.0f) * static_cast<float>(i),comboBase.y - 8.0f});
+			digit->SetSize(kPopupComboDigitSize);
+			digit->SetColor(comboColor);
+			digit->Update();
+		}
+
+		if(popup.frame >= kTotalFrames){ scoreArrived = true; }
+	}
+	if(scoreArrived){ scoreArrivalFlashFrames_ = 12; }
+	scorePopups_.erase(std::remove_if(scorePopups_.begin(),scorePopups_.end(),
+		[](const ScorePopup& popup){ return popup.frame >= kPopupHoldFrames + kPopupTravelFrames; }),scorePopups_.end());
+}
+
+// 加算点ポップアップの描画
+void GameScene::DrawScorePopups() const{
+	for(const auto& popup : scorePopups_){
+		popup.plusHorizontal->Draw();
+		popup.plusVertical->Draw();
+		for(const auto& digit : popup.scoreDigits){ digit->Draw(); }
+		popup.comboSlashUp->Draw();
+		popup.comboSlashDown->Draw();
+		for(const auto& digit : popup.comboDigits){ digit->Draw(); }
 	}
 }
 

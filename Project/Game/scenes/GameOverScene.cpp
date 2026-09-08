@@ -8,6 +8,7 @@
 #include "SoundManager.h"
 #include "WinAPI.h"
 #include "ImGuiManager.h"
+// 修正：コンフリクト解消 天球用のインクルードを残しました
 #include "CameraManager.h" // 追加：天球の描画に使うカメラを取得する
 #include "Obj3dCommon.h"   // 追加：天球の共通設定の初期化にDXCommonが要る
 #include "DXCommon.h"
@@ -37,23 +38,41 @@ namespace{
 	constexpr float kPanelWidth = 660.0f;
 	constexpr float kRankingStartY = 126.0f;
 	constexpr float kRankingRowStep = 60.0f;
-	constexpr Vector2 kRankingPanelSize = {kPanelWidth,54.0f};
 	constexpr float kRankX = 350.0f;
 	constexpr float kScoreX = 510.0f;
-	const Vector4 kRankingPanelColor = {0.90f,0.92f,1.0f,1.0f};
-	const Vector4 kCurrentPanelColor = {1.0f,0.88f,0.35f,1.0f};
 	const Vector4 kSeparatorColor = {0.12f,0.10f,0.20f,1.0f};
+	const Vector4 kRankingLightningColor = {0.15f,0.85f,1.0f,1.0f};
+	const Vector4 kCurrentLightningColor = {1.0f,0.85f,0.10f,1.0f};
+	// 60fps想定で約2秒ごとに、24フレームかけて光が通る。
+	constexpr int32_t kShineCycleFrames = 120;
+	constexpr int32_t kShineDurationFrames = 24;
 	constexpr int32_t kRainbowFramesPerColor = 12;
 	constexpr int32_t kRainbowColorCount = 7;
+	// yourScoreLabel_の虹色アニメーション用の色。赤→橙→黄→緑→水→青→紫。
 	constexpr Vector4 kYourScoreRainbowColors[kRainbowColorCount] = {
 		{1.0f,0.15f,0.15f,1.0f}, {1.0f,0.55f,0.10f,1.0f},
 		{1.0f,0.95f,0.10f,1.0f}, {0.15f,1.0f,0.25f,1.0f},
 		{0.10f,0.85f,1.0f,1.0f}, {0.20f,0.30f,1.0f,1.0f},
 		{0.75f,0.20f,1.0f,1.0f}
 	};
+	// 2つの色を線形補間する。t=0.0でa、t=1.0でb。
 	Vector4 LerpColor(const Vector4& a,const Vector4& b,float t){
 		return {a.x + (b.x-a.x)*t,a.y + (b.y-a.y)*t,
 			a.z + (b.z-a.z)*t,a.w + (b.w-a.w)*t};
+	}
+	// 光の通過量を0.0～1.0で返す。周期的に繰り返す。
+	float GetShineAmount(int32_t frame,int32_t delay){
+		int32_t localFrame = (frame - delay) % kShineCycleFrames;
+		if(localFrame < 0){ localFrame += kShineCycleFrames; }
+		if(localFrame >= kShineDurationFrames){ return 0.0f; }
+		constexpr float kPi = 3.14159265358979323846f;
+		return std::sin(kPi * static_cast<float>(localFrame) /
+			static_cast<float>(kShineDurationFrames));
+	}
+	// 光の通過量を元に、明るさを計算してRGBAで返す。1.0が通常の明るさ。
+	Vector4 GetBrightnessColor(float shine){
+		const float brightness = 1.0f + shine * 2.0f;
+		return {brightness,brightness,brightness,1.0f};
 	}
 }
 
@@ -109,21 +128,19 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 	TextureManager::GetInstance()->LoadTexture(kRankTexture);
 	TextureManager::GetInstance()->LoadTexture(kScoreTexture);
 	TextureManager::GetInstance()->LoadTexture(kYourScoreTexture);
-	rankingRowBackgrounds_.clear();
+	rankingLightningSprites_.clear();
+	currentLightningSprites_.clear();
 	rankingNumberSprites_.clear();
 	currentNumberSprites_.clear();
 
 	const auto& records = history_.GetRecords();
 	for(int32_t row = 0; row < kRankingCount; ++row){
-		auto panel = std::make_unique<Sprite>();
-		panel->Initialize(spriteCommon_,kSolidTexture);
-		panel->SetPosition({kPanelX,kRankingStartY + kRankingRowStep * static_cast<float>(row)});
-		panel->SetSize(kRankingPanelSize);
-		panel->SetColor(kRankingPanelColor);
-		rankingRowBackgrounds_.push_back(std::move(panel));
+		const float rowY = kRankingStartY + kRankingRowStep * static_cast<float>(row);
+		AppendLightningUnderline(rankingLightningSprites_,kPanelX,kPanelX + kPanelWidth,
+			rowY + 54.0f,kRankingLightningColor);
 
 		if(static_cast<size_t>(row) < records.size()){
-			const float numberY = kRankingStartY + 3.0f + kRankingRowStep * static_cast<float>(row);
+			const float numberY = rowY + 3.0f;
 			AppendNumberSprites(rankingNumberSprites_,row + 1,2,{kRankX,numberY},kNumberDrawSize);
 			AppendNumberSprites(rankingNumberSprites_,records[row].score,8,{kScoreX,numberY},kNumberDrawSize);
 		}
@@ -135,13 +152,10 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 	separator_->SetSize({kPanelWidth,8.0f});
 	separator_->SetColor(kSeparatorColor);
 
-	currentScoreBackground_ = std::make_unique<Sprite>();
-	currentScoreBackground_->Initialize(spriteCommon_,kSolidTexture);
-	currentScoreBackground_->SetPosition({kPanelX,512.0f});
-	currentScoreBackground_->SetSize({kPanelWidth,64.0f});
-	currentScoreBackground_->SetColor(kCurrentPanelColor);
 	AppendNumberSprites(currentNumberSprites_,currentRank_,2,{kRankX,520.0f},kNumberDrawSize);
 	AppendNumberSprites(currentNumberSprites_,currentScore_,8,{kScoreX,520.0f},kNumberDrawSize);
+	AppendLightningUnderline(currentLightningSprites_,kPanelX,kPanelX + kPanelWidth,
+		576.0f,kCurrentLightningColor);
 
 	auto createLabel = [&](const std::string& texture,const Vector2& position,const Vector2& size){
 		auto sprite = std::make_unique<Sprite>();
@@ -157,12 +171,43 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 	// 元画像の緑色ではなく透明度を文字の形として使い、全色へ着色可能にする。
 	yourScoreLabel_->SetUseAlphaMask(true);
 	yourScoreRainbowFrame_ = 0;
+	scoreShineFrame_ = 0;
 
 	// スコア画面のBGMをロードしてループ再生する。
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath);
 	SoundManager::GetInstance()->PlayAudio(kBgmPath,kBgmVolume,true);
 }
+// 電撃風の下線を作る。ジグザグの線を16分割で作る。
+void GameOverScene::AppendLightningUnderline(std::vector<std::unique_ptr<Sprite>>& destination,
+	float startX,float endX,float baseY,const Vector4& color){
+	// ジグザグのオフセットを16分割で作る。最後の要素は終点のオフセットとして使う。
+	constexpr int32_t kSegmentCount = 16;
+	// 16分割のオフセットは、-6～+6の範囲でランダムに作る。最後の要素は終点のオフセットとして使う。
+	constexpr float kOffsets[kSegmentCount + 1] = {
+		0.0f,-5.0f,3.0f,-2.0f,6.0f,-4.0f,2.0f,-6.0f,1.0f,
+		5.0f,-3.0f,4.0f,-5.0f,2.0f,-1.0f,5.0f,0.0f
+	};
+	// 16分割の幅を計算し、各セグメントごとに線を作る。
+	const float segmentWidth = (endX - startX) / static_cast<float>(kSegmentCount);
+	// 16分割の各セグメントを線として作る。線の長さは2点間の距離、角度はatan2で計算する。
+	for(int32_t segment = 0; segment < kSegmentCount; ++segment){
+		const float x0 = startX + segmentWidth * static_cast<float>(segment);
+		const float x1 = x0 + segmentWidth;
+		const float y0 = baseY + kOffsets[segment];
+		const float y1 = baseY + kOffsets[segment + 1];
+		const float dx = x1 - x0;
+		const float dy = y1 - y0;
 
+		auto line = std::make_unique<Sprite>();
+		line->Initialize(spriteCommon_,kSolidTexture);
+		line->SetPosition({x0,y0});
+		line->SetSize({std::sqrt(dx * dx + dy * dy),3.0f});
+		line->SetRotation(std::atan2(dy,dx));
+		line->SetColor(color);
+		destination.push_back(std::move(line));
+	}
+}
+// numbers.pngから数字を切り出し、指定位置へ桁数ぶん並べる。
 void GameOverScene::AppendNumberSprites(std::vector<std::unique_ptr<Sprite>>& destination,
 	int64_t value,int32_t digitCount,const Vector2& position,const Vector2& digitDrawSize){
 	if(value < 0){ value = 0; }
@@ -251,23 +296,54 @@ void GameOverScene::Update(){
 			skybox_->Update(*camera);
 		}
 	}
-	for(auto& panel : rankingRowBackgrounds_){ panel->Update(); }
+	++lightningAnimationFrame_;
+	for(size_t i = 0; i < rankingLightningSprites_.size(); ++i){
+		const bool bright = ((lightningAnimationFrame_ + static_cast<int32_t>(i) * 3) % 11) < 8;
+		rankingLightningSprites_[i]->SetColor(bright ? kRankingLightningColor : Vector4{0.05f,0.35f,0.50f,0.65f});
+		rankingLightningSprites_[i]->Update();
+	}
+	for(size_t i = 0; i < currentLightningSprites_.size(); ++i){
+		const bool bright = ((lightningAnimationFrame_ + static_cast<int32_t>(i) * 5) % 13) < 10;
+		currentLightningSprites_[i]->SetColor(bright ? kCurrentLightningColor : Vector4{0.55f,0.25f,0.05f,0.65f});
+		currentLightningSprites_[i]->Update();
+	}
 	if(separator_){ separator_->Update(); }
-	if(currentScoreBackground_){ currentScoreBackground_->Update(); }
-	if(rankingLabel_){ rankingLabel_->Update(); }
-	if(rankLabel_){ rankLabel_->Update(); }
-	if(scoreLabel_){ scoreLabel_->Update(); }
+	++scoreShineFrame_;
+	if(scoreShineFrame_ >= kShineCycleFrames){ scoreShineFrame_ = 0; }
+	if(rankingLabel_){
+		rankingLabel_->SetColor(GetBrightnessColor(GetShineAmount(scoreShineFrame_,0)));
+		rankingLabel_->Update();
+	}
+	if(rankLabel_){
+		rankLabel_->SetColor(GetBrightnessColor(GetShineAmount(scoreShineFrame_,5)));
+		rankLabel_->Update();
+	}
+	if(scoreLabel_){
+		scoreLabel_->SetColor(GetBrightnessColor(GetShineAmount(scoreShineFrame_,10)));
+		scoreLabel_->Update();
+	}
 	if(yourScoreLabel_){
 		++yourScoreRainbowFrame_;
 		const int32_t color = (yourScoreRainbowFrame_ / kRainbowFramesPerColor) % kRainbowColorCount;
 		const int32_t next = (color + 1) % kRainbowColorCount;
 		const float t = static_cast<float>(yourScoreRainbowFrame_ % kRainbowFramesPerColor) /
 			static_cast<float>(kRainbowFramesPerColor);
-		yourScoreLabel_->SetColor(LerpColor(kYourScoreRainbowColors[color],kYourScoreRainbowColors[next],t));
+		const Vector4 rainbowColor = LerpColor(kYourScoreRainbowColors[color],kYourScoreRainbowColors[next],t);
+		const float shine = GetShineAmount(scoreShineFrame_,15) * 0.8f;
+		yourScoreLabel_->SetColor(LerpColor(rainbowColor,{1.0f,1.0f,1.0f,1.0f},shine));
 		yourScoreLabel_->Update();
 	}
-	for(auto& number : rankingNumberSprites_){ number->Update(); }
-	for(auto& number : currentNumberSprites_){ number->Update(); }
+	for(size_t i = 0; i < rankingNumberSprites_.size(); ++i){
+		// 数字を左から右へ順番に光らせる。
+		const int32_t delay = 18 + static_cast<int32_t>(i) * 2;
+		rankingNumberSprites_[i]->SetColor(GetBrightnessColor(GetShineAmount(scoreShineFrame_,delay)));
+		rankingNumberSprites_[i]->Update();
+	}
+	for(size_t i = 0; i < currentNumberSprites_.size(); ++i){
+		const int32_t delay = 24 + static_cast<int32_t>(i) * 2;
+		currentNumberSprites_[i]->SetColor(GetBrightnessColor(GetShineAmount(scoreShineFrame_,delay)));
+		currentNumberSprites_[i]->Update();
+	}
 
 	// スペースキーでタイトル画面へ遷移
 	if(input_->TriggerKey(DIK_SPACE)){
@@ -286,9 +362,10 @@ void GameOverScene::Draw(){
 	// 変更：背景スプライトを消したため、条件から background_ を外した
 	if(spriteCommon_){
 		spriteCommon_->Draw();
-		for(const auto& panel : rankingRowBackgrounds_){ panel->Draw(); }
+		// 修正：コンフリクト解消 宣言のない背景パネルと不要になった古い背景スプライトを削除し、雷エフェクトの描画を残しました
+		for(const auto& line : rankingLightningSprites_){ line->Draw(); }
+		for(const auto& line : currentLightningSprites_){ line->Draw(); }
 		if(separator_){ separator_->Draw(); }
-		if(currentScoreBackground_){ currentScoreBackground_->Draw(); }
 		if(rankingLabel_){ rankingLabel_->Draw(); }
 		if(rankLabel_){ rankLabel_->Draw(); }
 		if(scoreLabel_){ scoreLabel_->Draw(); }

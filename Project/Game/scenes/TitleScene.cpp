@@ -18,6 +18,9 @@
 #include "SkyboxCommon.h" // 追加：天球の共通設定
 #include <cmath>
 
+// 追加：タイトルロゴの浮遊アニメーションで sin を使うため
+#include <cmath>
+
 // ImGui (マクロ定義がある場合のみ)
 #ifdef USE_IMGUI
 #include "imguiManager.h"
@@ -52,6 +55,36 @@ namespace{
 
 	// 追加：タイトルBGMの初期音量
 	constexpr float kBgmVolume = 0.5f;
+
+	// 追加：タイトルロゴのモデル（resource/ui/title/title.obj）
+	const std::string kTitleModel = "ui/title/title.obj";
+
+	// 追加：タイトルロゴの拡大率。
+	// 元の形状は横幅1.6・縦幅0.46程度と小さいため、盤面（横幅10）に対して
+	// 見出しとして目立つ大きさになるよう拡大する。
+	constexpr float kTitleScale = 7.5f;
+
+	// 追加：タイトルロゴの基準位置。
+	// 盤面の上部に重なるよう盤面中心よりやや上（Y）に置き、
+	// 手前（カメラ側、Zがより負の方向）にずらして落下ブロックより前面に表示する。
+	const Vector3 kTitlePosition = {0.0f, 5.0f, -3.0f};
+
+	// 追加：円周率×2。sin の位相計算（フレーム数→ラジアン）に使う。
+	constexpr float kTitleFloatTwoPi = 3.14159265f * 2.0f;
+
+	// 追加：上下にふわふわ浮くときの振れ幅（ワールド単位）
+	constexpr float kTitleFloatAmplitude = 0.25f;
+
+	// 追加：上下運動1往復にかけるフレーム数（150 = 約2.5秒。ゆっくり浮かせる）
+	constexpr int32_t kTitleFloatPeriodFrames = 150;
+
+	// 追加：左右にわずかに傾ける揺れの最大角度（ラジアン）
+	// 度数法3度ぶん。傾けすぎるとロゴが読みにくくなるため控えめにする。
+	constexpr float kTitleSwayAmplitudeRadians = 3.0f * (3.14159265f / 180.0f);
+
+	// 追加：傾き1往復にかけるフレーム数。
+	// 上下運動と同じ周期にすると単調に見えるため、あえてずらして自然な揺れにする。
+	constexpr int32_t kTitleSwayPeriodFrames = 190;
 }
 
 // コンストラクタ
@@ -122,6 +155,19 @@ void TitleScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommo
 		fallingObjs_.push_back(std::move(obj));
 	}
 	SyncDemoBlockObjs();
+
+	// 追加：盤面の上に重ねて表示するタイトルロゴを読み込む。
+	// 位置・傾きは毎フレーム Update() 内でふわふわ動かすため、ここでは初期状態だけ設定する。
+	ModelManager::GetInstance()->LoadModel(kTitleModel);
+	titleObj_ = std::make_unique<Obj3D>();
+	titleObj_->Initialize(object3dCommon_);
+	titleObj_->SetModel(kTitleModel);
+	titleObj_->SetScale({kTitleScale, kTitleScale, kTitleScale});
+	titleObj_->SetTranslate(kTitlePosition);
+	if(Model::Material* material = titleObj_->GetMaterial()){
+		// ロゴなので陰影は付けず、常に同じ明るさで見えるようにする
+		material->enableLighting = 0;
+	}
 
 	// 追加：タイトルBGMをロードしてループ再生する
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath);
@@ -204,6 +250,20 @@ void TitleScene::Update(){
 		obj->Update();
 	}
 
+	// 追加：タイトルロゴをふわふわ浮遊させる。
+	// 上下移動と傾きで別々の周期の sin を使い、単純な往復には見えないようにする。
+	++titleFloatTimer_;
+	const float floatPhase = kTitleFloatTwoPi *
+		static_cast<float>(titleFloatTimer_) / static_cast<float>(kTitleFloatPeriodFrames);
+	const float swayPhase = kTitleFloatTwoPi *
+		static_cast<float>(titleFloatTimer_) / static_cast<float>(kTitleSwayPeriodFrames);
+
+	Vector3 titleTranslate = kTitlePosition;
+	titleTranslate.y += std::sin(floatPhase) * kTitleFloatAmplitude;
+	titleObj_->SetTranslate(titleTranslate);
+	titleObj_->SetRotate({0.0f, 0.0f, std::sin(swayPhase) * kTitleSwayAmplitudeRadians});
+	titleObj_->Update();
+
 	// 4. シーン遷移 (スペースキー)
 	if(input_->TriggerKey(DIK_SPACE)){
 		SceneManager::GetInstance()->ChangeScene("GAME");
@@ -224,6 +284,9 @@ void TitleScene::Draw(){
 	for(auto& obj : fallingObjs_){
 		obj->Draw();
 	}
+
+	// 追加：タイトルロゴを最後に描画し、背景の盤面より手前に重ねて見せる
+	titleObj_->Draw();
 }
 
 // 追加：背景のデモプレイを1フレーム進める。
