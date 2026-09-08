@@ -17,11 +17,15 @@ namespace{
 	// 追加：配線に使うモデル。細く引き伸ばして棒にするため、面取りのない素のキューブを使う。
 	const std::string kWireModel = "defaultBlock/defaultBlock.obj";
 
-	// 左右の壁（ゴール）に使うモデル
-	const std::string kGoalBlockModel = "goalBlock/goalBlock.obj";
+	// 変更：左右の壁（ゴール）に使うモデル。落下ブロックと同じツヤを出すため面取り版にする。
+	const std::string kGoalBlockModel = "goalBlock/goalBlockBevel.obj";
 
-	// 下の壁（電源）に使うモデル
-	const std::string kSupplyBlockModel = "supplyBlock/supplyBlock.obj";
+	// 変更：下の壁（電源）に使うモデル。こちらも面取り版にする。
+	const std::string kSupplyBlockModel = "supplyBlock/supplyBlockBevel.obj";
+
+	// 追加：壁ブロックへ渡す色。テクスチャの色をそのまま出したいので白にし、
+	// ライティングによる減衰ぶんだけ持ち上げる。
+	const Vector4 kWallColor = PuzzleConfig::ApplyLitGain(PuzzleConfig::ToLinearColor({1.0f, 1.0f, 1.0f, 1.0f}));
 
 	// 削除：通常の固定マスの色は PuzzleConfig::GetBlockColor() でブロックの種類ごとに引くようにした
 
@@ -113,7 +117,12 @@ void Board::CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath){
 	obj->SetTranslate(GridToWorld(x,y));
 
 	if(Model::Material* wallMaterial = obj->GetMaterial()){
-		wallMaterial->enableLighting = 0; // 2D的な見た目にするため陰影を切る（色はモデルのテクスチャそのまま）
+		// 変更：落下ブロックと同じようにライティングを有効にし、面取り面へツヤを乗せる。
+		// テクスチャが黒ベースで拡散光では光らないため、鏡面反射と映り込みは壁専用の強めの値を使う。
+		wallMaterial->color = kWallColor;
+		wallMaterial->enableLighting = 1;
+		wallMaterial->shininess = PuzzleConfig::kWallShininess;
+		wallMaterial->environmentCoefficient = PuzzleConfig::kWallEnvironmentCoefficient;
 	}
 
 	wallObjs_.push_back(std::move(obj));
@@ -207,6 +216,22 @@ void Board::RebuildCellObjects(){
 			}
 		}
 	}
+}
+
+// 追加：マスの中身と消去演出の状態をすべて初期状態へ戻す（壁はそのまま）。
+void Board::Reset(){
+	// マスをすべて空にする
+	cells_ = {};
+
+	// 消去演出の途中だった場合に備えて、その状態も消す
+	clearingCells_.clear();
+	isClearing_ = false;
+	clearTimer_ = 0;
+	chainCount_ = 0;
+	clearResults_.clear();
+
+	// 空になった盤面に合わせて見た目を作り直す
+	RebuildCellObjects();
 }
 
 // 電源（最下段）から実際にどこまで通電が届いているかを幅優先探索で調べる。
@@ -591,6 +616,13 @@ bool Board::ConvertToStrongest(int32_t x,int32_t y){
 	}
 	cell.MakeStrongest();
 	chainCount_ = 0;
+
+	// 追加：変換後のマスが自分の列で浮いた状態になっていないよう、
+	// 通常の消去処理と同じくここでも列単位の落下処理をかける
+	// （消去を経由しない変換ではこれまで ApplyGravity が呼ばれておらず、
+	// 空中に浮いたまま表示されるバグがあったため）。
+	ApplyGravity({{x,y}},{});
+
 	ResolveConduction();
 	RebuildCellObjects();
 	return true;

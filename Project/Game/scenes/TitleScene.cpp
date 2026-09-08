@@ -22,10 +22,27 @@
 
 // 定数定義 (ファイルパスやパラメータ)
 namespace{
-	const std::string kModelName = "Fence/fence.obj";
-	const std::string kTextureName = "resource/uvChecker.png";
+	// 削除：仮置きだったFenceのモデルとuvCheckerのスプライト用の定数
+
+	// 環境マップ（映り込み）に使うスカイボックスのテクスチャ。
+	// 盤面のブロックの描画で参照するため、タイトルでも読み込んでおく必要がある。
 	const std::string kSkyboxTexture = "resource/Skybox/rostock_laage_airport_4k.dds";
-	const float kSpriteSize = 300.0f;
+
+	// 追加：デモプレイの落下ブロックに使うモデル。
+	// 読み込み自体は Board::Initialize() が済ませているため、ここではパスだけ持つ。
+	const std::string kBlockModel = "blockBevel/blockBevel.obj";
+
+	// 追加：デモプレイの操作間隔（フレーム）。
+	// 回転・左右移動をこの間隔で1回ずつ行い、人が操作しているように見せる。
+	constexpr int32_t kDemoActionIntervalFrames = 8;
+
+	// 追加：デモプレイで1個のブロックにつき行う左右移動の最大回数。
+	// 実際の回数はこの範囲から抽選する（負なら左、正なら右）。
+	constexpr int32_t kDemoMaxHorizontalMoves = 5;
+
+	// 追加：デモプレイの自動落下の間隔（フレーム）。
+	// ゲーム中より速くして、タイトルでも展開が止まって見えないようにする。
+	constexpr int32_t kDemoFallIntervalFrames = 20;
 
 	// 追加：タイトル画面で流すBGMのパス
 	const std::string kBgmPath = "resource/music/bgm/New_Breath.mp3";
@@ -48,8 +65,6 @@ void TitleScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommo
 	spriteCommon_ = spriteCommon;
 
 	// --- リソースのロード ---
-	ModelManager::GetInstance()->LoadModel(kModelName);
-	TextureManager::GetInstance()->LoadTexture(kTextureName);
 	TextureManager::GetInstance()->LoadTexture(kSkyboxTexture);
 
 	auto* dxCommon = object3dCommon_->GetDxCommon();
@@ -59,27 +74,40 @@ void TitleScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommo
 	CameraManager::GetInstance()->SetActiveCamera("TitleCamera");
 
 	// 3. 必要なら座標を調整
+	// 変更：背景の盤面がゲーム中とまったく同じ大きさ・位置で映るよう、
+	// カメラの引き距離もゲームシーンと同じ値にする。
 	auto* camera = CameraManager::GetInstance()->GetActiveCamera();
-	camera->SetTranslate({0.0f, 0.0f, -10.0f});
+	camera->SetTranslate({0.0f, 0.0f, PuzzleConfig::kCameraDistanceZ});
 
-	// --- スプライト生成と設定 ---
-	sprite_ = std::make_unique<Sprite>();
-	sprite_->Initialize(spriteCommon_,kTextureName);
-	sprite_->SetPosition({0.0f, 0.0f});         // 左上
-	sprite_->SetSize({kSpriteSize, kSpriteSize});
-	sprite_->SetColor({1.0f, 1.0f, 1.0f, 1.0f}); // 白（不透明）
+	// 追加：Obj3Dは生成時に既定のカメラを取り込むため、盤面を作る前に差し替えておく
+	object3dCommon_->SetDefaultCamera(camera);
 
-	// --- 3Dオブジェクト生成と設定 ---
-	titleObject_ = std::make_unique<Obj3D>();
-	titleObject_->Initialize(object3dCommon_);
-	titleObject_->SetModel(kModelName);
-	titleObject_->SetTranslate({0.0f, 0.0f, 0.0f});
-	titleObject_->SetScale({0.5f, 0.5f, 0.5f});
+	// 追加：背景として描画する盤面を初期化する（壁だけの空の盤面）
+	board_.Initialize(object3dCommon_);
 
-	auto* material = titleObject_->GetMaterial();
-	if(material){
-		material->environmentCoefficient = 0.0f;
+	// 追加：デモプレイ用の乱数エンジンをシードし、最初のブロックを出現させる
+	std::random_device seedGenerator;
+	randomEngine_.seed(seedGenerator());
+	SpawnDemoBlock();
+
+	// 追加：落下中ブロックの描画オブジェクトを、ブロックのマス数だけ用意する。
+	// 色は種類ごとに変わるため SyncDemoBlockObjs() で毎フレーム設定する。
+	const size_t cellCount = fallingBlock_.GetOccupiedCells().size();
+	for(size_t i = 0; i < cellCount; ++i){
+		auto obj = std::make_unique<Obj3D>();
+		obj->Initialize(object3dCommon_);
+		obj->SetModel(kBlockModel);
+		obj->SetScale({PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale});
+
+		if(Model::Material* material = obj->GetMaterial()){
+			material->enableLighting = 1;
+			material->shininess = PuzzleConfig::kBlockShininess;
+			material->environmentCoefficient = PuzzleConfig::kBlockEnvironmentCoefficient;
+		}
+
+		fallingObjs_.push_back(std::move(obj));
 	}
+	SyncDemoBlockObjs();
 
 	// 追加：タイトルBGMをロードしてループ再生する
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath);
@@ -99,9 +127,7 @@ void TitleScene::Update(){
 
 	// 1. ImGuiの設定更新
 #ifdef USE_IMGUI
-	ImGui::Begin("Sprite Settings");
-	ImGui::ColorEdit4("Color & Alpha",&spriteColor_.x); // 色と透明度の調整
-	ImGui::End();
+	// 削除：仮置きだったスプライトの色調整UI
 
 	// 追加：音量調整UI
 	SoundManager::GetInstance()->ShowVolumeGui();
@@ -134,16 +160,13 @@ void TitleScene::Update(){
 		Application::GetInstance()->TriggerGlitch();
 	}
 
-	// 2. オブジェクトの更新
-	if(titleObject_){
-		titleObject_->Update();
-	}
+	// 2. 背景のデモプレイの更新
+	UpdateDemoPlay();
 
-	// 3. スプライトの更新
-	if(sprite_){
-		// ImGuiが無効な場合、spriteColor_ は初期値が適用されます
-		sprite_->SetColor(spriteColor_);
-		sprite_->Update();
+	// 3. 背景の盤面の更新（カメラに追従させるため行列を毎フレーム更新する）
+	board_.Update();
+	for(auto& obj : fallingObjs_){
+		obj->Update();
 	}
 
 	// 4. シーン遷移 (スペースキー)
@@ -154,14 +177,100 @@ void TitleScene::Update(){
 
 // 描画処理
 void TitleScene::Draw(){
-	// 3Dオブジェクト描画
-	if(titleObject_){
-		titleObject_->Draw();
+	// 背景としてゲーム中と同じ盤面とデモプレイのブロックを描画する。
+	// タイトル名などのUIは、このあとにスプライトで重ねて描画する。
+	board_.Draw();
+	for(auto& obj : fallingObjs_){
+		obj->Draw();
+	}
+}
+
+// 追加：背景のデモプレイを1フレーム進める。
+void TitleScene::UpdateDemoPlay(){
+	// 消去演出中はゲーム中と同じく操作も落下も止める（盤面の更新は呼び出し元で行う）
+	if(board_.IsBusy()){
+		return;
 	}
 
-	// 2Dスプライト描画
-	if(spriteCommon_ && sprite_){
-		spriteCommon_->Draw(); // 描画前処理
-		sprite_->Draw();       // スプライト本体
+	// 消去の結果はタイトルでは使わないため、溜め込まないよう毎フレーム捨てる
+	board_.TakeClearResults();
+
+	// 一定間隔で、出現時に決めておいた回転・左右移動を1つずつ実行する
+	if(demoActionTimer_ > 0){
+		--demoActionTimer_;
+	} else if(demoPendingRotations_ > 0){
+		fallingBlock_.Rotate(board_);
+		--demoPendingRotations_;
+		demoActionTimer_ = kDemoActionIntervalFrames;
+	} else if(demoPendingMoves_ < 0){
+		fallingBlock_.MoveLeft(board_);
+		++demoPendingMoves_;
+		demoActionTimer_ = kDemoActionIntervalFrames;
+	} else if(demoPendingMoves_ > 0){
+		fallingBlock_.MoveRight(board_);
+		--demoPendingMoves_;
+		demoActionTimer_ = kDemoActionIntervalFrames;
+	} else{
+		// 操作し終えたら、あとは加速して落とす（下キーを押しっぱなしにしたのと同じ扱い）
+		fallingBlock_.SetSoftDrop(true);
 	}
+
+	// 時間経過を進め、盤面に固定されたら次のブロックを出す
+	if(fallingBlock_.Update(board_,kDemoFallIntervalFrames)){
+		// 天井より上にはみ出したまま固定された、または出現位置が塞がっていたら
+		// ゲーム中はゲームオーバーになる状態。デモでは最初からやり直す
+		const bool lockedAboveCeiling = fallingBlock_.IsLockedAboveCeiling();
+		if(lockedAboveCeiling || !SpawnDemoBlock()){
+			ResetDemoPlay();
+		}
+	}
+
+	// 描画オブジェクトを現在の占有マスに合わせて動かす
+	SyncDemoBlockObjs();
+}
+
+// 追加：デモ用のブロックを1個出現させ、そのブロックで行う操作内容を決める。
+bool TitleScene::SpawnDemoBlock(){
+	// 種類は全種類から等確率で選ぶ（背景の演出なので偏りは問題にならない）
+	std::uniform_int_distribution<int32_t> typeDist(0,BlockShape::kTypeCount - 1);
+	const BlockShape::Type type = static_cast<BlockShape::Type>(typeDist(randomEngine_));
+
+	const bool spawned = fallingBlock_.Spawn(board_,type,nextBlockId_);
+	++nextBlockId_;
+
+	// 前のブロックの加速状態を持ち越さないよう戻す
+	fallingBlock_.SetSoftDrop(false);
+
+	// このブロックで行う回転回数と左右移動の回数を決める。
+	// 壁や既存ブロックと重なる操作は FallingBlock 側が拒否するため、
+	// ここでは置ける場所かどうかを気にせず抽選してよい。
+	std::uniform_int_distribution<int32_t> rotationDist(0,BlockShape::kRotationCount - 1);
+	std::uniform_int_distribution<int32_t> moveDist(-kDemoMaxHorizontalMoves,kDemoMaxHorizontalMoves);
+	demoPendingRotations_ = rotationDist(randomEngine_);
+	demoPendingMoves_ = moveDist(randomEngine_);
+	demoActionTimer_ = kDemoActionIntervalFrames;
+
+	return spawned;
+}
+
+// 追加：落下中ブロックの描画オブジェクトを、現在の占有マスと種類の色に合わせる。
+void TitleScene::SyncDemoBlockObjs(){
+	const Vector4 blockColor = PuzzleConfig::ApplyLitGain(PuzzleConfig::GetBlockColor(fallingBlock_.GetType()));
+
+	const std::vector<GridPos> cells = fallingBlock_.GetOccupiedCells();
+	for(size_t i = 0; i < fallingObjs_.size() && i < cells.size(); ++i){
+		fallingObjs_[i]->SetTranslate(board_.GridToWorld(cells[i].x,cells[i].y));
+
+		if(Model::Material* material = fallingObjs_[i]->GetMaterial()){
+			material->color = blockColor;
+		}
+	}
+}
+
+// 追加：天井まで積み上がったときに、盤面を空に戻してデモを最初からやり直す。
+void TitleScene::ResetDemoPlay(){
+	board_.Reset();
+	nextBlockId_ = 0;
+	SpawnDemoBlock();
+	SyncDemoBlockObjs();
 }

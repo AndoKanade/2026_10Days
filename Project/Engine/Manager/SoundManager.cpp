@@ -1,6 +1,8 @@
 #include "SoundManager.h"
 #include <cassert>
 #include <iostream>
+#include <fstream>
+#include <cstdlib>
 
 // --- 高速化・プロパティ操作用 ---
 #include <propvarutil.h> 
@@ -21,6 +23,15 @@ namespace{
 	constexpr float kDefaultVolume = 1.0f;
 	// ImGuiのスライダー幅を自動で広げるための指定値
 	constexpr float kGuiFullWidth = -1.0f;
+
+	// 追加：音量設定を保存するファイルのパス (実行時のカレントディレクトリ基準)
+	constexpr const char* kVolumeSettingsFilePath = "soundSettings.txt";
+
+	// 追加：音量設定ファイルで、マスター音量の行に書くキー
+	constexpr const char* kMasterVolumeKey = "master";
+
+	// 追加：音量設定ファイルの1行で、音量とキーを区切る文字
+	constexpr char kVolumeSettingsSeparator = ' ';
 }
 
 // 追加：値を上下限の内側に収める (音量のクランプ用)
@@ -59,12 +70,18 @@ void SoundManager::Initialize(){
 	// 3. マスターボイスの作成
 	result = xAudio2_->CreateMasteringVoice(&masterVoice_);
 	assert(SUCCEEDED(result));
+
+	// 追加：4. 前回終了時の音量設定を読み込む
+	LoadVolumeSettings();
 }
 
 // ==========================================================================
 // 終了処理
 // ==========================================================================
 void SoundManager::Finalize(){
+	// 追加：次回起動時に引き継げるよう、音量設定を書き出す
+	SaveVolumeSettings();
+
 	// 再生中ボイスの破棄
 	for(auto& pair : activeVoices_){
 		if(pair.second){
@@ -219,8 +236,12 @@ void SoundManager::PlayAudio(const std::string& filename,float volume,bool loop)
 	result = xAudio2_->CreateSourceVoice(&pSourceVoice,&soundData.wfex);
 	assert(SUCCEEDED(result));
 
-	// 追加：指定音量を記録し、マスター音量を掛けた値を実際に適用する
-	volumes_[filename] = ClampVolume(volume);
+	// 変更：引数の音量は「その音声の音量がまだ決まっていない場合の初期値」として扱う。
+	// 毎回上書きしていると、設定ファイルから読み込んだ値やUIで調整した値が
+	// 再生のたびに元へ戻ってしまうため。決まっていればそちらを優先する
+	if(volumes_.find(filename) == volumes_.end()){
+		volumes_[filename] = ClampVolume(volume);
+	}
 	pSourceVoice->SetVolume(volumes_[filename] * masterVolume_);
 
 	XAUDIO2_BUFFER buf{};
@@ -326,6 +347,60 @@ float SoundManager::GetMasterVolume() const{
 }
 
 // ==========================================================================
+// 音量設定の読み込み (追加)
+// ==========================================================================
+void SoundManager::LoadVolumeSettings(){
+	std::ifstream file(kVolumeSettingsFilePath);
+
+	// まだ一度も保存していない場合はファイルが無い。既定の音量のまま始める
+	if(!file){
+		return;
+	}
+
+	std::string line;
+	while(std::getline(file,line)){
+		// 1行は「音量 区切り文字 キー」の形式。ファイル名にスペースが入っていても
+		// 壊れないよう、先頭の音量だけを取り出して残りをすべてキーとして扱う
+		const size_t separator = line.find(kVolumeSettingsSeparator);
+		if(separator == std::string::npos){
+			continue;
+		}
+
+		const std::string key = line.substr(separator + 1);
+		if(key.empty()){
+			continue;
+		}
+
+		const float volume = ClampVolume(std::strtof(line.c_str(),nullptr));
+
+		if(key == kMasterVolumeKey){
+			masterVolume_ = volume;
+		} else{
+			// 音声のロードはこの後に行われるため、ロード済みかどうかは確認しない
+			volumes_[key] = volume;
+		}
+	}
+}
+
+// ==========================================================================
+// 音量設定の書き出し (追加)
+// ==========================================================================
+void SoundManager::SaveVolumeSettings() const{
+	std::ofstream file(kVolumeSettingsFilePath,std::ios::trunc);
+
+	// 書き込めない場合は保存をあきらめる (音が鳴らなくなるわけではないため)
+	if(!file){
+		return;
+	}
+
+	file << masterVolume_ << kVolumeSettingsSeparator << kMasterVolumeKey << '\n';
+
+	for(const auto& pair : volumes_){
+		file << pair.second << kVolumeSettingsSeparator << pair.first << '\n';
+	}
+}
+
+// ==========================================================================
 // 音量調整用デバッグUI (追加)
 // ==========================================================================
 void SoundManager::ShowVolumeGui(){
@@ -337,6 +412,10 @@ void SoundManager::ShowVolumeGui(){
 	ImGui::PushItemWidth(kGuiFullWidth);
 	if(ImGui::SliderFloat("Master Volume",&master,kMinVolume,kMaxVolume)){
 		SetMasterVolume(master);
+	}
+	// 追加：スライダーを離した時点で保存する (ドラッグ中に毎フレーム書き出さないため)
+	if(ImGui::IsItemDeactivatedAfterEdit()){
+		SaveVolumeSettings();
 	}
 	ImGui::PopItemWidth();
 
@@ -356,6 +435,10 @@ void SoundManager::ShowVolumeGui(){
 		ImGui::PushItemWidth(kGuiFullWidth);
 		if(ImGui::SliderFloat("Volume",&volume,kMinVolume,kMaxVolume)){
 			SetVolume(filename,volume);
+		}
+		// 追加：スライダーを離した時点で保存する
+		if(ImGui::IsItemDeactivatedAfterEdit()){
+			SaveVolumeSettings();
 		}
 		ImGui::PopItemWidth();
 

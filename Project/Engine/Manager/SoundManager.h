@@ -64,7 +64,7 @@ public: // --- 音声ロード・再生制御 ---
 	/// 音声を再生
 	/// </summary>
 	/// <param name="filename">ファイルパス</param>
-	/// <param name="volume">音量 (0.0=無音, 1.0=最大)</param>
+	/// <param name="volume">音量 (0.0=無音, 1.0=最大)。まだ音量が決まっていない場合の初期値として使う</param>
 	/// <param name="loop">trueで無限ループ</param>
 	void PlayAudio(const std::string& filename,float volume = 1.0f,bool loop = false);
 
@@ -128,6 +128,17 @@ private: // --- 内部ヘルパー関数 ---
 
 	// 音声データのメモリ解放
 	void Unload(SoundData* soundData);
+
+	/// <summary>
+	/// 追加：音量設定をファイルから読み込む (初期化時に呼ぶ)
+	/// ファイルが無い場合は何もせず、既定の音量のままにする
+	/// </summary>
+	void LoadVolumeSettings();
+
+	/// <summary>
+	/// 追加：音量設定をファイルへ書き出す (終了時とUIでの調整後に呼ぶ)
+	/// </summary>
+	void SaveVolumeSettings() const;
 
 private: // --- メンバ変数 ---
 
