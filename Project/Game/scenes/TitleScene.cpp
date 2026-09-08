@@ -14,6 +14,9 @@
 #include "Model.h"
 #include "Application.h"
 #include "SoundManager.h"
+#include "Skybox.h"       // 追加：背景の天球
+#include "SkyboxCommon.h" // 追加：天球の共通設定
+#include <cmath>
 
 // ImGui (マクロ定義がある場合のみ)
 #ifdef USE_IMGUI
@@ -81,6 +84,17 @@ void TitleScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommo
 
 	// 追加：Obj3Dは生成時に既定のカメラを取り込むため、盤面を作る前に差し替えておく
 	object3dCommon_->SetDefaultCamera(camera);
+
+	// 追加：ゲーム中と同じゲーミングな背景の天球を用意する。
+	// 天球の共通設定（ルートシグネチャとPSO）はエンジン側で作られないため、シーンごとに作る。
+	skyboxCommon_ = std::make_unique<SkyboxCommon>();
+	skyboxCommon_->Initialize(object3dCommon_->GetDxCommon());
+	skybox_ = std::make_unique<Skybox>();
+	skybox_->Initialize(skyboxCommon_.get(),PuzzleConfig::kSkyboxBackgroundTexture);
+	skyboxRotationY_ = 0.0f;
+	skyboxPulseFrame_ = 0;
+	// 1フレーム目の描画に間に合うよう、行列をここで一度作っておく
+	skybox_->Update(*camera);
 
 	// 追加：背景として描画する盤面を初期化する（壁だけの空の盤面）
 	board_.Initialize(object3dCommon_);
@@ -160,6 +174,27 @@ void TitleScene::Update(){
 		Application::GetInstance()->TriggerGlitch();
 	}
 
+	// 追加：背景の天球を進める（ゲーム中と同じ動かし方）。
+	// ゆっくり回して虹色の帯を横へ流し、あわせて明るさをわずかに脈打たせる。
+	if(skybox_){
+		skyboxRotationY_ += PuzzleConfig::kSkyboxRotationPerFrame;
+		if(skyboxRotationY_ >= 2.0f * PuzzleConfig::kPi){
+			skyboxRotationY_ -= 2.0f * PuzzleConfig::kPi;
+		}
+		skybox_->SetRotationY(skyboxRotationY_);
+
+		++skyboxPulseFrame_;
+		if(skyboxPulseFrame_ >= PuzzleConfig::kSkyboxPulseCycleFrames){
+			skyboxPulseFrame_ = 0;
+		}
+		const float phase = 2.0f * PuzzleConfig::kPi *
+			static_cast<float>(skyboxPulseFrame_) / static_cast<float>(PuzzleConfig::kSkyboxPulseCycleFrames);
+		const float brightness = 1.0f + PuzzleConfig::kSkyboxPulseAmplitude * std::sin(phase);
+		skybox_->SetColor({brightness,brightness,brightness,1.0f});
+
+		skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
+	}
+
 	// 2. 背景のデモプレイの更新
 	UpdateDemoPlay();
 
@@ -177,6 +212,12 @@ void TitleScene::Update(){
 
 // 描画処理
 void TitleScene::Draw(){
+	// 追加：背景の天球を最初に描く。
+	// 天球は深度を書き込まないので、このあとに描く3Dオブジェクトがそのまま手前に重なる。
+	if(skybox_){
+		skybox_->Draw();
+	}
+
 	// 背景としてゲーム中と同じ盤面とデモプレイのブロックを描画する。
 	// タイトル名などのUIは、このあとにスプライトで重ねて描画する。
 	board_.Draw();

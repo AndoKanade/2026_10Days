@@ -26,8 +26,12 @@ void Skybox::Initialize(SkyboxCommon* skyboxCommon,const std::string& texturePat
 }
 
 void Skybox::Update(const Camera& camera){
-	// 500倍スケーリングで巨大化
-	Matrix4x4 worldMatrix = MakeScaleMatrix({500.0f, 500.0f, 500.0f});
+	// 変更：500倍スケーリングで巨大化したうえで、Y軸まわりに回す。
+	// ピクセルシェーダのサンプリング方向は頂点のローカル座標なので、
+	// ワールド行列を回すと空そのものが回って見える。
+	Matrix4x4 worldMatrix = Multiply(
+		MakeScaleMatrix({500.0f, 500.0f, 500.0f}),
+		MakeRotateYMatrix(rotationY_));
 
 	// カメラの平行移動を無効化
 	Matrix4x4 viewMatrix = camera.GetViewMatrix();

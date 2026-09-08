@@ -14,7 +14,10 @@
 #include "LevelManager.h"
 #include "SceneManager.h"
 #include "WinAPI.h"
+#include "Skybox.h"       // 追加：背景の天球
+#include "SkyboxCommon.h" // 追加：天球の共通設定
 #include <algorithm>
+#include <cmath>
 
 namespace{
 	const std::string kGaugeBackgroundTexture = "resource/ui/specialGauge/red.png";
@@ -127,6 +130,8 @@ namespace{
 		return "?";
 	}
 
+	// 変更：背景の天球の調整値は PuzzleConfig へ移した（タイトルと共通で使うため）
+
 	// スペシャル選択カーソルの見た目
 	constexpr float kSpecialCursorScale = 0.50f;
 	const Vector4 kSpecialCursorValidColor = {0.25f, 1.0f, 0.45f, 0.75f};
@@ -195,6 +200,17 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	defaultCamera->SetTranslate({0.0f, 0.0f, PuzzleConfig::kCameraDistanceZ});
 	CameraManager::GetInstance()->SetActiveCamera("default");
 	object3dCommon_->SetDefaultCamera(CameraManager::GetInstance()->GetActiveCamera());
+
+	// 追加：ゲーミングな背景の天球を用意する。
+	// 天球の共通設定（ルートシグネチャとPSO）はエンジン側で作られないため、シーンごとに作る。
+	skyboxCommon_ = std::make_unique<SkyboxCommon>();
+	skyboxCommon_->Initialize(object3dCommon_->GetDxCommon());
+	skybox_ = std::make_unique<Skybox>();
+	skybox_->Initialize(skyboxCommon_.get(),PuzzleConfig::kSkyboxBackgroundTexture);
+	skyboxRotationY_ = 0.0f;
+	skyboxPulseFrame_ = 0;
+	// 1フレーム目の描画に間に合うよう、行列をここで一度作っておく
+	skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
 
@@ -642,6 +658,28 @@ void GameScene::Update() {
 		return;
 	}
 
+	// 追加：背景の天球を進める。
+	// ゆっくり回して虹色の帯を横へ流し、あわせて明るさをわずかに脈打たせる。
+	// ポーズ中はここまで来ないので、背景も一緒に止まる。
+	if(skybox_){
+		skyboxRotationY_ += PuzzleConfig::kSkyboxRotationPerFrame;
+		if(skyboxRotationY_ >= 2.0f * PuzzleConfig::kPi){
+			skyboxRotationY_ -= 2.0f * PuzzleConfig::kPi;
+		}
+		skybox_->SetRotationY(skyboxRotationY_);
+
+		++skyboxPulseFrame_;
+		if(skyboxPulseFrame_ >= PuzzleConfig::kSkyboxPulseCycleFrames){
+			skyboxPulseFrame_ = 0;
+		}
+		const float phase = 2.0f * PuzzleConfig::kPi *
+			static_cast<float>(skyboxPulseFrame_) / static_cast<float>(PuzzleConfig::kSkyboxPulseCycleFrames);
+		const float brightness = 1.0f + PuzzleConfig::kSkyboxPulseAmplitude * std::sin(phase);
+		skybox_->SetColor({brightness,brightness,brightness,1.0f});
+
+		skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
+	}
+
 	// レベル配置JSONのホットリロード確認
 	// ファイルが更新されていた場合、自動で再読み込みしてlevelObjects_を作り直す
 	if (levelManager_.CheckAndReload()) {
@@ -926,6 +964,12 @@ void GameScene::Update() {
 
 // --- 描画処理 ---
 void GameScene::Draw(){
+	// 追加：背景の天球を最初に描く。
+	// 天球は深度を書き込まないので、このあとに描く3Dオブジェクトがそのまま手前に重なる。
+	if(skybox_){
+		skybox_->Draw();
+	}
+
 	object3dCommon_->Draw();
 
 	// 配置オブジェクトの描画

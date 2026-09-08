@@ -39,9 +39,15 @@ void SkyboxCommon::CreateRootSignature(){
 	desc.NumStaticSamplers = _countof(staticSamplers);
 	desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
+	// 追加：失敗しても気づけるよう、エラーの内容を受け取って確認する。
+	// ここが失敗するとルートシグネチャがnullのままになり、描画だけが静かに消える。
 	Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
-	D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&signatureBlob,nullptr);
-	dxCommon_->GetDevice()->CreateRootSignature(0,signatureBlob->GetBufferPointer(),signatureBlob->GetBufferSize(),IID_PPV_ARGS(&rootSignature_));
+	Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+	HRESULT hr = D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&signatureBlob,&errorBlob);
+	assert(SUCCEEDED(hr));
+
+	hr = dxCommon_->GetDevice()->CreateRootSignature(0,signatureBlob->GetBufferPointer(),signatureBlob->GetBufferSize(),IID_PPV_ARGS(&rootSignature_));
+	assert(SUCCEEDED(hr));
 }
 
 void SkyboxCommon::CreateGraphicsPipelineState(){
@@ -58,7 +64,13 @@ void SkyboxCommon::CreateGraphicsPipelineState(){
 	psoDesc.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
 	psoDesc.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
 	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+	// 変更：カリングを切る。BACK のままだと天球が1枚も描かれなかった。
+	// 立方体の6面は面ごとに頂点の並び順がそろっていないため、表裏どちらを表と
+	// みなしても、カメラが向いている面が捨てられてしまうことがある。
+	// カメラは必ず立方体の内側にいるので、視線が立方体を出るのは1面だけ。
+	// 反対側の面はカメラの後ろに来てw>0のクリップで消えるため、
+	// カリングを切っても手前の面が奥の面に上書きされることはない。
+	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 	psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
 	psoDesc.DepthStencilState.DepthEnable = true;
 	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
@@ -70,5 +82,7 @@ void SkyboxCommon::CreateGraphicsPipelineState(){
 	psoDesc.SampleDesc.Count = 1;
 	psoDesc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 
-	dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc,IID_PPV_ARGS(&graphicsPipelineState_));
+	// 追加：ここが失敗するとPSOがnullのままになり、描画だけが静かに消える
+	HRESULT hr = dxCommon_->GetDevice()->CreateGraphicsPipelineState(&psoDesc,IID_PPV_ARGS(&graphicsPipelineState_));
+	assert(SUCCEEDED(hr));
 }
