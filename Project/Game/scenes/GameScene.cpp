@@ -88,6 +88,10 @@ namespace{
 	// 追加：ゲーム画面のBGMの初期音量
 	constexpr float kBgmVolume = 0.5f;
 
+	// 追加：ブロックが消えたときに鳴らすSEのパスと初期音量
+	const std::string kDisappearSePath = "resource/SE/disappear.mp3";
+	constexpr float kDisappearSeVolume = 0.6f;
+
 	const std::string kLevelJsonFile = "level.json"; // レベル配置情報のJSONファイル名
 
 	// 変更：落下ブロックの描画に使うモデル。盤面のマスと同じ面取りキューブを使う。
@@ -127,6 +131,17 @@ namespace{
 
 	// 追加：ラベルの色（陰影なしの白っぽい色で光らせ、視認性を確保する）
 	const Vector4 kLabelColor = {0.9f, 0.9f, 0.95f, 1.0f};
+
+	// 追加：「Tabでポーズ」のヒント表示に使うモデル（Blenderで作成したテキスト形状のメッシュ）
+	const std::string kTabHintModel = "ui/pause/tabto.obj";
+
+	// 追加：ヒントの拡大率。元の形状はNEXT/HOLDのラベルよりだいぶ横長（横幅5.2程度）なため、
+	// 同じ見た目の大きさに収まるよう控えめな倍率にする。
+	constexpr float kTabHintScale = 0.6f;
+
+	// 追加：ヒントを表示する盤面マス座標（列0＝盤面中央、盤面の下端よりさらに下の行）。
+	// 盤面幅が変わっても中央に留まるよう、列は常に0を使う。
+	constexpr int32_t kTabHintAnchorRow = PuzzleConfig::kBoardHeight + 2;
 
 	// ブロックの種類名（ImGui表示用）
 	const char* BlockTypeName(BlockShape::Type type){
@@ -230,6 +245,9 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	// 追加：ゲームBGMをループ再生する
 	SoundManager::GetInstance()->PlayAudio(kBgmPath_,kBgmVolume,true);
 
+	// 追加：ブロックが消えたときのSEをロードしておく（再生は消去成立時のみ）
+	SoundManager::GetInstance()->SoundLoadFile(kDisappearSePath);
+
 	// 追加：パズルの盤面を初期化する（盤面は3Dオブジェクトで描画する）
 	board_.Initialize(object3dCommon_);
 
@@ -302,6 +320,21 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	}
 
 	SyncPreviewLabels();
+
+	// 追加：「Tabでポーズ」のヒントを盤面下の余白に表示する
+	ModelManager::GetInstance()->LoadModel(kTabHintModel);
+	tabHintObj_ = std::make_unique<Obj3D>();
+	tabHintObj_->Initialize(object3dCommon_);
+	tabHintObj_->SetModel(kTabHintModel);
+	tabHintObj_->SetScale({kTabHintScale, kTabHintScale, kTabHintScale});
+	// 列は0を渡して盤面幅に応じたY・Zだけ受け取り、Xは中央(0)へ上書きする
+	Vector3 tabHintPos = board_.GridToWorld(0,kTabHintAnchorRow);
+	tabHintPos.x = 0.0f;
+	tabHintObj_->SetTranslate(tabHintPos);
+	if(Model::Material* material = tabHintObj_->GetMaterial()){
+		material->color = kLabelColor;
+		material->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+	}
 
 	// スペシャルの対象選択カーソルを用意する
 	specialCursorObj_ = std::make_unique<Obj3D>();
@@ -709,6 +742,8 @@ void GameScene::Update() {
 		}
 		score_.AddFromClear(result.cellCount,result.chainCount);
 		SpawnScorePopup(score_.GetLastGain(),score_.GetLastChain());
+		// 追加：ブロックが消えたときのSEを鳴らす
+		SoundManager::GetInstance()->PlayAudio(kDisappearSePath,kDisappearSeVolume);
 	}
 	// スペシャルから始まった消去と、その落下連鎖がすべて終わってから通常チャージへ戻す。
 	if(suppressSpecialClearCharge_ && !board_.IsBusy()){
@@ -827,6 +862,10 @@ void GameScene::Update() {
 			}
 			if(holdLabelObj_){
 				holdLabelObj_->Update();
+			}
+			// 追加：「Tabでポーズ」ヒントも毎フレーム行列を更新する
+			if(tabHintObj_){
+				tabHintObj_->Update();
 			}
 		}
 
@@ -1024,6 +1063,10 @@ void GameScene::Draw(){
 	}
 	if(holdLabelObj_){
 		holdLabelObj_->Draw();
+	}
+	// 追加：「Tabでポーズ」ヒントを描画する
+	if(tabHintObj_){
+		tabHintObj_->Draw();
 	}
 
 	// スペシャルの対象選択カーソルを最後に重ねて描画する
