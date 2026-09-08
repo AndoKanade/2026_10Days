@@ -160,5 +160,10 @@ private:
 	// 対象にする列は、clearedCells に1マスでも含まれる列（今回の消去でマスが
 	// 空いた列）に加えて、clearedBlockIds と同じ元ブロックIDの残骸が残っている列
 	// （支えを失って構造的に浮いた可能性がある列）。それ以外の無関係な列は触らない。
-	void ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds);
+	// 修正：forceAllColumns が true のときは、上記の判定に関わらず全列を対象にする。
+	// Easy の横列消去は「行を丸ごと消す」仕様のため、その行のうち元々空きマスだった
+	// 列（せり出しブロックの下の穴など）は clearedCells に入らず対象列から漏れる。
+	// 漏れた列だけ他の列と一緒に落ちず、上のブロックが取り残されて見えるバグになる
+	// ため、Easy の消去確定時はこのフラグで全列を強制的に詰め直す。
+	void ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds,bool forceAllColumns = false);
 };

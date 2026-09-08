@@ -355,7 +355,10 @@ void Board::Update(){
 			// 支えにしていたマスが消えて構造的に浮いた状態のため、自分の列自体には
 			// 消去が起きていなくても落とす必要がある。それ以外の、本当に無関係な列は
 			// 従来通り触らない。
-			ApplyGravity(clearedCells,clearedBlockIds);
+			// Easy は行を丸ごと消す仕様なので、その行に元々空きマスだった列も
+			// 含めて全列を強制的に詰め直す（forceAllColumns）。これをしないと、
+			// たまたま消去行が空きマスだった列だけ上のブロックが落ちてこない。
+			ApplyGravity(clearedCells,clearedBlockIds,difficulty_ == Difficulty::Easy);
 
 			// 落下後に再度通電判定を行う。まだ繋がっていれば連鎖してまた消去演出に入る
 			// （isClearing_ は直前で false にしてあるため、ここで判定が素通りされることはない）
@@ -705,9 +708,18 @@ std::vector<GridPos> Board::PruneDeadEndCells(const std::vector<GridPos>& compon
 	return trunk;
 }
 
-void Board::ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds){
+void Board::ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds,bool forceAllColumns){
 	// どの列を対象にするかを、列単位のフラグに変換しておく
 	std::array<bool,PuzzleConfig::kBoardWidthMax> clearedColumns{};
+
+	// Easy の横列消去は行を丸ごと消す仕様のため、その行に元々空きマスだった
+	// 列も含めて全列を強制的に詰め直す（そうしないと、その列だけ上のブロックが
+	// 落ちてこず、他の列との間で高さがずれて見える）。
+	if(forceAllColumns){
+		for(int32_t x = 0; x < width_; ++x){
+			clearedColumns[x] = true;
+		}
+	}
 
 	// 1. 今回の消去でマスが空いた列
 	for(const GridPos& pos : clearedCells){
