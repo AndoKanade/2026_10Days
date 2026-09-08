@@ -36,6 +36,10 @@ namespace{
 	const std::string kPauseTitleTexture = "resource/ui/pause/title.png";
 	const std::string kPauseTutorialTexture = "resource/ui/pause/tutorial.png";
 
+	// 追加：チュートリアルの内容を1枚にまとめた画像。
+	// 画面と同じ 1280x720 で作ってあるので、画面全体へ引き伸ばさずそのまま貼る。
+	const std::string kPauseTutorialSheetTexture = "resource/ui/pause/tutorialSheet.png";
+
 	// 暗幕の色（黒の半透明。後ろのゲーム画面がうっすら見える濃さにする）
 	constexpr Vector4 kPauseOverlayColor = {0.0f,0.0f,0.0f,0.65f};
 
@@ -993,6 +997,7 @@ void GameScene::InitializePauseUi(){
 	TextureManager::GetInstance()->LoadTexture(kPauseRestartTexture);
 	TextureManager::GetInstance()->LoadTexture(kPauseTitleTexture);
 	TextureManager::GetInstance()->LoadTexture(kPauseTutorialTexture);
+	TextureManager::GetInstance()->LoadTexture(kPauseTutorialSheetTexture); // 追加
 
 	// 画面全体を覆う暗幕
 	pauseOverlaySprite_ = std::make_unique<Sprite>();
@@ -1027,8 +1032,15 @@ void GameScene::InitializePauseUi(){
 		pauseMenuSprites_.push_back(createCenteredSprite(menuTextures[i],posY));
 	}
 
-	// チュートリアル画面の見出し。内容はこれから追加する
-	pauseTutorialHeaderSprite_ = createCenteredSprite(kPauseTutorialTexture,kPauseHeaderPosY);
+	// 変更：チュートリアル画面は見出しではなく、内容をまとめた1枚絵をそのまま表示する。
+	// 画像は画面と同じ大きさで作ってあるため、左上に置いて画面いっぱいに広げる。
+	pauseTutorialSheetSprite_ = std::make_unique<Sprite>();
+	pauseTutorialSheetSprite_->Initialize(spriteCommon_,kPauseTutorialSheetTexture);
+	pauseTutorialSheetSprite_->SetPosition({0.0f,0.0f});
+	pauseTutorialSheetSprite_->SetSize({
+		static_cast<float>(WinAPI::kClientWidth),
+		static_cast<float>(WinAPI::kClientHeight)
+	});
 
 	UpdatePauseUi();
 }
@@ -1068,8 +1080,9 @@ void GameScene::UpdatePauseUi(){
 	if(pauseHeaderSprite_){
 		pauseHeaderSprite_->Update();
 	}
-	if(pauseTutorialHeaderSprite_){
-		pauseTutorialHeaderSprite_->Update();
+	// 変更：チュートリアルの1枚絵も毎フレーム行列を更新する
+	if(pauseTutorialSheetSprite_){
+		pauseTutorialSheetSprite_->Update();
 	}
 
 	// 選択中の項目だけ明るくして、いまどれを選んでいるか分かるようにする
@@ -1120,9 +1133,9 @@ void GameScene::DrawPause(){
 			sprite->Draw();
 		}
 	} else{
-		// チュートリアル画面。いまは見出しだけで、内容はこれから追加する
-		if(pauseTutorialHeaderSprite_){
-			pauseTutorialHeaderSprite_->Draw();
+		// 変更：チュートリアル画面。内容をまとめた1枚絵を暗幕の上に重ねる
+		if(pauseTutorialSheetSprite_){
+			pauseTutorialSheetSprite_->Draw();
 		}
 	}
 }
