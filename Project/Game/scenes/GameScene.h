@@ -195,6 +195,9 @@ private:
 	std::unique_ptr<Obj3D> nextLabelObj_;
 	std::unique_ptr<Obj3D> holdLabelObj_;
 
+	// 追加：「Tabでポーズ」のヒント表示（ui/pause/tabto.obj）
+	std::unique_ptr<Obj3D> tabHintObj_;
+
 	// レベル配置データからオブジェクトを再構築する
 	void RebuildLevelObjects();
 
