@@ -218,6 +218,22 @@ void Board::RebuildCellObjects(){
 	}
 }
 
+// 追加：マスの中身と消去演出の状態をすべて初期状態へ戻す（壁はそのまま）。
+void Board::Reset(){
+	// マスをすべて空にする
+	cells_ = {};
+
+	// 消去演出の途中だった場合に備えて、その状態も消す
+	clearingCells_.clear();
+	isClearing_ = false;
+	clearTimer_ = 0;
+	chainCount_ = 0;
+	clearResults_.clear();
+
+	// 空になった盤面に合わせて見た目を作り直す
+	RebuildCellObjects();
+}
+
 // 電源（最下段）から実際にどこまで通電が届いているかを幅優先探索で調べる。
 // ゴールに届いているかは問わない。見た目のハイライトに使う。
 std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> Board::ComputePoweredMask() const{
