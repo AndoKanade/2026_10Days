@@ -616,6 +616,13 @@ bool Board::ConvertToStrongest(int32_t x,int32_t y){
 	}
 	cell.MakeStrongest();
 	chainCount_ = 0;
+
+	// 追加：変換後のマスが自分の列で浮いた状態になっていないよう、
+	// 通常の消去処理と同じくここでも列単位の落下処理をかける
+	// （消去を経由しない変換ではこれまで ApplyGravity が呼ばれておらず、
+	// 空中に浮いたまま表示されるバグがあったため）。
+	ApplyGravity({{x,y}},{});
+
 	ResolveConduction();
 	RebuildCellObjects();
 	return true;
