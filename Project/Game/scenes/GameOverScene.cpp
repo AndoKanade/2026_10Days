@@ -5,6 +5,7 @@
 #include "SpriteCommon.h"
 #include "TextureManager.h"
 #include "SceneManager.h"
+#include "SoundManager.h"
 #include "WinAPI.h"
 #include "ImGuiManager.h"
 #include <ctime>
@@ -19,6 +20,8 @@ namespace{
 	const std::string kScoreTexture = "resource/ui/score/score.png";
 	const std::string kYourScoreTexture = "resource/ui/score/yourScore.png";
 	const std::string kSolidTexture = "resource/character/white.png";
+	const std::string kBgmPath = "resource/music/bgm/As_Time_Carries_Us_Away.mp3";
+	constexpr float kBgmVolume = 0.5f;
 	constexpr Vector2 kNumberCellSize = {8.0f,12.0f};
 	// 線形補間で隣の数字を拾わないよう、セル境界ではなく端のピクセル中心を参照する。
 	constexpr Vector2 kNumberSampleInset = {0.5f,0.5f};
@@ -144,6 +147,10 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 	// 元画像の緑色ではなく透明度を文字の形として使い、全色へ着色可能にする。
 	yourScoreLabel_->SetUseAlphaMask(true);
 	yourScoreRainbowFrame_ = 0;
+
+	// スコア画面のBGMをロードしてループ再生する。
+	SoundManager::GetInstance()->SoundLoadFile(kBgmPath);
+	SoundManager::GetInstance()->PlayAudio(kBgmPath,kBgmVolume,true);
 }
 
 void GameOverScene::AppendNumberSprites(std::vector<std::unique_ptr<Sprite>>& destination,
@@ -174,12 +181,15 @@ void GameOverScene::AppendNumberSprites(std::vector<std::unique_ptr<Sprite>>& de
 }
 
 void GameOverScene::Finalize(){
+	SoundManager::GetInstance()->StopAudio(kBgmPath);
+
 	// unique_ptrにより自動解放されるため処理なし
 }
 
 // 更新処理
 void GameOverScene::Update(){
 #ifdef USE_IMGUI
+	SoundManager::GetInstance()->ShowVolumeGui();
 	ImGui::Begin("Game Over Result");
 	ImGui::Text("Final Score: %lld",static_cast<long long>(SceneManager::GetInstance()->GetFinalScore()));
 	ImGui::Text("Total cleared cells: %lld",static_cast<long long>(SceneManager::GetInstance()->GetFinalClearedCells()));

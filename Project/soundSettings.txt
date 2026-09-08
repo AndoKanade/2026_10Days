@@ -1,3 +1,4 @@
 1 master
+0.5 resource/music/bgm/As_Time_Carries_Us_Away.mp3
 0.5 resource/music/bgm/New_Breath.mp3
 0.5 resource/music/bgm/サクラカゼ.mp3
