@@ -6,6 +6,7 @@
 #include "TextureManager.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
+#include "SoundConfig.h"  // 追加：汎用SEのパスと再生窓口
 #include "WinAPI.h"
 #include "ImGuiManager.h"
 // 修正：コンフリクト解消 天球用のインクルードを残しました
@@ -174,8 +175,11 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 	scoreShineFrame_ = 0;
 
 	// スコア画面のBGMをロードしてループ再生する。
-	SoundManager::GetInstance()->SoundLoadFile(kBgmPath);
+	SoundManager::GetInstance()->SoundLoadFile(kBgmPath,SoundCategory::BGM);
 	SoundManager::GetInstance()->PlayAudio(kBgmPath,kBgmVolume,true);
+
+	// 追加：タイトルへ戻るときに鳴らす汎用SEをロードしておく
+	SoundConfig::LoadCommonSe();
 }
 // 電撃風の下線を作る。ジグザグの線を16分割で作る。
 void GameOverScene::AppendLightningUnderline(std::vector<std::unique_ptr<Sprite>>& destination,
@@ -349,6 +353,8 @@ void GameOverScene::Update(){
 
 	// スペースキーでタイトル画面へ遷移
 	if(input_->TriggerKey(DIK_SPACE)){
+		// 追加：決定SE
+		SoundConfig::PlayDecide();
 		SceneManager::GetInstance()->ChangeScene("TITLE");
 	}
 }

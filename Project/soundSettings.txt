@@ -1,10 +1,12 @@
-1 master
-0.6 resource/SE/direction.mp3
-0.6 resource/SE/direction_trimmed.wav
+
+0.239 master
+0.3 category_bgm
+0.6 category_se
+0.5 resource/SE/cancel.mp3
+0.6 resource/SE/decide.mp3
 0.6 resource/SE/disappear.mp3
-0.6 resource/SE/disappear_trimmed.wav
-0.6 resource/SE/put.mp3
-0.6 resource/SE/put_trimmed.wav
+0.4 resource/SE/move.mp3
+
 0.5 resource/music/bgm/As_Time_Carries_Us_Away.mp3
 0.5 resource/music/bgm/New_Breath.mp3
 0.5 resource/music/bgm/サクラカゼ.mp3
