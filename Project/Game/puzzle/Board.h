@@ -10,6 +10,7 @@
 #include "Cell.h"
 #include "GridPos.h" // 追加：マス座標の共通型
 #include "PuzzleConfig.h"
+#include "Difficulty.h" // 追加：消す範囲を決める難易度
 
 // 前方宣言
 class Obj3dCommon;
@@ -79,6 +80,11 @@ public:
 	// 盤面の幅を切り替える（6と10の切り替え用。デバッグUIから呼ぶ想定）
 	void SetWidth(int32_t width);
 
+	// 追加：通電が成立したときに消す範囲を切り替える。
+	// タイトルで選んだ値を GameScene から渡す。詳しくは Difficulty.h を参照。
+	void SetDifficulty(Difficulty difficulty){ difficulty_ = difficulty; }
+	Difficulty GetDifficulty() const{ return difficulty_; }
+
 	// 追加：マスの中身と消去演出の状態をすべて初期状態へ戻す（壁はそのまま）。
 	// タイトル背景のデモプレイを、天井まで積み上がったときに最初からやり直すために使う。
 	void Reset();
@@ -107,6 +113,9 @@ private:
 	// 現在有効な盤面の幅（マス数）
 	int32_t width_ = PuzzleConfig::kBoardWidth;
 
+	// 追加：通電が成立したときに消す範囲。既定はタイトルと同じ Normal。
+	Difficulty difficulty_ = Difficulty::Normal;
+
 	// 盤面の外周をU字（左・下・右、上は開き）に囲む壁ブロックのオブジェクト
 	std::vector<std::unique_ptr<Obj3D>> wallObjs_;
 
@@ -123,6 +132,10 @@ private:
 	int32_t clearTimer_ = 0;
 	int32_t chainCount_ = 0;
 	std::vector<ClearResult> clearResults_;
+
+	// 追加：今回の消去演出で、電源（最下段）からいちばん遠いマスまでの行の距離。
+	// 「光の波」が下段から上段へ届くまでの進み具合を計算する基準に使う。
+	int32_t clearWaveMaxDistance_ = 0;
   
 	// U字の壁ブロックを1個生成して wallObjs_ に追加する（modelPath で使うモデルを指定する）
 	void CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath);
@@ -130,7 +143,16 @@ private:
 	// 右の壁・下の壁は幅に応じて位置・範囲が変わるため、幅切り替え時にも呼び直す必要がある。
 	void RebuildWalls();
 	// 追加：cells_ の埋まっているマスから cellObjs_ を作り直す
+	// GPU用の定数バッファをマスごとに新規確保するため、消去演出中の毎フレーム更新には使わない。
 	void RebuildCellObjects();
+
+	// 追加：消去演出中の「光の波」アニメーションを、既存の cellObjs_ の色・スケールだけを
+	// 書き換えて毎フレーム反映する軽量版（オブジェクトの作り直しはしない）。
+	void UpdateClearingCellVisuals();
+
+	// 追加：消去演出中のマス1個ぶんについて、光の波が届いているか・届いていたら
+	// どれだけ膨らませるかを計算する（RebuildCellObjects/UpdateClearingCellVisuals共通処理）。
+	void ComputeClearWaveState(int32_t y,bool& waveReached,float& popScale) const;
 
 	// 追加：指定マスが現在消去演出中かどうか
 	bool IsClearingCell(int32_t x,int32_t y) const;
@@ -143,9 +165,18 @@ private:
 	// 繋がっていれば、その範囲のマスを消去演出の対象にする（この時点ではまだ消さない）。
 	void ResolveConduction();
 
+	// 追加：Hard で使う。通電した一かたまりから行き止まりの枝を取り除き、
+	// 電源とゴールを実際に結んでいるマスだけを返す。
+	std::vector<GridPos> PruneDeadEndCells(const std::vector<GridPos>& component) const;
+
 	// 追加：空きマスを詰めるように、各列のマスをマス単位で下へ落とす。
 	// 対象にする列は、clearedCells に1マスでも含まれる列（今回の消去でマスが
 	// 空いた列）に加えて、clearedBlockIds と同じ元ブロックIDの残骸が残っている列
 	// （支えを失って構造的に浮いた可能性がある列）。それ以外の無関係な列は触らない。
-	void ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds);
+	// 修正：forceAllColumns が true のときは、上記の判定に関わらず全列を対象にする。
+	// Easy の横列消去は「行を丸ごと消す」仕様のため、その行のうち元々空きマスだった
+	// 列（せり出しブロックの下の穴など）は clearedCells に入らず対象列から漏れる。
+	// 漏れた列だけ他の列と一緒に落ちず、上のブロックが取り残されて見えるバグになる
+	// ため、Easy の消去確定時はこのフラグで全列を強制的に詰め直す。
+	void ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds,bool forceAllColumns = false);
 };

@@ -58,6 +58,12 @@ private:
 	const std::string kBgmPath_ = "resource/music/bgm/サクラカゼ.mp3";
 	// 削除：どこからも使われていなかった isPaused_ は、下のポーズ画面の項目へまとめた
 
+	// 追加：SEの発音遅れ対策で、先頭無音を切り詰めたWAVを生成できた場合はそちらのパスが入る
+	// （生成できなければ元のmp3のパスのまま）。ロードと再生の両方でこちらを使う。
+	std::string disappearSePath_;
+	std::string rotateSePath_;
+	std::string placeSePath_;
+
 	// レベル配置オブジェクト
 	std::vector<std::shared_ptr<Obj3D>> levelObjects_;
 
@@ -113,8 +119,12 @@ private:
 
 	// スペシャル発動に使用するゲージ
 	SpecialGauge specialGauge_;
+	// Easy難易度の自動チャージ用フレームカウンター。
+	int32_t easyPassiveChargeFrames_ = 0;
 	// スペシャルによって始まった消去・連鎖では、ゲージを自己充電させない。
 	bool suppressSpecialClearCharge_ = false;
+	// スペシャル専用BGMとの切り替え状態。
+	bool isSpecialBgmPlaying_ = false;
 	ScoreSystem score_;
 
 	// スペシャルで最強マスにする対象の選択状態
@@ -195,6 +205,9 @@ private:
 	std::unique_ptr<Obj3D> nextLabelObj_;
 	std::unique_ptr<Obj3D> holdLabelObj_;
 
+	// 追加：「Tabでポーズ」のヒント表示（ui/pause/tabto.obj）
+	std::unique_ptr<Obj3D> tabHintObj_;
+
 	// レベル配置データからオブジェクトを再構築する
 	void RebuildLevelObjects();
 
@@ -241,6 +254,8 @@ private:
 	void SyncSpecialCursor();
 	// EnterまたはデバッグUIから共通の決定処理を呼ぶ。
 	void ConfirmSpecialTarget();
+	// ゲージ発動状態に合わせ、通常BGMとスペシャルBGMを切り替える。
+	void SyncSpecialBgm();
 	void UpdateSpecialGaugeUi();
 	void UpdateScoreUi();
 	void SpawnScorePopup(int64_t gainedScore,int32_t combo);

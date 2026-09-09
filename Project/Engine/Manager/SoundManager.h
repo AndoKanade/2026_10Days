@@ -22,6 +22,16 @@
 #pragma comment(lib, "mfuuid.lib")
 
 /// <summary>
+/// 追加：音声の分類
+/// オプション画面で「BGMだけ」「SEだけ」をまとめて調整するために使う
+/// </summary>
+enum class SoundCategory{
+	BGM,	// ループ再生する背景音楽
+	SE,		// 単発で鳴らす効果音
+	Count,	// 分類の総数 (配列の要素数として使う)
+};
+
+/// <summary>
 /// 音声データ構造体
 /// フォーマット情報と、デコード済みの波形データを保持する
 /// </summary>
@@ -56,9 +66,13 @@ public: // --- 音声ロード・再生制御 ---
 
 	/// <summary>
 	/// 音声ファイルをロード (MP3, WAVなど)
+	/// 変更：ファイルが見つからない場合でも落とさず false を返すようにした。
+	/// 音源の差し替え作業中に、まだ用意していないSEを参照しても進行できるようにするため
 	/// </summary>
 	/// <param name="filename">ファイルパス (キーとして使用)</param>
-	void SoundLoadFile(const std::string& filename);
+	/// <param name="category">音量をまとめて扱うための分類 (BGM か SE)</param>
+	/// <returns>ロードに成功したら true</returns>
+	bool SoundLoadFile(const std::string& filename,SoundCategory category = SoundCategory::SE);
 
 	/// <summary>
 	/// 音声を再生
@@ -113,6 +127,24 @@ public: // --- 音量制御 (追加) ---
 	float GetMasterVolume() const;
 
 	/// <summary>
+	/// 追加：分類ごとの音量を設定 (その分類の音声すべてにまとめて掛かる)
+	/// </summary>
+	/// <param name="category">BGM か SE</param>
+	/// <param name="volume">音量 (0.0=無音, 1.0=最大)</param>
+	void SetCategoryVolume(SoundCategory category,float volume);
+
+	/// <summary>
+	/// 追加：分類ごとの音量を取得
+	/// </summary>
+	float GetCategoryVolume(SoundCategory category) const;
+
+	/// <summary>
+	/// 移動：音量設定をファイルへ書き出す (終了時とUIでの調整後に呼ぶ)
+	/// オプション画面からも保存できるよう public に置いている
+	/// </summary>
+	void SaveVolumeSettings() const;
+
+	/// <summary>
 	/// ImGuiで音量を調整するデバッグUIを表示する
 	/// マスター音量と、ロード済み音声ごとの音量・再生状態を操作できる
 	/// </summary>
@@ -136,9 +168,15 @@ private: // --- 内部ヘルパー関数 ---
 	void LoadVolumeSettings();
 
 	/// <summary>
-	/// 追加：音量設定をファイルへ書き出す (終了時とUIでの調整後に呼ぶ)
+	/// 追加：実際にソースボイスへ渡す音量を求める
+	/// 個別音量 × 分類音量 × マスター音量 の積で決まる
 	/// </summary>
-	void SaveVolumeSettings() const;
+	float CalcOutputVolume(const std::string& filename) const;
+
+	/// <summary>
+	/// 追加：登録済みの分類を取得する (未登録なら SE として扱う)
+	/// </summary>
+	SoundCategory GetCategory(const std::string& filename) const;
 
 private: // --- メンバ変数 ---
 
@@ -155,6 +193,12 @@ private: // --- メンバ変数 ---
 
 	// 追加：音声ごとの音量 [キー:ファイル名]。停止中でも値を保持する
 	std::map<std::string,float> volumes_;
+
+	// 追加：音声ごとの分類 [キー:ファイル名]。ロード時に登録する
+	std::map<std::string,SoundCategory> categories_;
+
+	// 追加：分類ごとの音量 (添字は SoundCategory の値)
+	float categoryVolumes_[static_cast<size_t>(SoundCategory::Count)] = {1.0f, 1.0f};
 
 	// 追加：マスター音量 (すべての音声に掛かる係数)
 	float masterVolume_ = 1.0f;

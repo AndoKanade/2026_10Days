@@ -10,6 +10,8 @@ public:
 	// 通電による消去結果をゲージへ加算する。
 	// chainCount は最初の消去を1とし、2以上のとき連鎖ボーナスを加える。
 	void AddFromClear(int32_t clearedCellCount,int32_t chainCount);
+	// Easy難易度など、消去以外の条件で少量チャージする。
+	void AddPassiveCharge(int32_t amount = 1);
 
 	// スペシャル発動後の制限時間を1フレーム分進める
 	void Update();

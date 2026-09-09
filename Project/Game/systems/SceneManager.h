@@ -8,6 +8,7 @@
 // --- エンジン内ヘッダー ---
 #include "BaseScene.h"
 #include "AbstractSceneFactory.h"
+#include "Difficulty.h" // 追加：タイトルで選んだ難易度を引き継ぐため
 
 // --- 前方宣言 ---
 class Obj3dCommon;
@@ -69,6 +70,11 @@ public:
 	void SetFinalClearedCells(int64_t cells){ finalClearedCells_ = cells; }
 	int64_t GetFinalClearedCells() const{ return finalClearedCells_; }
 
+	// 追加：タイトルで選んだ難易度を、シーンをまたいで引き継ぐ。
+	// 遊び直しのたびに選び直さずに済むよう、ゲームオーバーから戻っても値は保持する。
+	void SetDifficulty(Difficulty difficulty){ difficulty_ = difficulty; }
+	Difficulty GetDifficulty() const{ return difficulty_; }
+
 	// -------------------------------------------------
 	// セットアップ (初期化時に使用)
 	// -------------------------------------------------
@@ -106,6 +112,9 @@ private:
 	std::string nextSceneName_ = "";
 	int64_t finalScore_ = 0;
 	int64_t finalClearedCells_ = 0;
+
+	// 追加：選択中の難易度。タイトルで選ぶまでは真ん中の Normal を既定にする。
+	Difficulty difficulty_ = Difficulty::Normal;
 
 	// --- 共通リソース (借用ポインタ) ---
 	Obj3dCommon* object3dCommon_ = nullptr;

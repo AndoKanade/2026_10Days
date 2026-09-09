@@ -3,6 +3,7 @@
 #include "ImGuiManager.h"
 #include "ModelManager.h"
 #include "SoundManager.h"
+#include "SoundConfig.h"  // 追加：汎用SE・ブロック操作SEのパスと再生窓口
 #include "Input.h"
 #include "Obj3D.h"
 #include "Obj3dCommon.h"
@@ -18,6 +19,16 @@
 #include "SkyboxCommon.h" // 追加：天球の共通設定
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+
+// 追加：SEの発音遅れ対策で、音声ファイルの先頭無音を切り詰めたWAVを
+// このゲームシーン側だけで生成するために使う（SoundManager本体には手を入れない）。
+#include <mfapi.h>
+#include <mfidl.h>
+#include <mfreadwrite.h>
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mfreadwrite.lib")
+#pragma comment(lib, "mfuuid.lib")
 
 namespace{
 	const std::string kGaugeBackgroundTexture = "resource/ui/specialGauge/red.png";
@@ -27,8 +38,10 @@ namespace{
 	constexpr Vector2 kGaugePosition = {20.0f,20.0f};
 	constexpr Vector2 kGaugeMaxSize = {360.0f,28.0f};
 	const std::string kScoreNumberTexture = "resource/ui/score/numbers.png";
-	const std::string kClearScoreSePath = "resource/music/se/clear_score.mp3";
-	constexpr float kClearScoreSeVolume = 0.7f;
+	// Easyでは通常プレイ中に約60秒で満タンになる（最大30、2秒ごとに+1）。
+	constexpr int32_t kEasyPassiveChargeIntervalFrames = 120;
+	const std::string kSpecialActiveBgmPath = "resource/music/bgm/ハッピーハッピー.mp3";
+	constexpr float kSpecialActiveBgmVolume = 0.5f;
 
 	// --- 追加：ポーズ画面 ---
 
@@ -87,8 +100,164 @@ namespace{
 	Vector2 LerpVector2(const Vector2& a,const Vector2& b,float t){
 		return {a.x + (b.x-a.x)*t,a.y + (b.y-a.y)*t};
 	}
-	// 追加：ゲーム画面のBGMの初期音量
-	constexpr float kBgmVolume = 0.5f;
+	// ゲーム画面のBGMの初期音量
+	constexpr float kBgmVolume = 0.35f;
+
+	// 追加：ブロックが消えたときに鳴らすSEのパスと初期音量
+	const std::string kDisappearSePath = "resource/SE/disappear.mp3";
+	constexpr float kDisappearSeVolume = 0.6f;
+
+	// ブロックを回転させたときに鳴らすSEのパスと初期音量
+	const std::string kRotateSePath = "resource/SE/direction.mp3";
+	constexpr float kRotateSeVolume = 0.6f;
+
+	// ブロックが盤面に固定されたときに鳴らすSEのパスと初期音量
+	const std::string kPlaceSePath = "resource/SE/put.mp3";
+	constexpr float kPlaceSeVolume = 0.6f;
+
+	// SEの発音遅れ対策用の定数
+	// 無音とみなす振幅のしきい値（16bit最大値に対する割合）
+	constexpr float kSeSilenceAmplitudeRatio = 0.02f;
+
+	// 切り詰めてよい最大時間（秒）。これを超える無音は意図した演出とみなして残す
+	constexpr float kSeMaxTrimSeconds = 0.3f;
+
+	// sourcePath の先頭無音を切り詰めたWAVファイルを用意し、そのパスを返す。
+	// 既に生成済みならデコードし直さずそのパスを返す。何らかの理由で生成できなければ
+	// sourcePath をそのまま返す（＝これまで通りの音声で再生される）。
+	std::string MakeSilenceTrimmedSePath(const std::string& sourcePath){
+		const size_t dotPos = sourcePath.find_last_of('.');
+		const std::string trimmedPath = (dotPos == std::string::npos ? sourcePath : sourcePath.substr(0,dotPos)) + "_trimmed.wav";
+
+		// 既に生成済みならそれを使う
+		if(std::ifstream(trimmedPath,std::ios::binary).good()){
+			return trimmedPath;
+		}
+
+		// ファイル名をワイド文字へ変換する
+		const int sizeNeeded = MultiByteToWideChar(CP_UTF8,0,sourcePath.c_str(),(int)sourcePath.size(),NULL,0);
+		std::wstring wSourcePath(sizeNeeded,0);
+		MultiByteToWideChar(CP_UTF8,0,sourcePath.c_str(),(int)sourcePath.size(),&wSourcePath[0],sizeNeeded);
+
+		IMFSourceReader* reader = nullptr;
+		if(FAILED(MFCreateSourceReaderFromURL(wSourcePath.c_str(),nullptr,&reader))){
+			return sourcePath;
+		}
+
+		IMFMediaType* requestType = nullptr;
+		MFCreateMediaType(&requestType);
+		requestType->SetGUID(MF_MT_MAJOR_TYPE,MFMediaType_Audio);
+		requestType->SetGUID(MF_MT_SUBTYPE,MFAudioFormat_PCM);
+		const bool typeSet = SUCCEEDED(reader->SetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM,nullptr,requestType));
+		requestType->Release();
+		if(!typeSet){
+			reader->Release();
+			return sourcePath;
+		}
+
+		IMFMediaType* actualType = nullptr;
+		reader->GetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM,&actualType);
+
+		WAVEFORMATEX* waveFormat = nullptr;
+		UINT32 waveFormatSize = 0;
+		MFCreateWaveFormatExFromMFMediaType(actualType,&waveFormat,&waveFormatSize);
+		actualType->Release();
+
+		// デコードしたPCMデータを1本のバッファへ集める
+		std::vector<BYTE> pcmData;
+		while(true){
+			IMFSample* sample = nullptr;
+			DWORD flags = 0;
+			if(FAILED(reader->ReadSample((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM,0,nullptr,&flags,nullptr,&sample))){
+				break;
+			}
+			if(flags & MF_SOURCE_READERF_ENDOFSTREAM){
+				break;
+			}
+			if(sample){
+				IMFMediaBuffer* buffer = nullptr;
+				sample->ConvertToContiguousBuffer(&buffer);
+				BYTE* data = nullptr;
+				DWORD length = 0;
+				buffer->Lock(&data,nullptr,&length);
+				const size_t oldSize = pcmData.size();
+				pcmData.resize(oldSize + length);
+				memcpy(&pcmData[oldSize],data,length);
+				buffer->Unlock();
+				buffer->Release();
+				sample->Release();
+			}
+		}
+		reader->Release();
+
+		// 16bit PCM以外はサンプルの読み方が変わるため対象外にする（元のまま再生する）
+		if(!waveFormat || waveFormat->wBitsPerSample != 16 || waveFormat->nBlockAlign == 0 || pcmData.empty()){
+			if(waveFormat){ CoTaskMemFree(waveFormat); }
+			return sourcePath;
+		}
+
+		// 先頭の無音区間（全チャンネルの振幅がしきい値以下のフレーム）を探す
+		const int16_t threshold = static_cast<int16_t>(32767.0f * kSeSilenceAmplitudeRatio);
+		const size_t blockAlign = waveFormat->nBlockAlign;
+		const size_t channelCount = waveFormat->nChannels;
+		const size_t frameCount = pcmData.size() / blockAlign;
+		const size_t maxTrimFrames = static_cast<size_t>(kSeMaxTrimSeconds * static_cast<float>(waveFormat->nSamplesPerSec));
+		const int16_t* samples = reinterpret_cast<const int16_t*>(pcmData.data());
+
+		size_t silentFrames = 0;
+		while(silentFrames < frameCount && silentFrames < maxTrimFrames){
+			bool isSilent = true;
+			const size_t sampleBase = silentFrames * channelCount;
+			for(size_t channel = 0; channel < channelCount; ++channel){
+				const int16_t sample = samples[sampleBase + channel];
+				if(sample > threshold || sample < -threshold){
+					isSilent = false;
+					break;
+				}
+			}
+			if(!isSilent){
+				break;
+			}
+			++silentFrames;
+		}
+
+		const size_t trimBytes = silentFrames * blockAlign;
+		const BYTE* trimmedData = pcmData.data() + trimBytes;
+		const uint32_t trimmedSize = static_cast<uint32_t>(pcmData.size() - trimBytes);
+
+		// 最小構成のWAV（RIFF/fmt/data）として書き出す
+		std::ofstream out(trimmedPath,std::ios::binary);
+		if(!out){
+			CoTaskMemFree(waveFormat);
+			return sourcePath;
+		}
+
+		const uint32_t fmtChunkSize = 16;
+		const uint32_t riffSize = 4 + (8 + fmtChunkSize) + (8 + trimmedSize);
+		const uint16_t formatTag = WAVE_FORMAT_PCM;
+		const uint16_t channels16 = waveFormat->nChannels;
+		const uint16_t blockAlign16 = static_cast<uint16_t>(waveFormat->nBlockAlign);
+		const uint16_t bitsPerSample16 = waveFormat->wBitsPerSample;
+
+		out.write("RIFF",4);
+		out.write(reinterpret_cast<const char*>(&riffSize),4);
+		out.write("WAVE",4);
+		out.write("fmt ",4);
+		out.write(reinterpret_cast<const char*>(&fmtChunkSize),4);
+		out.write(reinterpret_cast<const char*>(&formatTag),2);
+		out.write(reinterpret_cast<const char*>(&channels16),2);
+		out.write(reinterpret_cast<const char*>(&waveFormat->nSamplesPerSec),4);
+		out.write(reinterpret_cast<const char*>(&waveFormat->nAvgBytesPerSec),4);
+		out.write(reinterpret_cast<const char*>(&blockAlign16),2);
+		out.write(reinterpret_cast<const char*>(&bitsPerSample16),2);
+		out.write("data",4);
+		out.write(reinterpret_cast<const char*>(&trimmedSize),4);
+		out.write(reinterpret_cast<const char*>(trimmedData),trimmedSize);
+
+		CoTaskMemFree(waveFormat);
+
+		return out.good() ? trimmedPath : sourcePath;
+	}
 
 	const std::string kLevelJsonFile = "level.json"; // レベル配置情報のJSONファイル名
 
@@ -129,6 +298,17 @@ namespace{
 
 	// 追加：ラベルの色（陰影なしの白っぽい色で光らせ、視認性を確保する）
 	const Vector4 kLabelColor = {0.9f, 0.9f, 0.95f, 1.0f};
+
+	// 追加：「Tabでポーズ」のヒント表示に使うモデル（Blenderで作成したテキスト形状のメッシュ）
+	const std::string kTabHintModel = "ui/pause/tabto.obj";
+
+	// 追加：ヒントの拡大率。元の形状はNEXT/HOLDのラベルよりだいぶ横長（横幅5.2程度）なため、
+	// 同じ見た目の大きさに収まるよう控えめな倍率にする。
+	constexpr float kTabHintScale = 0.6f;
+
+	// 追加：ヒントを表示する盤面マス座標（列0＝盤面中央、盤面の下端よりさらに下の行）。
+	// 盤面幅が変わっても中央に留まるよう、列は常に0を使う。
+	constexpr int32_t kTabHintAnchorRow = PuzzleConfig::kBoardHeight + 2;
 
 	// ブロックの種類名（ImGui表示用）
 	const char* BlockTypeName(BlockShape::Type type){
@@ -208,6 +388,8 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	debugManualFallSpeed_ = false;
 	debugFallIntervalFrames_ = PuzzleConfig::kFallIntervalFrames;
 	suppressSpecialClearCharge_ = false;
+	easyPassiveChargeFrames_ = 0;
+	isSpecialBgmPlaying_ = false;
 
 	// カメラの生成・設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
@@ -227,14 +409,30 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	// 1フレーム目の描画に間に合うよう、行列をここで一度作っておく
 	skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
 
-	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
-	SoundManager::GetInstance()->SoundLoadFile(kClearScoreSePath);
+	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_,SoundCategory::BGM);
+	SoundManager::GetInstance()->SoundLoadFile(kSpecialActiveBgmPath,SoundCategory::BGM);
 
 	// 追加：ゲームBGMをループ再生する
 	SoundManager::GetInstance()->PlayAudio(kBgmPath_,kBgmVolume,true);
 
+	// 追加：ポーズメニューで使う汎用SEと、ブロック操作のSEをロードしておく
+	SoundConfig::LoadCommonSe();
+	SoundConfig::LoadBlockSe();
+
+	// 追加：ブロックが消えたとき／回転したとき／固定されたときに鳴らすSEをロードしておく。
+	// 効果音は鳴らした瞬間に聞こえてほしいため、先頭無音を切り詰めたWAVがあればそちらを使う。
+	disappearSePath_ = MakeSilenceTrimmedSePath(kDisappearSePath);
+	rotateSePath_ = MakeSilenceTrimmedSePath(kRotateSePath);
+	placeSePath_ = MakeSilenceTrimmedSePath(kPlaceSePath);
+	SoundManager::GetInstance()->SoundLoadFile(disappearSePath_);
+	SoundManager::GetInstance()->SoundLoadFile(rotateSePath_);
+	SoundManager::GetInstance()->SoundLoadFile(placeSePath_);
+
 	// 追加：パズルの盤面を初期化する（盤面は3Dオブジェクトで描画する）
 	board_.Initialize(object3dCommon_);
+
+	// 追加：タイトルで選んだ難易度を盤面へ渡す。通電時に消す範囲がこれで変わる。
+	board_.SetDifficulty(SceneManager::GetInstance()->GetDifficulty());
 
 	// 追加：次ブロック抽選用の乱数エンジンをシードする
 	std::random_device seedGenerator;
@@ -305,6 +503,21 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	}
 
 	SyncPreviewLabels();
+
+	// 追加：「Tabでポーズ」のヒントを盤面下の余白に表示する
+	ModelManager::GetInstance()->LoadModel(kTabHintModel);
+	tabHintObj_ = std::make_unique<Obj3D>();
+	tabHintObj_->Initialize(object3dCommon_);
+	tabHintObj_->SetModel(kTabHintModel);
+	tabHintObj_->SetScale({kTabHintScale, kTabHintScale, kTabHintScale});
+	// 列は0を渡して盤面幅に応じたY・Zだけ受け取り、Xは中央(0)へ上書きする
+	Vector3 tabHintPos = board_.GridToWorld(0,kTabHintAnchorRow);
+	tabHintPos.x = 0.0f;
+	tabHintObj_->SetTranslate(tabHintPos);
+	if(Model::Material* material = tabHintObj_->GetMaterial()){
+		material->color = kLabelColor;
+		material->enableLighting = 0; // 2D的な見た目にするため陰影を切る
+	}
 
 	// スペシャルの対象選択カーソルを用意する
 	specialCursorObj_ = std::make_unique<Obj3D>();
@@ -649,7 +862,8 @@ void GameScene::RebuildLevelObjects(){
 void GameScene::Finalize(){
 	// 追加：シーンを抜けるときにゲームBGMを止める
 	SoundManager::GetInstance()->StopAudio(kBgmPath_);
-	SoundManager::GetInstance()->StopAudio(kClearScoreSePath);
+	SoundManager::GetInstance()->StopAudio(kSpecialActiveBgmPath);
+	isSpecialBgmPlaying_ = false;
 }
 
 // --- 更新処理 ---
@@ -660,12 +874,20 @@ void GameScene::Update() {
 	if(!isGameOver_ && input_->TriggerKey(DIK_TAB)){
 		if(isPaused_ && pauseMode_ == PauseMode::Tutorial){
 			pauseMode_ = PauseMode::Menu;
+
+			// 追加：一段戻るのでキャンセルSE
+			SoundConfig::PlayCancel();
 		} else{
 			isPaused_ = !isPaused_;
 			if(isPaused_){
 				// 開くたびに先頭の項目から選び直す
 				pauseMode_ = PauseMode::Menu;
 				pauseMenuIndex_ = 0;
+
+				// 追加：開くときは決定SE、閉じるときはキャンセルSE
+				SoundConfig::PlayDecide();
+			} else{
+				SoundConfig::PlayCancel();
 			}
 		}
 		UpdatePauseUi();
@@ -713,7 +935,8 @@ void GameScene::Update() {
 		}
 		score_.AddFromClear(result.cellCount,result.chainCount);
 		SpawnScorePopup(score_.GetLastGain(),score_.GetLastChain());
-		SoundManager::GetInstance()->PlayAudio(kClearScoreSePath,kClearScoreSeVolume,false);
+		// 追加：ブロックが消えたときのSEを鳴らす
+		SoundManager::GetInstance()->PlayAudio(disappearSePath_,kDisappearSeVolume);
 	}
 	// スペシャルから始まった消去と、その落下連鎖がすべて終わってから通常チャージへ戻す。
 	if(suppressSpecialClearCharge_ && !board_.IsBusy()){
@@ -723,6 +946,18 @@ void GameScene::Update() {
 	// スペシャル発動後は、対象選択中もゲージを減少させる
 	if (!isGameOver_) {
 		specialGauge_.Update();
+	}
+	// Easyだけは通常プレイ中にゲージを自動チャージする。
+	if(!isGameOver_ &&
+		SceneManager::GetInstance()->GetDifficulty() == Difficulty::Easy &&
+		!specialGauge_.IsActivationActive() && !specialSelector_.IsSelecting()){
+		++easyPassiveChargeFrames_;
+		if(easyPassiveChargeFrames_ >= kEasyPassiveChargeIntervalFrames){
+			easyPassiveChargeFrames_ = 0;
+			specialGauge_.AddPassiveCharge();
+		}
+	} else{
+		easyPassiveChargeFrames_ = 0;
 	}
 	if (specialSelector_.IsSelecting() && !specialGauge_.IsActivationActive()) {
 		// 制限時間内に決定できなかったため、選択を終了する
@@ -741,19 +976,25 @@ void GameScene::Update() {
 	if (specialSelector_.IsSelecting()) {
 		fallingBlock_.SetSoftDrop(false);
 
+		// 追加：カーソル移動と決定に汎用SEを鳴らす
 		if (input_->TriggerKey(DIK_LEFT)) {
 			specialSelector_.Move(-1, 0, board_);
+			SoundConfig::PlayCursorMove();
 		}
 		if (input_->TriggerKey(DIK_RIGHT)) {
 			specialSelector_.Move(1, 0, board_);
+			SoundConfig::PlayCursorMove();
 		}
 		if (input_->TriggerKey(DIK_UP)) {
 			specialSelector_.Move(0, -1, board_);
+			SoundConfig::PlayCursorMove();
 		}
 		if (input_->TriggerKey(DIK_DOWN)) {
 			specialSelector_.Move(0, 1, board_);
+			SoundConfig::PlayCursorMove();
 		}
 		if (input_->TriggerKey(DIK_RETURN)) {
+			SoundConfig::PlayDecide();
 			ConfirmSpecialTarget();
 		}
 		SyncSpecialCursor();
@@ -763,17 +1004,28 @@ void GameScene::Update() {
 				// 手動調整中は自動加速の時計を止める。
 				if(!debugManualFallSpeed_){ ++activePlayFrames_; }
 				// 左右移動・回転はトリガー（押した瞬間）で1回ずつ
+				// 追加：壁や既存ブロックに阻まれて動かなかったときは鳴らさない
 				if (input_->TriggerKey(DIK_A)) {
-					fallingBlock_.MoveLeft(board_);
+					if (fallingBlock_.MoveLeft(board_)) {
+						SoundConfig::PlayBlockMove();
+					}
 				}
 				if (input_->TriggerKey(DIK_D)) {
-					fallingBlock_.MoveRight(board_);
+					if (fallingBlock_.MoveRight(board_)) {
+						SoundConfig::PlayBlockMove();
+					}
 				}
 				if (input_->TriggerKey(DIK_W)) {
-					fallingBlock_.Rotate(board_);
+					// 回転が実際に成功したときだけSEを鳴らす（壁蹴りで拒否された場合は鳴らさない）
+					if (fallingBlock_.Rotate(board_)) {
+						SoundManager::GetInstance()->PlayAudio(rotateSePath_,kRotateSeVolume);
+					}
 				}
 				// 追加：ホールド操作（1個のブロックにつき1回まで）
 				if (input_->TriggerKey(DIK_C) && canHold_) {
+					// 追加：ホールドSE（差し替えに失敗した場合はゲームオーバーへ抜ける）
+					SoundConfig::PlayBlockHold();
+
 					if (!SwapHold()) {
 						// 差し替えたブロックの出現位置が塞がっていた＝ゲームオーバー
 						isGameOver_ = true;
@@ -792,6 +1044,9 @@ void GameScene::Update() {
 					: fallingBlock_.Update(board_,GetCurrentFallInterval());
 
 				if (blockLocked) {
+					// 追加：ブロックが盤面に固定されたときのSEを鳴らす
+					SoundManager::GetInstance()->PlayAudio(placeSePath_,kPlaceSeVolume);
+
 					// 天井より上にはみ出したまま固定された ＝ 積み上がりすぎでゲームオーバー
 					const bool lockedAboveCeiling = fallingBlock_.IsLockedAboveCeiling();
 
@@ -832,6 +1087,10 @@ void GameScene::Update() {
 			}
 			if(holdLabelObj_){
 				holdLabelObj_->Update();
+			}
+			// 追加：「Tabでポーズ」ヒントも毎フレーム行列を更新する
+			if(tabHintObj_){
+				tabHintObj_->Update();
 			}
 		}
 
@@ -979,6 +1238,7 @@ void GameScene::Update() {
 			Application::GetInstance()->ShowPostProcessUI();
 		}
 #endif
+	SyncSpecialBgm();
 	UpdateSpecialGaugeUi();
 	UpdateScoreUi();
 	UpdateScorePopups();
@@ -1029,6 +1289,10 @@ void GameScene::Draw(){
 	}
 	if(holdLabelObj_){
 		holdLabelObj_->Draw();
+	}
+	// 追加：「Tabでポーズ」ヒントを描画する
+	if(tabHintObj_){
+		tabHintObj_->Draw();
 	}
 
 	// スペシャルの対象選択カーソルを最後に重ねて描画する
@@ -1118,21 +1382,29 @@ void GameScene::UpdatePauseMenu(){
 		const int32_t itemCount = static_cast<int32_t>(PauseMenuItem::Count);
 
 		// 上下で選択を移動する（端まで行ったら反対側へ回り込む）
+		// 追加：移動のたびにカーソル移動SEを鳴らす
 		if(input_->TriggerKey(DIK_UP) || input_->TriggerKey(DIK_W)){
 			pauseMenuIndex_ = (pauseMenuIndex_ - 1 + itemCount) % itemCount;
+			SoundConfig::PlayCursorMove();
 		}
 		if(input_->TriggerKey(DIK_DOWN) || input_->TriggerKey(DIK_S)){
 			pauseMenuIndex_ = (pauseMenuIndex_ + 1) % itemCount;
+			SoundConfig::PlayCursorMove();
 		}
 
 		// 決定
 		if(input_->TriggerKey(DIK_RETURN) || input_->TriggerKey(DIK_SPACE)){
+			// 追加：決定SE
+			SoundConfig::PlayDecide();
 			ConfirmPauseMenuItem();
 		}
 	} else{
 		// チュートリアル表示中は、決定でメニューへ戻る（TABでも戻れる）
 		if(input_->TriggerKey(DIK_RETURN) || input_->TriggerKey(DIK_SPACE)){
 			pauseMode_ = PauseMode::Menu;
+
+			// 追加：一段戻るのでキャンセルSE
+			SoundConfig::PlayCancel();
 		}
 	}
 
@@ -1402,4 +1674,20 @@ void GameScene::ConfirmSpecialTarget(){
 		suppressSpecialClearCharge_ = board_.IsBusy();
 		specialSelector_.Cancel();
 	}
+}
+
+void GameScene::SyncSpecialBgm(){
+	const bool shouldPlay = specialGauge_.IsActivationActive();
+	if(shouldPlay == isSpecialBgmPlaying_){
+		return;
+	}
+
+	if(shouldPlay){
+		SoundManager::GetInstance()->PauseAudio(kBgmPath_);
+		SoundManager::GetInstance()->PlayAudio(kSpecialActiveBgmPath,kSpecialActiveBgmVolume,true);
+	} else{
+		SoundManager::GetInstance()->StopAudio(kSpecialActiveBgmPath);
+		SoundManager::GetInstance()->ResumeAudio(kBgmPath_);
+	}
+	isSpecialBgmPlaying_ = shouldPlay;
 }

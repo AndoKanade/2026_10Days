@@ -19,6 +19,13 @@ void SpecialGauge::AddFromClear(int32_t clearedCellCount,int32_t chainCount){
 	value_ = std::min(value_ + gainedValue,PuzzleConfig::kSpecialGaugeMax);
 }
 
+void SpecialGauge::AddPassiveCharge(int32_t amount){
+	if(amount <= 0 || isActivationActive_){
+		return;
+	}
+	value_ = std::min(value_ + amount,PuzzleConfig::kSpecialGaugeMax);
+}
+
 // スペシャル発動後の制限時間を1フレーム分進める
 void SpecialGauge::Update(){
 	if(!isActivationActive_){

@@ -109,31 +109,38 @@ void FallingBlock::UpdateLockedAboveCeiling(const std::vector<GridPos>& lockedCe
 	}
 }
 
-void FallingBlock::MoveLeft(const Board& board){
+bool FallingBlock::MoveLeft(const Board& board){
 	const GridPos moved = {origin_.x - 1, origin_.y};
 	if(board.CanFall(CalcCells(moved,rotation_))){
 		origin_ = moved;
 		// 動かせたら固定猶予をリセットする（着地際の操作を受け付けるため）
 		lockTimer_ = 0;
+		return true;
 	}
+	return false;
 }
 
 // 追加：右に1マス移動する。
-void FallingBlock::MoveRight(const Board& board){
+bool FallingBlock::MoveRight(const Board& board){
 	const GridPos moved = {origin_.x + 1, origin_.y};
 	if(board.CanFall(CalcCells(moved,rotation_))){
 		origin_ = moved;
 		lockTimer_ = 0;
+		return true;
 	}
+	return false;
 }
 
 // 追加：時計回りに1段階回転する。重なる場合は回転しない（押し戻しはしない）。
-void FallingBlock::Rotate(const Board& board){
+
+bool FallingBlock::Rotate(const Board& board){
 	const int32_t nextRotation = (rotation_ + 1) % BlockShape::kRotationCount;
 	if(board.CanFall(CalcCells(origin_,nextRotation))){
 		rotation_ = nextRotation;
 		lockTimer_ = 0;
+		return true;
 	}
+	return false;
 }
 
 // 現在このブロックが占めている盤面マスの絶対座標を返す。

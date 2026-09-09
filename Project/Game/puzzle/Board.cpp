@@ -128,8 +128,31 @@ void Board::CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath){
 	wallObjs_.push_back(std::move(obj));
 }
 
+// 消去演出中のマス1個ぶんについて、電源からの光の波が届いているかどうかと、
+// 届いていた場合にどれだけ膨らませるか(popScale)を計算する。
+// RebuildCellObjects()（初回構築）と UpdateClearingCellVisuals()（毎フレームの軽量更新）の
+// 両方から同じ計算式を使うための共通処理。
+void Board::ComputeClearWaveState(int32_t y,bool& waveReached,float& popScale) const{
+	waveReached = false;
+	popScale = 1.0f;
+
+	const int32_t distance = (PuzzleConfig::kBoardHeight - 1) - y;
+	// 消去が確定するまでの最後の描画フレーム（clearTimer_ の最大値）で波が
+	// ちょうど一番遠いマスまで届くよう、分母を1フレーム分小さくしておく。
+	// そうしないと一番遠いマスだけ光る前に消えてしまう。
+	const int32_t waveDurationFrames = PuzzleConfig::kClearEffectFrames > 1 ? PuzzleConfig::kClearEffectFrames - 1 : 1;
+	const float clearProgress = static_cast<float>(clearTimer_) / static_cast<float>(waveDurationFrames);
+	const float waveFront = clearProgress * static_cast<float>(clearWaveMaxDistance_);
+	waveReached = static_cast<float>(distance) <= waveFront;
+	if(waveReached){
+		popScale = 1.0f + PuzzleConfig::kClearPopScaleAmount * clearProgress * clearProgress;
+	}
+}
+
 // U字の壁ブロックを1個生成して wallObjs_ に追加する処理と同じ手順で、
 // 追加：盤面に固定されたマスの見た目を cells_ から作り直す
+// 注意：GPU用の定数バッファをマスごとに新規確保する重い処理のため、消去演出中の
+// 毎フレーム更新には使わない（そちらは UpdateClearingCellVisuals() を使う）。
 void Board::RebuildCellObjects(){
 	cellObjs_.clear();
 
@@ -143,22 +166,35 @@ void Board::RebuildCellObjects(){
 				continue;
 			}
 
+			// 消去演出中だけは一瞬の演出なので専用色で塗りつぶす。
+			const bool isClearingCell = IsClearingCell(x,y);
+
+			// 消去演出中は、電源に近い行から順に「光の波」が届いたことにする。
+			// 波が届く前は通常の通電表示のまま、届いた瞬間に消去色へ切り替わり、
+			// 消えるまでの残り時間ぶんだけマスが膨らんで弾ける直前のように見せる。
+			bool waveReached = false;
+			float popScale = 1.0f;
+			if(isClearingCell){
+				ComputeClearWaveState(y,waveReached,popScale);
+			}
+
 			auto obj = std::make_unique<Obj3D>();
 			obj->Initialize(object3dCommon_);
 			obj->SetModel(kBlockModel);
-			obj->SetScale({PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale, PuzzleConfig::kCellModelScale});
+			obj->SetScale({
+				PuzzleConfig::kCellModelScale * popScale,
+				PuzzleConfig::kCellModelScale * popScale,
+				PuzzleConfig::kCellModelScale * popScale
+			});
 			obj->SetTranslate(GridToWorld(x,y));
 
 			// 変更：まずマス本来の色（最強マスは専用の紫、それ以外はブロックの種類色）を決め、
 			// 通電中はその色を塗り替えず明るくするだけにする。
 			// 別の色で塗りつぶすと元のブロックの種類が分からなくなるため。
-			// 消去演出中だけは一瞬の演出なので専用色で塗りつぶす。
-			const bool isClearingCell = IsClearingCell(x,y);
-
 			Vector4 color = cells_[y][x].IsStrongest()
 				? kStrongestCellColor
 				: PuzzleConfig::GetBlockColor(cells_[y][x].type);
-			if(isClearingCell){
+			if(waveReached){
 				color = kClearingCellColor;
 			} else if(powered[y][x]){
 				color = PuzzleConfig::MakePoweredColor(color);
@@ -180,7 +216,7 @@ void Board::RebuildCellObjects(){
 
 			// 追加：このマスの配線を、端子が立っている方向だけ中心から辺へ伸びる細い棒で描画する。
 			// 通電中（このマスが光っている）なら明るく、そうでなければ暗く表示する。
-			const Vector4 wireColor = (isClearingCell || powered[y][x]) ? kWireLitColor : kWireUnlitColor;
+			const Vector4 wireColor = (waveReached || powered[y][x]) ? kWireLitColor : kWireUnlitColor;
 
 			for(int32_t dir = 0; dir < 4; ++dir){
 				if(!(cells_[y][x].terminals & kSelfBits[dir])){
@@ -213,6 +249,76 @@ void Board::RebuildCellObjects(){
 				}
 
 				cellObjs_.push_back(std::move(wireObj));
+			}
+		}
+	}
+}
+
+// 消去演出中、毎フレームの「光の波」アニメーションを反映する軽量な更新。
+// RebuildCellObjects() と違ってオブジェクトを作り直さず、既に存在する cellObjs_ の
+// 色・スケールだけをその場で書き換える（GPU用の定数バッファを毎フレーム確保すると
+// 消去のたびに大量の生成が発生し、負荷で描画が乱れるため）。
+// cellObjs_ の並びは RebuildCellObjects() と同じ順番（y,x の順で、各マスにつき
+// 本体→端子の立っている方向の配線の順）で作られている前提で、同じ順番になぞって書き換える。
+void Board::UpdateClearingCellVisuals(){
+	const auto powered = ComputePoweredMask();
+	size_t objIndex = 0;
+
+	for(int32_t y = 0; y < PuzzleConfig::kBoardHeight; ++y){
+		for(int32_t x = 0; x < width_; ++x){
+			if(cells_[y][x].IsEmpty()){
+				continue;
+			}
+			// 安全策：想定と cellObjs_ の構成がずれていたら、それ以上は触らない
+			if(objIndex >= cellObjs_.size()){
+				return;
+			}
+
+			const bool isClearingCell = IsClearingCell(x,y);
+			bool waveReached = false;
+			float popScale = 1.0f;
+			if(isClearingCell){
+				ComputeClearWaveState(y,waveReached,popScale);
+			}
+
+			Obj3D* bodyObj = cellObjs_[objIndex].get();
+			++objIndex;
+
+			bodyObj->SetScale({
+				PuzzleConfig::kCellModelScale * popScale,
+				PuzzleConfig::kCellModelScale * popScale,
+				PuzzleConfig::kCellModelScale * popScale
+			});
+
+			Vector4 color = cells_[y][x].IsStrongest()
+				? kStrongestCellColor
+				: PuzzleConfig::GetBlockColor(cells_[y][x].type);
+			if(waveReached){
+				color = kClearingCellColor;
+			} else if(powered[y][x]){
+				color = PuzzleConfig::MakePoweredColor(color);
+			}
+			color = PuzzleConfig::ApplyLitGain(color);
+
+			if(Model::Material* cellMaterial = bodyObj->GetMaterial()){
+				cellMaterial->color = color;
+			}
+
+			const Vector4 wireColor = (waveReached || powered[y][x]) ? kWireLitColor : kWireUnlitColor;
+
+			for(int32_t dir = 0; dir < 4; ++dir){
+				if(!(cells_[y][x].terminals & kSelfBits[dir])){
+					continue;
+				}
+				if(objIndex >= cellObjs_.size()){
+					return;
+				}
+				Obj3D* wireObj = cellObjs_[objIndex].get();
+				++objIndex;
+
+				if(Model::Material* wireMaterial = wireObj->GetMaterial()){
+					wireMaterial->color = wireColor;
+				}
 			}
 		}
 	}
@@ -355,7 +461,10 @@ void Board::Update(){
 			// 支えにしていたマスが消えて構造的に浮いた状態のため、自分の列自体には
 			// 消去が起きていなくても落とす必要がある。それ以外の、本当に無関係な列は
 			// 従来通り触らない。
-			ApplyGravity(clearedCells,clearedBlockIds);
+			// Easy は行を丸ごと消す仕様なので、その行に元々空きマスだった列も
+			// 含めて全列を強制的に詰め直す（forceAllColumns）。これをしないと、
+			// たまたま消去行が空きマスだった列だけ上のブロックが落ちてこない。
+			ApplyGravity(clearedCells,clearedBlockIds,difficulty_ == Difficulty::Easy);
 
 			// 落下後に再度通電判定を行う。まだ繋がっていれば連鎖してまた消去演出に入る
 			// （isClearing_ は直前で false にしてあるため、ここで判定が素通りされることはない）
@@ -363,6 +472,12 @@ void Board::Update(){
 
 			// 消去・落下後の見た目を作り直す
 			RebuildCellObjects();
+		} else{
+			// 消去演出中は毎フレーム、電源に近い（下段の）マスから順に光っていく
+			// 光の波が経路を伝って進む様子をアニメーションさせる。
+			// RebuildCellObjects() は使わず、既存オブジェクトの色・スケールだけを更新する
+			// 軽量な処理にする（毎フレーム作り直すとGPUリソースの生成が過剰になるため）。
+			UpdateClearingCellVisuals();
 		}
 	}
 }
@@ -442,9 +557,14 @@ void Board::Place(const std::vector<GridPos>& cells,int32_t blockId,const std::v
 }
 
 // 電源（最下段）から幅優先探索で通電範囲（一かたまり）を調べ、ゴール（左右端）まで
-// 繋がっていれば、その一かたまりから行き止まりの枝を取り除いた残りのマスを
-// 消去演出の対象にする（電源とゴールを実際に繋ぐのに使われているマスだけが残る。
-// 複数ルートやループも、行き止まりでなければすべて残る）。この時点ではまだ消さない。
+// 繋がっていれば、そのかたまりを消去演出の対象にする。
+//
+// どこまで消すかは難易度で変わる（詳しくは Difficulty.h）。
+//   Easy   ：かたまりが通っている横列を丸ごと消す。通電に関係ないマスも片付く。
+//   Normal ：かたまりのマスをすべて消す。枝分かれもループも含む。
+//   Hard   ：電源とゴールを実際に結んでいるマスだけを消す。枝は盤面に残る。
+//
+// この時点ではまだ消さない。
 void Board::ResolveConduction(){
 	// 既に消去演出中なら、演出が終わるまで新たな判定はしない
 	if(isClearing_){
@@ -454,8 +574,13 @@ void Board::ResolveConduction(){
 	// マスごとの訪問済みフラグ（同じマスを何度も探索しないようにする）
 	std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> visited{};
 
-	// 通電が確定したマスをまとめて集める
+	// 消去対象のマス。Normal と Hard はここへ直接ためる。
+	// 一かたまりどうしは visited を共有していて重ならないため、重複はしない。
 	std::vector<GridPos> cellsToClear;
+
+	// Easy 用。通電が成立した一かたまりが通っている横列に印を付ける。
+	// 行単位でまとめるので、複数のかたまりが同じ行を通っても重複しない。
+	std::array<bool,PuzzleConfig::kBoardHeight> rowsToClear{};
 
 	const int32_t bottomY = PuzzleConfig::kBoardHeight - 1;
 
@@ -511,85 +636,45 @@ void Board::ResolveConduction(){
 			continue;
 		}
 
-		// この一かたまりから、行き止まりの枝（他のマスと1本以下しか繋がっていないマス）を
-		// 繰り返し取り除いていく。残ったマスが消去対象になる。
-		std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> inSet{};
-		std::array<std::array<int32_t,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> degree{};
+		// 難易度ごとに、このかたまりから消す範囲を決める
+		switch(difficulty_){
+		case Difficulty::Easy:
+			// かたまりが通っている横列に印を付ける。実際に集めるのはループを抜けたあと。
+			for(const GridPos& pos : component){
+				rowsToClear[pos.y] = true;
+			}
+			break;
 
-		for(const GridPos& pos : component){
-			inSet[pos.y][pos.x] = true;
-		}
-		for(const GridPos& pos : component){
-			const Cell& posCell = cells_[pos.y][pos.x];
-			int32_t d = 0;
-			for(int32_t dir = 0; dir < 4; ++dir){
-				const int32_t nx = pos.x + kDirs[dir].x;
-				const int32_t ny = pos.y + kDirs[dir].y;
-				if(!IsInside(nx,ny) || !inSet[ny][nx]){
-					continue;
-				}
-				// 位置が隣り合っていても、互いに向き合う端子ビットが両方立っていなければ
-				// 繋がっているとは数えない（別ルート経由で同じ一かたまりに入っているだけの場合がある）
-				if(!(posCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
-					continue;
-				}
-				++d;
-			}
-			// 電源（最下段）・ゴール（左右端）は、外部と繋がっている仮想の1本があるものとして数える
-			if(pos.y == bottomY){
-				++d;
-			}
-			if(pos.x == 0 || pos.x == width_ - 1){
-				++d;
-			}
-			degree[pos.y][pos.x] = d;
+		case Difficulty::Normal:
+			// かたまりのマスをそのまま消す
+			cellsToClear.insert(cellsToClear.end(),component.begin(),component.end());
+			break;
+
+		case Difficulty::Hard:{
+			// 行き止まりの枝を取り除き、電源とゴールを結ぶマスだけを消す
+			const std::vector<GridPos> trunk = PruneDeadEndCells(component);
+			cellsToClear.insert(cellsToClear.end(),trunk.begin(),trunk.end());
+			break;
 		}
 
-		// 繋がりが1本以下のマスを取り除きの起点にする
-		std::vector<GridPos> pruneQueue;
-		for(const GridPos& pos : component){
-			if(degree[pos.y][pos.x] <= 1){
-				pruneQueue.push_back(pos);
-			}
+		default:
+			break;
 		}
+	}
 
-		size_t pruneHead = 0;
-		while(pruneHead < pruneQueue.size()){
-			const GridPos current = pruneQueue[pruneHead];
-			++pruneHead;
-
-			// 既に取り除き済みなら何もしない
-			if(!inSet[current.y][current.x]){
+	// Easy のみ：印の付いた横列にあるマスを、通電しているかどうかに関係なくすべて集める。
+	// 行単位で1回だけ走査するので重複しない（重複するとマス数を二重に数えて
+	// スコアとスペシャルゲージがずれる）。
+	if(difficulty_ == Difficulty::Easy){
+		for(int32_t y = 0; y < PuzzleConfig::kBoardHeight; ++y){
+			if(!rowsToClear[y]){
 				continue;
 			}
-			inSet[current.y][current.x] = false;
-
-			const Cell& currentCell = cells_[current.y][current.x];
-
-			// 取り除いた分、端子ビットで実際に繋がっていた隣のマスだけ繋がり本数を減らし、
-			// 1本以下になったら追加で取り除く
-			for(int32_t dir = 0; dir < 4; ++dir){
-				const int32_t nx = current.x + kDirs[dir].x;
-				const int32_t ny = current.y + kDirs[dir].y;
-
-				if(!IsInside(nx,ny) || !inSet[ny][nx]){
+			for(int32_t x = 0; x < width_; ++x){
+				if(cells_[y][x].IsEmpty()){
 					continue;
 				}
-				if(!(currentCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
-					continue;
-				}
-
-				--degree[ny][nx];
-				if(degree[ny][nx] <= 1){
-					pruneQueue.push_back({nx, ny});
-				}
-			}
-		}
-
-		// 取り除かれずに残ったマスを消去対象にする
-		for(const GridPos& pos : component){
-			if(inSet[pos.y][pos.x]){
-				cellsToClear.push_back(pos);
+				cellsToClear.push_back({x, y});
 			}
 		}
 	}
@@ -601,6 +686,16 @@ void Board::ResolveConduction(){
 		clearingCells_ = std::move(cellsToClear);
 		isClearing_ = true;
 		clearTimer_ = 0;
+
+		// 電源から見た行の距離のうち、いちばん遠いマスまでの距離を控えておく。
+		// 消去演出中、この距離を基準に「光の波」が下段から上段へ届くまでの進み具合を計算する。
+		clearWaveMaxDistance_ = 0;
+		for(const GridPos& pos : clearingCells_){
+			const int32_t distance = bottomY - pos.y;
+			if(distance > clearWaveMaxDistance_){
+				clearWaveMaxDistance_ = distance;
+			}
+		}
 	}else{
 		chainCount_ = 0;
 	}
@@ -645,9 +740,108 @@ std::vector<Board::ClearResult> Board::TakeClearResults(){
 // 出っ張りマスを巻き込んで落とさないようにするため。
 // 対象になった列は、その列全体を空きマスが無くなるまで下に詰め直す
 // （落下はマス単位で行い、ブロックの形は保持しない仕様のため）。
-void Board::ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds){
+// 追加：Hard で使う。通電した一かたまりから、行き止まりの枝（他のマスと1本以下しか
+// 繋がっていないマス）を繰り返し取り除き、残ったマスを返す。
+// 残るのは電源とゴールを実際に結ぶのに使われているマスだけで、複数ルートやループも
+// 行き止まりでなければ残る。
+std::vector<GridPos> Board::PruneDeadEndCells(const std::vector<GridPos>& component) const{
+	const int32_t bottomY = PuzzleConfig::kBoardHeight - 1;
+
+	std::array<std::array<bool,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> inSet{};
+	std::array<std::array<int32_t,PuzzleConfig::kBoardWidthMax>,PuzzleConfig::kBoardHeight> degree{};
+
+	for(const GridPos& pos : component){
+		inSet[pos.y][pos.x] = true;
+	}
+	for(const GridPos& pos : component){
+		const Cell& posCell = cells_[pos.y][pos.x];
+		int32_t d = 0;
+		for(int32_t dir = 0; dir < 4; ++dir){
+			const int32_t nx = pos.x + kDirs[dir].x;
+			const int32_t ny = pos.y + kDirs[dir].y;
+			if(!IsInside(nx,ny) || !inSet[ny][nx]){
+				continue;
+			}
+			// 位置が隣り合っていても、互いに向き合う端子ビットが両方立っていなければ
+			// 繋がっているとは数えない（別ルート経由で同じ一かたまりに入っているだけの場合がある）
+			if(!(posCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
+				continue;
+			}
+			++d;
+		}
+		// 電源（最下段）・ゴール（左右端）は、外部と繋がっている仮想の1本があるものとして数える
+		if(pos.y == bottomY){
+			++d;
+		}
+		if(pos.x == 0 || pos.x == width_ - 1){
+			++d;
+		}
+		degree[pos.y][pos.x] = d;
+	}
+
+	// 繋がりが1本以下のマスを取り除きの起点にする
+	std::vector<GridPos> pruneQueue;
+	for(const GridPos& pos : component){
+		if(degree[pos.y][pos.x] <= 1){
+			pruneQueue.push_back(pos);
+		}
+	}
+
+	size_t pruneHead = 0;
+	while(pruneHead < pruneQueue.size()){
+		const GridPos current = pruneQueue[pruneHead];
+		++pruneHead;
+
+		// 既に取り除き済みなら何もしない
+		if(!inSet[current.y][current.x]){
+			continue;
+		}
+		inSet[current.y][current.x] = false;
+
+		const Cell& currentCell = cells_[current.y][current.x];
+
+		// 取り除いた分、端子ビットで実際に繋がっていた隣のマスだけ繋がり本数を減らし、
+		// 1本以下になったら追加で取り除く
+		for(int32_t dir = 0; dir < 4; ++dir){
+			const int32_t nx = current.x + kDirs[dir].x;
+			const int32_t ny = current.y + kDirs[dir].y;
+
+			if(!IsInside(nx,ny) || !inSet[ny][nx]){
+				continue;
+			}
+			if(!(currentCell.terminals & kSelfBits[dir]) || !(cells_[ny][nx].terminals & kOtherBits[dir])){
+				continue;
+			}
+
+			--degree[ny][nx];
+			if(degree[ny][nx] <= 1){
+				pruneQueue.push_back({nx, ny});
+			}
+		}
+	}
+
+	// 取り除かれずに残ったマスを返す
+	std::vector<GridPos> trunk;
+	for(const GridPos& pos : component){
+		if(inSet[pos.y][pos.x]){
+			trunk.push_back(pos);
+		}
+	}
+	return trunk;
+}
+
+void Board::ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds,bool forceAllColumns){
 	// どの列を対象にするかを、列単位のフラグに変換しておく
 	std::array<bool,PuzzleConfig::kBoardWidthMax> clearedColumns{};
+
+	// Easy の横列消去は行を丸ごと消す仕様のため、その行に元々空きマスだった
+	// 列も含めて全列を強制的に詰め直す（そうしないと、その列だけ上のブロックが
+	// 落ちてこず、他の列との間で高さがずれて見える）。
+	if(forceAllColumns){
+		for(int32_t x = 0; x < width_; ++x){
+			clearedColumns[x] = true;
+		}
+	}
 
 	// 1. 今回の消去でマスが空いた列
 	for(const GridPos& pos : clearedCells){

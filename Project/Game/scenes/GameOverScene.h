@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 #include "ScoreHistory.h"
+#include "Difficulty.h"
+#include <array>
 
 // --- 前方宣言 ---
 class Input;
@@ -60,10 +62,12 @@ private:
 	std::unique_ptr<Sprite> rankLabel_;
 	std::unique_ptr<Sprite> scoreLabel_;
 	std::unique_ptr<Sprite> yourScoreLabel_;
+	std::unique_ptr<Sprite> difficultyLabel_;
 	std::vector<std::unique_ptr<Sprite>> rankingNumberSprites_;
 	std::vector<std::unique_ptr<Sprite>> currentNumberSprites_;
 	// シーンを作り直しても共有し、アプリを終了すると破棄する。
-	inline static ScoreHistory history_;
+	inline static std::array<ScoreHistory,static_cast<std::size_t>(Difficulty::Count)> histories_{};
+	Difficulty currentDifficulty_ = Difficulty::Normal;
 	bool resultRecorded_ = false;
 	bool isNewRecord_ = false;
 	int64_t currentScore_ = 0;
