@@ -27,6 +27,8 @@ namespace{
 	constexpr Vector2 kGaugePosition = {20.0f,20.0f};
 	constexpr Vector2 kGaugeMaxSize = {360.0f,28.0f};
 	const std::string kScoreNumberTexture = "resource/ui/score/numbers.png";
+	const std::string kClearScoreSePath = "resource/music/se/clear_score.mp3";
+	constexpr float kClearScoreSeVolume = 0.7f;
 
 	// --- 追加：ポーズ画面 ---
 
@@ -226,6 +228,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_);
+	SoundManager::GetInstance()->SoundLoadFile(kClearScoreSePath);
 
 	// 追加：ゲームBGMをループ再生する
 	SoundManager::GetInstance()->PlayAudio(kBgmPath_,kBgmVolume,true);
@@ -646,6 +649,7 @@ void GameScene::RebuildLevelObjects(){
 void GameScene::Finalize(){
 	// 追加：シーンを抜けるときにゲームBGMを止める
 	SoundManager::GetInstance()->StopAudio(kBgmPath_);
+	SoundManager::GetInstance()->StopAudio(kClearScoreSePath);
 }
 
 // --- 更新処理 ---
@@ -709,6 +713,7 @@ void GameScene::Update() {
 		}
 		score_.AddFromClear(result.cellCount,result.chainCount);
 		SpawnScorePopup(score_.GetLastGain(),score_.GetLastChain());
+		SoundManager::GetInstance()->PlayAudio(kClearScoreSePath,kClearScoreSeVolume,false);
 	}
 	// スペシャルから始まった消去と、その落下連鎖がすべて終わってから通常チャージへ戻す。
 	if(suppressSpecialClearCharge_ && !board_.IsBusy()){
