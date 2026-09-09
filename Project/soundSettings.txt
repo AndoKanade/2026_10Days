@@ -11,3 +11,5 @@
 0.5 resource/music/bgm/As_Time_Carries_Us_Away.mp3
 0.5 resource/music/bgm/New_Breath.mp3
 0.5 resource/music/bgm/サクラカゼ.mp3
+0.5 resource/music/bgm/ハッピーハッピー.mp3
+0.7 resource/music/se/clear_score.mp3

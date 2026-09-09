@@ -26,6 +26,11 @@ namespace{
 	const std::string kRankTexture = "resource/ui/score/rank.png";
 	const std::string kScoreTexture = "resource/ui/score/score.png";
 	const std::string kYourScoreTexture = "resource/ui/score/yourScore.png";
+	const std::string kDifficultyTextures[] = {
+		"resource/ui/title/easy.png",
+		"resource/ui/title/normal.png",
+		"resource/ui/title/hard.png"
+	};
 	const std::string kSolidTexture = "resource/character/white.png";
 	const std::string kBgmPath = "resource/music/bgm/As_Time_Carries_Us_Away.mp3";
 	constexpr float kBgmVolume = 0.5f;
@@ -75,6 +80,16 @@ namespace{
 	Vector4 GetBrightnessColor(float shine){
 		return LerpColor(kNumberBaseColor,{1.5f,1.5f,1.5f,1.0f},shine);
 	}
+	std::size_t DifficultyIndex(Difficulty difficulty){
+		return static_cast<std::size_t>(difficulty);
+	}
+	const char* DifficultyName(Difficulty difficulty){
+		switch(difficulty){
+		case Difficulty::Easy: return "EASY";
+		case Difficulty::Hard: return "HARD";
+		default: return "NORMAL";
+		}
+	}
 }
 
 GameOverScene::GameOverScene() = default;
@@ -85,10 +100,12 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 	object3dCommon_ = object3dCommon;
 	input_ = input;
 	spriteCommon_ = spriteCommon;
+	currentDifficulty_ = SceneManager::GetInstance()->GetDifficulty();
+	ScoreHistory& history = histories_[DifficultyIndex(currentDifficulty_)];
 	currentScore_ = SceneManager::GetInstance()->GetFinalScore();
 	currentRank_ = 1;
 	// 同点は先に登録された記録を上位にするため、既存の同点も今回より上に数える。
-	for(const auto& oldRecord : history_.GetRecords()){
+	for(const auto& oldRecord : history.GetRecords()){
 		if(oldRecord.score >= currentScore_){ ++currentRank_; }
 	}
 
@@ -104,8 +121,8 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 		if(localtime_s(&local,&now) == 0){ std::strftime(date,sizeof(date),"%Y-%m-%d %H:%M:%S",&local); }
 		record.date = date[0] ? date : "0000-00-00 00:00:00";
 		isNewRecord_ = record.score > 0 &&
-			(history_.GetRecords().empty() || record.score > history_.GetRecords().front().score);
-		history_.Add(record);
+			(history.GetRecords().empty() || record.score > history.GetRecords().front().score);
+		history.Add(record);
 	}
 
 	// --- 変更：背景を仮置きのスプライトから、ゲーム中と同じ天球に置き換える ---
@@ -129,12 +146,13 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 	TextureManager::GetInstance()->LoadTexture(kRankTexture);
 	TextureManager::GetInstance()->LoadTexture(kScoreTexture);
 	TextureManager::GetInstance()->LoadTexture(kYourScoreTexture);
+	TextureManager::GetInstance()->LoadTexture(kDifficultyTextures[DifficultyIndex(currentDifficulty_)]);
 	rankingLightningSprites_.clear();
 	currentLightningSprites_.clear();
 	rankingNumberSprites_.clear();
 	currentNumberSprites_.clear();
 
-	const auto& records = history_.GetRecords();
+	const auto& records = history.GetRecords();
 	for(int32_t row = 0; row < kRankingCount; ++row){
 		const float rowY = kRankingStartY + kRankingRowStep * static_cast<float>(row);
 		AppendLightningUnderline(rankingLightningSprites_,kPanelX,kPanelX + kPanelWidth,
@@ -169,6 +187,9 @@ void GameOverScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCo
 	rankLabel_ = createLabel(kRankTexture,{350.0f,72.0f},{128.0f,48.0f});
 	scoreLabel_ = createLabel(kScoreTexture,{560.0f,72.0f},{160.0f,48.0f});
 	yourScoreLabel_ = createLabel(kYourScoreTexture,{480.0f,452.0f},{320.0f,48.0f});
+	const Vector2 difficultySize = currentDifficulty_ == Difficulty::Easy ? Vector2{150.0f,60.0f} :
+		(currentDifficulty_ == Difficulty::Hard ? Vector2{162.0f,60.0f} : Vector2{246.0f,60.0f});
+	difficultyLabel_ = createLabel(kDifficultyTextures[DifficultyIndex(currentDifficulty_)],{40.0f,20.0f},difficultySize);
 	// 元画像の緑色ではなく透明度を文字の形として使い、全色へ着色可能にする。
 	yourScoreLabel_->SetUseAlphaMask(true);
 	yourScoreRainbowFrame_ = 0;
@@ -253,6 +274,7 @@ void GameOverScene::Update(){
 	SoundManager::GetInstance()->ShowVolumeGui();
 	ImGui::Begin("Game Over Result");
 	ImGui::Text("Final Score: %lld",static_cast<long long>(SceneManager::GetInstance()->GetFinalScore()));
+	ImGui::Text("Difficulty: %s",DifficultyName(currentDifficulty_));
 	ImGui::Text("Total cleared cells: %lld",static_cast<long long>(SceneManager::GetInstance()->GetFinalClearedCells()));
 	if(isNewRecord_){ ImGui::Text("NEW RECORD!"); }
 	ImGui::Separator();
@@ -265,7 +287,7 @@ void GameOverScene::Update(){
 		ImGui::TableSetupColumn("Date");
 		ImGui::TableHeadersRow();
 		int rank = 1;
-		for(const auto& record : history_.GetRecords()){
+		for(const auto& record : histories_[DifficultyIndex(currentDifficulty_)].GetRecords()){
 			if(rank > kRankingCount){ break; }
 			ImGui::TableNextRow();
 			ImGui::TableNextColumn(); ImGui::Text("%d",rank++);
@@ -314,6 +336,7 @@ void GameOverScene::Update(){
 		currentLightningSprites_[i]->Update();
 	}
 	if(separator_){ separator_->Update(); }
+	if(difficultyLabel_){ difficultyLabel_->Update(); }
 	++scoreShineFrame_;
 	if(scoreShineFrame_ >= kShineCycleFrames){ scoreShineFrame_ = 0; }
 	if(rankingLabel_){
@@ -378,6 +401,7 @@ void GameOverScene::Draw(){
 		if(rankLabel_){ rankLabel_->Draw(); }
 		if(scoreLabel_){ scoreLabel_->Draw(); }
 		if(yourScoreLabel_){ yourScoreLabel_->Draw(); }
+		if(difficultyLabel_){ difficultyLabel_->Draw(); }
 		for(const auto& number : rankingNumberSprites_){ number->Draw(); }
 		for(const auto& number : currentNumberSprites_){ number->Draw(); }
 	}

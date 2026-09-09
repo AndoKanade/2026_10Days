@@ -119,8 +119,12 @@ private:
 
 	// スペシャル発動に使用するゲージ
 	SpecialGauge specialGauge_;
+	// Easy難易度の自動チャージ用フレームカウンター。
+	int32_t easyPassiveChargeFrames_ = 0;
 	// スペシャルによって始まった消去・連鎖では、ゲージを自己充電させない。
 	bool suppressSpecialClearCharge_ = false;
+	// スペシャル専用BGMとの切り替え状態。
+	bool isSpecialBgmPlaying_ = false;
 	ScoreSystem score_;
 
 	// スペシャルで最強マスにする対象の選択状態
@@ -250,6 +254,8 @@ private:
 	void SyncSpecialCursor();
 	// EnterまたはデバッグUIから共通の決定処理を呼ぶ。
 	void ConfirmSpecialTarget();
+	// ゲージ発動状態に合わせ、通常BGMとスペシャルBGMを切り替える。
+	void SyncSpecialBgm();
 	void UpdateSpecialGaugeUi();
 	void UpdateScoreUi();
 	void SpawnScorePopup(int64_t gainedScore,int32_t combo);

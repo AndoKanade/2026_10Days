@@ -38,6 +38,10 @@ namespace{
 	constexpr Vector2 kGaugePosition = {20.0f,20.0f};
 	constexpr Vector2 kGaugeMaxSize = {360.0f,28.0f};
 	const std::string kScoreNumberTexture = "resource/ui/score/numbers.png";
+	// Easyでは通常プレイ中に約60秒で満タンになる（最大30、2秒ごとに+1）。
+	constexpr int32_t kEasyPassiveChargeIntervalFrames = 120;
+	const std::string kSpecialActiveBgmPath = "resource/music/bgm/ハッピーハッピー.mp3";
+	constexpr float kSpecialActiveBgmVolume = 0.5f;
 
 	// --- 追加：ポーズ画面 ---
 
@@ -384,6 +388,8 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	debugManualFallSpeed_ = false;
 	debugFallIntervalFrames_ = PuzzleConfig::kFallIntervalFrames;
 	suppressSpecialClearCharge_ = false;
+	easyPassiveChargeFrames_ = 0;
+	isSpecialBgmPlaying_ = false;
 
 	// カメラの生成・設定
 	CameraManager::GetInstance()->CreateCamera("default",object3dCommon_->GetDxCommon()->GetDevice());
@@ -404,6 +410,7 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	skybox_->Update(*CameraManager::GetInstance()->GetActiveCamera());
 
 	SoundManager::GetInstance()->SoundLoadFile(kBgmPath_,SoundCategory::BGM);
+	SoundManager::GetInstance()->SoundLoadFile(kSpecialActiveBgmPath,SoundCategory::BGM);
 
 	// 追加：ゲームBGMをループ再生する
 	SoundManager::GetInstance()->PlayAudio(kBgmPath_,kBgmVolume,true);
@@ -855,6 +862,8 @@ void GameScene::RebuildLevelObjects(){
 void GameScene::Finalize(){
 	// 追加：シーンを抜けるときにゲームBGMを止める
 	SoundManager::GetInstance()->StopAudio(kBgmPath_);
+	SoundManager::GetInstance()->StopAudio(kSpecialActiveBgmPath);
+	isSpecialBgmPlaying_ = false;
 }
 
 // --- 更新処理 ---
@@ -937,6 +946,18 @@ void GameScene::Update() {
 	// スペシャル発動後は、対象選択中もゲージを減少させる
 	if (!isGameOver_) {
 		specialGauge_.Update();
+	}
+	// Easyだけは通常プレイ中にゲージを自動チャージする。
+	if(!isGameOver_ &&
+		SceneManager::GetInstance()->GetDifficulty() == Difficulty::Easy &&
+		!specialGauge_.IsActivationActive() && !specialSelector_.IsSelecting()){
+		++easyPassiveChargeFrames_;
+		if(easyPassiveChargeFrames_ >= kEasyPassiveChargeIntervalFrames){
+			easyPassiveChargeFrames_ = 0;
+			specialGauge_.AddPassiveCharge();
+		}
+	} else{
+		easyPassiveChargeFrames_ = 0;
 	}
 	if (specialSelector_.IsSelecting() && !specialGauge_.IsActivationActive()) {
 		// 制限時間内に決定できなかったため、選択を終了する
@@ -1217,6 +1238,7 @@ void GameScene::Update() {
 			Application::GetInstance()->ShowPostProcessUI();
 		}
 #endif
+	SyncSpecialBgm();
 	UpdateSpecialGaugeUi();
 	UpdateScoreUi();
 	UpdateScorePopups();
@@ -1652,4 +1674,20 @@ void GameScene::ConfirmSpecialTarget(){
 		suppressSpecialClearCharge_ = board_.IsBusy();
 		specialSelector_.Cancel();
 	}
+}
+
+void GameScene::SyncSpecialBgm(){
+	const bool shouldPlay = specialGauge_.IsActivationActive();
+	if(shouldPlay == isSpecialBgmPlaying_){
+		return;
+	}
+
+	if(shouldPlay){
+		SoundManager::GetInstance()->PauseAudio(kBgmPath_);
+		SoundManager::GetInstance()->PlayAudio(kSpecialActiveBgmPath,kSpecialActiveBgmVolume,true);
+	} else{
+		SoundManager::GetInstance()->StopAudio(kSpecialActiveBgmPath);
+		SoundManager::GetInstance()->ResumeAudio(kBgmPath_);
+	}
+	isSpecialBgmPlaying_ = shouldPlay;
 }

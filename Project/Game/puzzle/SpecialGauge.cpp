@@ -1,7 +1,5 @@
 #include "SpecialGauge.h"
-
 #include <algorithm>
-
 #include "PuzzleConfig.h"
 
 // 追加：消去結果からスペシャルゲージを加算する。
@@ -17,6 +15,13 @@ void SpecialGauge::AddFromClear(int32_t clearedCellCount,int32_t chainCount){
 		additionalChainCount * PuzzleConfig::kSpecialGaugeBonusPerAdditionalChain;
 
 	value_ = std::min(value_ + gainedValue,PuzzleConfig::kSpecialGaugeMax);
+}
+
+void SpecialGauge::AddPassiveCharge(int32_t amount){
+	if(amount <= 0 || isActivationActive_){
+		return;
+	}
+	value_ = std::min(value_ + amount,PuzzleConfig::kSpecialGaugeMax);
 }
 
 // スペシャル発動後の制限時間を1フレーム分進める
