@@ -132,6 +132,7 @@ bool FallingBlock::MoveRight(const Board& board){
 }
 
 // 追加：時計回りに1段階回転する。重なる場合は回転しない（押し戻しはしない）。
+
 bool FallingBlock::Rotate(const Board& board){
 	const int32_t nextRotation = (rotation_ + 1) % BlockShape::kRotationCount;
 	if(board.CanFall(CalcCells(origin_,nextRotation))){

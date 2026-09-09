@@ -58,6 +58,12 @@ private:
 	const std::string kBgmPath_ = "resource/music/bgm/サクラカゼ.mp3";
 	// 削除：どこからも使われていなかった isPaused_ は、下のポーズ画面の項目へまとめた
 
+	// 追加：SEの発音遅れ対策で、先頭無音を切り詰めたWAVを生成できた場合はそちらのパスが入る
+	// （生成できなければ元のmp3のパスのまま）。ロードと再生の両方でこちらを使う。
+	std::string disappearSePath_;
+	std::string rotateSePath_;
+	std::string placeSePath_;
+
 	// レベル配置オブジェクト
 	std::vector<std::shared_ptr<Obj3D>> levelObjects_;
 

@@ -19,6 +19,16 @@
 #include "SkyboxCommon.h" // 追加：天球の共通設定
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+
+// 追加：SEの発音遅れ対策で、音声ファイルの先頭無音を切り詰めたWAVを
+// このゲームシーン側だけで生成するために使う（SoundManager本体には手を入れない）。
+#include <mfapi.h>
+#include <mfidl.h>
+#include <mfreadwrite.h>
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mfreadwrite.lib")
+#pragma comment(lib, "mfuuid.lib")
 
 namespace{
 	const std::string kGaugeBackgroundTexture = "resource/ui/specialGauge/red.png";
@@ -86,12 +96,164 @@ namespace{
 	Vector2 LerpVector2(const Vector2& a,const Vector2& b,float t){
 		return {a.x + (b.x-a.x)*t,a.y + (b.y-a.y)*t};
 	}
-	// 追加：ゲーム画面のBGMの初期音量
-	constexpr float kBgmVolume = 0.5f;
+	// ゲーム画面のBGMの初期音量
+	constexpr float kBgmVolume = 0.35f;
 
 	// 追加：ブロックが消えたときに鳴らすSEのパスと初期音量
 	const std::string kDisappearSePath = "resource/SE/disappear.mp3";
 	constexpr float kDisappearSeVolume = 0.6f;
+
+	// ブロックを回転させたときに鳴らすSEのパスと初期音量
+	const std::string kRotateSePath = "resource/SE/direction.mp3";
+	constexpr float kRotateSeVolume = 0.6f;
+
+	// ブロックが盤面に固定されたときに鳴らすSEのパスと初期音量
+	const std::string kPlaceSePath = "resource/SE/put.mp3";
+	constexpr float kPlaceSeVolume = 0.6f;
+
+	// SEの発音遅れ対策用の定数
+	// 無音とみなす振幅のしきい値（16bit最大値に対する割合）
+	constexpr float kSeSilenceAmplitudeRatio = 0.02f;
+
+	// 切り詰めてよい最大時間（秒）。これを超える無音は意図した演出とみなして残す
+	constexpr float kSeMaxTrimSeconds = 0.3f;
+
+	// sourcePath の先頭無音を切り詰めたWAVファイルを用意し、そのパスを返す。
+	// 既に生成済みならデコードし直さずそのパスを返す。何らかの理由で生成できなければ
+	// sourcePath をそのまま返す（＝これまで通りの音声で再生される）。
+	std::string MakeSilenceTrimmedSePath(const std::string& sourcePath){
+		const size_t dotPos = sourcePath.find_last_of('.');
+		const std::string trimmedPath = (dotPos == std::string::npos ? sourcePath : sourcePath.substr(0,dotPos)) + "_trimmed.wav";
+
+		// 既に生成済みならそれを使う
+		if(std::ifstream(trimmedPath,std::ios::binary).good()){
+			return trimmedPath;
+		}
+
+		// ファイル名をワイド文字へ変換する
+		const int sizeNeeded = MultiByteToWideChar(CP_UTF8,0,sourcePath.c_str(),(int)sourcePath.size(),NULL,0);
+		std::wstring wSourcePath(sizeNeeded,0);
+		MultiByteToWideChar(CP_UTF8,0,sourcePath.c_str(),(int)sourcePath.size(),&wSourcePath[0],sizeNeeded);
+
+		IMFSourceReader* reader = nullptr;
+		if(FAILED(MFCreateSourceReaderFromURL(wSourcePath.c_str(),nullptr,&reader))){
+			return sourcePath;
+		}
+
+		IMFMediaType* requestType = nullptr;
+		MFCreateMediaType(&requestType);
+		requestType->SetGUID(MF_MT_MAJOR_TYPE,MFMediaType_Audio);
+		requestType->SetGUID(MF_MT_SUBTYPE,MFAudioFormat_PCM);
+		const bool typeSet = SUCCEEDED(reader->SetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM,nullptr,requestType));
+		requestType->Release();
+		if(!typeSet){
+			reader->Release();
+			return sourcePath;
+		}
+
+		IMFMediaType* actualType = nullptr;
+		reader->GetCurrentMediaType((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM,&actualType);
+
+		WAVEFORMATEX* waveFormat = nullptr;
+		UINT32 waveFormatSize = 0;
+		MFCreateWaveFormatExFromMFMediaType(actualType,&waveFormat,&waveFormatSize);
+		actualType->Release();
+
+		// デコードしたPCMデータを1本のバッファへ集める
+		std::vector<BYTE> pcmData;
+		while(true){
+			IMFSample* sample = nullptr;
+			DWORD flags = 0;
+			if(FAILED(reader->ReadSample((DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM,0,nullptr,&flags,nullptr,&sample))){
+				break;
+			}
+			if(flags & MF_SOURCE_READERF_ENDOFSTREAM){
+				break;
+			}
+			if(sample){
+				IMFMediaBuffer* buffer = nullptr;
+				sample->ConvertToContiguousBuffer(&buffer);
+				BYTE* data = nullptr;
+				DWORD length = 0;
+				buffer->Lock(&data,nullptr,&length);
+				const size_t oldSize = pcmData.size();
+				pcmData.resize(oldSize + length);
+				memcpy(&pcmData[oldSize],data,length);
+				buffer->Unlock();
+				buffer->Release();
+				sample->Release();
+			}
+		}
+		reader->Release();
+
+		// 16bit PCM以外はサンプルの読み方が変わるため対象外にする（元のまま再生する）
+		if(!waveFormat || waveFormat->wBitsPerSample != 16 || waveFormat->nBlockAlign == 0 || pcmData.empty()){
+			if(waveFormat){ CoTaskMemFree(waveFormat); }
+			return sourcePath;
+		}
+
+		// 先頭の無音区間（全チャンネルの振幅がしきい値以下のフレーム）を探す
+		const int16_t threshold = static_cast<int16_t>(32767.0f * kSeSilenceAmplitudeRatio);
+		const size_t blockAlign = waveFormat->nBlockAlign;
+		const size_t channelCount = waveFormat->nChannels;
+		const size_t frameCount = pcmData.size() / blockAlign;
+		const size_t maxTrimFrames = static_cast<size_t>(kSeMaxTrimSeconds * static_cast<float>(waveFormat->nSamplesPerSec));
+		const int16_t* samples = reinterpret_cast<const int16_t*>(pcmData.data());
+
+		size_t silentFrames = 0;
+		while(silentFrames < frameCount && silentFrames < maxTrimFrames){
+			bool isSilent = true;
+			const size_t sampleBase = silentFrames * channelCount;
+			for(size_t channel = 0; channel < channelCount; ++channel){
+				const int16_t sample = samples[sampleBase + channel];
+				if(sample > threshold || sample < -threshold){
+					isSilent = false;
+					break;
+				}
+			}
+			if(!isSilent){
+				break;
+			}
+			++silentFrames;
+		}
+
+		const size_t trimBytes = silentFrames * blockAlign;
+		const BYTE* trimmedData = pcmData.data() + trimBytes;
+		const uint32_t trimmedSize = static_cast<uint32_t>(pcmData.size() - trimBytes);
+
+		// 最小構成のWAV（RIFF/fmt/data）として書き出す
+		std::ofstream out(trimmedPath,std::ios::binary);
+		if(!out){
+			CoTaskMemFree(waveFormat);
+			return sourcePath;
+		}
+
+		const uint32_t fmtChunkSize = 16;
+		const uint32_t riffSize = 4 + (8 + fmtChunkSize) + (8 + trimmedSize);
+		const uint16_t formatTag = WAVE_FORMAT_PCM;
+		const uint16_t channels16 = waveFormat->nChannels;
+		const uint16_t blockAlign16 = static_cast<uint16_t>(waveFormat->nBlockAlign);
+		const uint16_t bitsPerSample16 = waveFormat->wBitsPerSample;
+
+		out.write("RIFF",4);
+		out.write(reinterpret_cast<const char*>(&riffSize),4);
+		out.write("WAVE",4);
+		out.write("fmt ",4);
+		out.write(reinterpret_cast<const char*>(&fmtChunkSize),4);
+		out.write(reinterpret_cast<const char*>(&formatTag),2);
+		out.write(reinterpret_cast<const char*>(&channels16),2);
+		out.write(reinterpret_cast<const char*>(&waveFormat->nSamplesPerSec),4);
+		out.write(reinterpret_cast<const char*>(&waveFormat->nAvgBytesPerSec),4);
+		out.write(reinterpret_cast<const char*>(&blockAlign16),2);
+		out.write(reinterpret_cast<const char*>(&bitsPerSample16),2);
+		out.write("data",4);
+		out.write(reinterpret_cast<const char*>(&trimmedSize),4);
+		out.write(reinterpret_cast<const char*>(trimmedData),trimmedSize);
+
+		CoTaskMemFree(waveFormat);
+
+		return out.good() ? trimmedPath : sourcePath;
+	}
 
 	const std::string kLevelJsonFile = "level.json"; // レベル配置情報のJSONファイル名
 
@@ -246,12 +408,18 @@ void GameScene::Initialize(Obj3dCommon* object3dCommon,Input* input,SpriteCommon
 	// 追加：ゲームBGMをループ再生する
 	SoundManager::GetInstance()->PlayAudio(kBgmPath_,kBgmVolume,true);
 
-	// 追加：ブロックが消えたときのSEをロードしておく（再生は消去成立時のみ）
-	SoundManager::GetInstance()->SoundLoadFile(kDisappearSePath,SoundCategory::SE);
-
 	// 追加：ポーズメニューで使う汎用SEと、ブロック操作のSEをロードしておく
 	SoundConfig::LoadCommonSe();
 	SoundConfig::LoadBlockSe();
+
+	// 追加：ブロックが消えたとき／回転したとき／固定されたときに鳴らすSEをロードしておく。
+	// 効果音は鳴らした瞬間に聞こえてほしいため、先頭無音を切り詰めたWAVがあればそちらを使う。
+	disappearSePath_ = MakeSilenceTrimmedSePath(kDisappearSePath);
+	rotateSePath_ = MakeSilenceTrimmedSePath(kRotateSePath);
+	placeSePath_ = MakeSilenceTrimmedSePath(kPlaceSePath);
+	SoundManager::GetInstance()->SoundLoadFile(disappearSePath_);
+	SoundManager::GetInstance()->SoundLoadFile(rotateSePath_);
+	SoundManager::GetInstance()->SoundLoadFile(placeSePath_);
 
 	// 追加：パズルの盤面を初期化する（盤面は3Dオブジェクトで描画する）
 	board_.Initialize(object3dCommon_);
@@ -759,7 +927,7 @@ void GameScene::Update() {
 		score_.AddFromClear(result.cellCount,result.chainCount);
 		SpawnScorePopup(score_.GetLastGain(),score_.GetLastChain());
 		// 追加：ブロックが消えたときのSEを鳴らす
-		SoundManager::GetInstance()->PlayAudio(kDisappearSePath,kDisappearSeVolume);
+		SoundManager::GetInstance()->PlayAudio(disappearSePath_,kDisappearSeVolume);
 	}
 	// スペシャルから始まった消去と、その落下連鎖がすべて終わってから通常チャージへ戻す。
 	if(suppressSpecialClearCharge_ && !board_.IsBusy()){
@@ -827,8 +995,9 @@ void GameScene::Update() {
 					}
 				}
 				if (input_->TriggerKey(DIK_W)) {
+					// 回転が実際に成功したときだけSEを鳴らす（壁蹴りで拒否された場合は鳴らさない）
 					if (fallingBlock_.Rotate(board_)) {
-						SoundConfig::PlayBlockRotate();
+						SoundManager::GetInstance()->PlayAudio(rotateSePath_,kRotateSeVolume);
 					}
 				}
 				// 追加：ホールド操作（1個のブロックにつき1回まで）
@@ -854,8 +1023,8 @@ void GameScene::Update() {
 					: fallingBlock_.Update(board_,GetCurrentFallInterval());
 
 				if (blockLocked) {
-					// 追加：ブロックを置いた（盤面に固定された）SE
-					SoundConfig::PlayBlockPlace();
+					// 追加：ブロックが盤面に固定されたときのSEを鳴らす
+					SoundManager::GetInstance()->PlayAudio(placeSePath_,kPlaceSeVolume);
 
 					// 天井より上にはみ出したまま固定された ＝ 積み上がりすぎでゲームオーバー
 					const bool lockedAboveCeiling = fallingBlock_.IsLockedAboveCeiling();

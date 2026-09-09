@@ -43,7 +43,7 @@ public:
 	bool MoveRight(const Board& board);
 
 	// 追加：時計回りに1段階回転する。回転後が壁や既存ブロックと重なる場合は回転しない。
-	// 変更：実際に回転できたかどうかを返す。
+
 	bool Rotate(const Board& board);
 
 	// 追加：下キーによる加速落下の入り切りを設定する。

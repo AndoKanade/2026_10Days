@@ -132,6 +132,10 @@ private:
 	int32_t clearTimer_ = 0;
 	int32_t chainCount_ = 0;
 	std::vector<ClearResult> clearResults_;
+
+	// 追加：今回の消去演出で、電源（最下段）からいちばん遠いマスまでの行の距離。
+	// 「光の波」が下段から上段へ届くまでの進み具合を計算する基準に使う。
+	int32_t clearWaveMaxDistance_ = 0;
   
 	// U字の壁ブロックを1個生成して wallObjs_ に追加する（modelPath で使うモデルを指定する）
 	void CreateWallBlock(int32_t x,int32_t y,const std::string& modelPath);
@@ -139,7 +143,16 @@ private:
 	// 右の壁・下の壁は幅に応じて位置・範囲が変わるため、幅切り替え時にも呼び直す必要がある。
 	void RebuildWalls();
 	// 追加：cells_ の埋まっているマスから cellObjs_ を作り直す
+	// GPU用の定数バッファをマスごとに新規確保するため、消去演出中の毎フレーム更新には使わない。
 	void RebuildCellObjects();
+
+	// 追加：消去演出中の「光の波」アニメーションを、既存の cellObjs_ の色・スケールだけを
+	// 書き換えて毎フレーム反映する軽量版（オブジェクトの作り直しはしない）。
+	void UpdateClearingCellVisuals();
+
+	// 追加：消去演出中のマス1個ぶんについて、光の波が届いているか・届いていたら
+	// どれだけ膨らませるかを計算する（RebuildCellObjects/UpdateClearingCellVisuals共通処理）。
+	void ComputeClearWaveState(int32_t y,bool& waveReached,float& popScale) const;
 
 	// 追加：指定マスが現在消去演出中かどうか
 	bool IsClearingCell(int32_t x,int32_t y) const;
@@ -160,5 +173,10 @@ private:
 	// 対象にする列は、clearedCells に1マスでも含まれる列（今回の消去でマスが
 	// 空いた列）に加えて、clearedBlockIds と同じ元ブロックIDの残骸が残っている列
 	// （支えを失って構造的に浮いた可能性がある列）。それ以外の無関係な列は触らない。
-	void ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds);
+	// 修正：forceAllColumns が true のときは、上記の判定に関わらず全列を対象にする。
+	// Easy の横列消去は「行を丸ごと消す」仕様のため、その行のうち元々空きマスだった
+	// 列（せり出しブロックの下の穴など）は clearedCells に入らず対象列から漏れる。
+	// 漏れた列だけ他の列と一緒に落ちず、上のブロックが取り残されて見えるバグになる
+	// ため、Easy の消去確定時はこのフラグで全列を強制的に詰め直す。
+	void ApplyGravity(const std::vector<GridPos>& clearedCells,const std::vector<int32_t>& clearedBlockIds,bool forceAllColumns = false);
 };
