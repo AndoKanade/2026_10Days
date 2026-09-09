@@ -1,7 +1,5 @@
 #include "SpecialGauge.h"
-
 #include <algorithm>
-
 #include "PuzzleConfig.h"
 
 // 追加：消去結果からスペシャルゲージを加算する。
